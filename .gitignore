@@ -1,0 +1,54 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+
+# .NET / Visual Studio / Rider / VSCode local state
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.dbmdl
+*.jfm
+*.cache
+*.swp
+
+# Tooling
+.config/dotnet-tools.json.lock
+project.lock.json
+project.fragment.lock.json
+artifacts/
+TestResults/
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+.nuget/
+*.nupkg
+*.snupkg
+
+# Velopack release artifacts
+releases/
+publish/
+
+# Local environment
+.env
+.env.local
+*.pfx
+*.snk
+
+# OS / editors
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# Internal design docs / brainstorming notes — kept local only
+docs/
