@@ -9,6 +9,5 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ShareQ.Core\ShareQ.Core.csproj" />
-    <ProjectReference Include="..\ShareQ.Storage\ShareQ.Storage.csproj" />
   </ItemGroup>
 </Project>

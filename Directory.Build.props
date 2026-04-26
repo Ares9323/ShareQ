@@ -20,6 +20,6 @@
 
   <!-- Test projects: relax rules that conflict with xUnit conventions and test ergonomics -->
   <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
-    <NoWarn>$(NoWarn);CA1707;CA1515;CA1861</NoWarn>
+    <NoWarn>$(NoWarn);CA1707;CA1515;CA1861;CA1859</NoWarn>
   </PropertyGroup>
 </Project>
