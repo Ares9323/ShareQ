@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>ShareQ.Editor</RootNamespace>
+    <AssemblyName>ShareQ.Editor</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ShareQ.Core\ShareQ.Core.csproj" />
+    <ProjectReference Include="..\ShareQ.Shared\ShareQ.Shared.csproj" />
+  </ItemGroup>
+</Project>

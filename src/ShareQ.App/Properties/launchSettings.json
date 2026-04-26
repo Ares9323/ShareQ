@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "ShareQ.App": {
+      "commandName": "Project"
+    }
+  }
+}
