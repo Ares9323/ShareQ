@@ -20,6 +20,9 @@ public partial class RegionOverlayWindow : Window
     private int _screenSnapshotLeft, _screenSnapshotTop;
     private System.Windows.Threading.DispatcherTimer? _magnifierTimer;
     private int _lastMagnifierX = int.MinValue, _lastMagnifierY = int.MinValue;
+    // Top-level windows enumerated once when the overlay opens. Used for snap-to-window.
+    private IReadOnlyList<WindowSnapshot> _windows = Array.Empty<WindowSnapshot>();
+    private WindowSnapshot? _hoveredWindow;
 
     public RegionOverlayWindow()
     {
@@ -68,6 +71,37 @@ public partial class RegionOverlayWindow : Window
 
         var cursorInWindow = PointFromScreen(new Point(pt.X, pt.Y));
         UpdateMagnifier(pt.X, pt.Y, cursorInWindow);
+        UpdateSnapPreview(pt.X, pt.Y);
+    }
+
+    /// <summary>While idle (no drag), highlight the window under the cursor so the user knows that
+    /// a click without drag will snap-capture it.</summary>
+    private void UpdateSnapPreview(int physicalX, int physicalY)
+    {
+        if (_dragStart is not null)
+        {
+            SnapRect.Visibility = Visibility.Collapsed;
+            _hoveredWindow = null;
+            return;
+        }
+        var hover = WindowEnumeration.FindWindowAt(physicalX, physicalY, _windows);
+        _hoveredWindow = hover;
+        if (hover is null)
+        {
+            SnapRect.Visibility = Visibility.Collapsed;
+            return;
+        }
+        // Convert physical pixels (screen-space) to overlay-canvas DIPs.
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var x = hover.X / dpi.DpiScaleX - Left;
+        var y = hover.Y / dpi.DpiScaleY - Top;
+        var w = hover.Width / dpi.DpiScaleX;
+        var h = hover.Height / dpi.DpiScaleY;
+        Canvas.SetLeft(SnapRect, x);
+        Canvas.SetTop(SnapRect, y);
+        SnapRect.Width = Math.Max(0, w);
+        SnapRect.Height = Math.Max(0, h);
+        SnapRect.Visibility = Visibility.Visible;
     }
 
     public CaptureRegion? PickRegion()
@@ -76,6 +110,9 @@ public partial class RegionOverlayWindow : Window
         // (so we don't need AllowsTransparency) and by the magnifier preview.
         TakeScreenSnapshot();
         if (_screenSnapshot is not null) ScreenshotImage.Source = _screenSnapshot;
+        // Enumerate visible windows for snap-on-hover. EnumWindows returns top-most z-order first
+        // (which is what we want — clicking on overlapping windows snaps to the foreground one).
+        _windows = WindowEnumeration.EnumerateVisibleWindows();
         ShowDialog();
         return _result;
     }
@@ -123,6 +160,7 @@ public partial class RegionOverlayWindow : Window
         SelectionRect.Height = 0;
         SelectionRect.Visibility = Visibility.Visible;
         SizeLabelBorder.Visibility = Visibility.Visible;
+        SnapRect.Visibility = Visibility.Collapsed;
         // While dragging the cursor-only label is hidden; the selection label takes its place.
         CursorPosBorder.Visibility = Visibility.Collapsed;
         CaptureMouse();
@@ -258,11 +296,19 @@ public partial class RegionOverlayWindow : Window
 
         var current = e.GetPosition(OverlayCanvas);
         var dpi = VisualTreeHelper.GetDpi(this);
-        var rawX = Math.Min(_dragStart.Value.X, current.X);
-        var rawY = Math.Min(_dragStart.Value.Y, current.Y);
         var rawW = Math.Abs(current.X - _dragStart.Value.X);
         var rawH = Math.Abs(current.Y - _dragStart.Value.Y);
 
+        // Click without (significant) drag: snap-capture the window under the cursor instead.
+        if (rawW < 5 && rawH < 5 && _hoveredWindow is { } w)
+        {
+            _result = new CaptureRegion(w.X, w.Y, w.Width, w.Height, WindowTitle: w.Title);
+            Close();
+            return;
+        }
+
+        var rawX = Math.Min(_dragStart.Value.X, current.X);
+        var rawY = Math.Min(_dragStart.Value.Y, current.Y);
         var (vsLeft, vsTop, _, _) = VirtualScreen.GetBounds();
         var pixelX = (int)Math.Round(rawX * dpi.DpiScaleX) + vsLeft;
         var pixelY = (int)Math.Round(rawY * dpi.DpiScaleY) + vsTop;

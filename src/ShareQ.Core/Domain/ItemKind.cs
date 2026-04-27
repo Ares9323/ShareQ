@@ -6,5 +6,6 @@ public enum ItemKind
     Html,
     Rtf,
     Image,
-    Files
+    Files,
+    Video
 }

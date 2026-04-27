@@ -46,6 +46,22 @@ public sealed class RecordingCoordinator
         _logger = logger;
     }
 
+    /// <summary>Strip filesystem-unsafe chars from a window title and limit length so filenames stay
+    /// reasonable. Returns empty string if the input is null/whitespace.</summary>
+    private static string SanitizeForFilename(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return string.Empty;
+        var invalid = Path.GetInvalidFileNameChars();
+        var sb = new System.Text.StringBuilder(title.Length);
+        foreach (var c in title)
+        {
+            if (Array.IndexOf(invalid, c) >= 0 || c == '-' || c == ' ') sb.Append('_');
+            else sb.Append(c);
+        }
+        var s = sb.ToString().Trim('_');
+        return s.Length > 40 ? s[..40] : s;
+    }
+
     /// <summary>Single hotkey toggle: if not recording, prompt for region + start; if recording, stop.</summary>
     public async Task ToggleAsync(RecordingFormat format, CancellationToken cancellationToken)
     {
@@ -77,7 +93,9 @@ public sealed class RecordingCoordinator
         Directory.CreateDirectory(OutputFolder);
         var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmssfff", System.Globalization.CultureInfo.InvariantCulture);
         var ext = format == RecordingFormat.Mp4 ? "mp4" : "gif";
-        var outPath = Path.Combine(OutputFolder, $"shareq-rec-{stamp}.{ext}");
+        var titleSlug = SanitizeForFilename(region.WindowTitle);
+        var outPath = Path.Combine(OutputFolder,
+            string.IsNullOrEmpty(titleSlug) ? $"shareq-rec-{stamp}.{ext}" : $"shareq-rec-{titleSlug}-{stamp}.{ext}");
 
         var options = new RecordingOptions(
             X: region.X, Y: region.Y, Width: region.Width, Height: region.Height,
@@ -162,7 +180,7 @@ public sealed class RecordingCoordinator
 
         var bytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
         var newItem = new NewItem(
-            Kind: ItemKind.Image, // closest existing kind for now — we don't have a Video kind yet.
+            Kind: ItemKind.Video,
             Source: ItemSource.CaptureRegion,
             CreatedAt: DateTimeOffset.UtcNow,
             Payload: bytes,

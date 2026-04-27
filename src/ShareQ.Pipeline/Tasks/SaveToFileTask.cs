@@ -40,12 +40,30 @@ public sealed class SaveToFileTask : IPipelineTask
         Directory.CreateDirectory(folder);
 
         var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmssfff", CultureInfo.InvariantCulture);
-        var fileName = $"shareq-{stamp}.{extension.TrimStart('.')}";
+        var titleSlug = context.Bag.TryGetValue(PipelineBagKeys.WindowTitle, out var rawTitle) && rawTitle is string title
+            ? SanitizeForFilename(title)
+            : string.Empty;
+        var fileName = string.IsNullOrEmpty(titleSlug)
+            ? $"shareq-{stamp}.{extension.TrimStart('.')}"
+            : $"shareq-{titleSlug}-{stamp}.{extension.TrimStart('.')}";
         var fullPath = Path.Combine(folder, fileName);
 
         await File.WriteAllBytesAsync(fullPath, bytes, cancellationToken).ConfigureAwait(false);
 
         context.Bag[PipelineBagKeys.LocalPath] = fullPath;
         _logger.LogDebug("SaveToFileTask: wrote {Bytes} bytes to {Path}", bytes.Length, fullPath);
+    }
+
+    private static string SanitizeForFilename(string title)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sb = new System.Text.StringBuilder(title.Length);
+        foreach (var c in title)
+        {
+            if (Array.IndexOf(invalid, c) >= 0 || c == '-' || c == ' ') sb.Append('_');
+            else sb.Append(c);
+        }
+        var s = sb.ToString().Trim('_');
+        return s.Length > 40 ? s[..40] : s;
     }
 }

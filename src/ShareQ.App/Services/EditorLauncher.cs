@@ -40,6 +40,18 @@ public sealed class EditorLauncher
             _logger.LogInformation("EditorLauncher: skipping non-image item {Id}", itemId);
             return;
         }
+        // Defensive: legacy items recorded BEFORE we had ItemKind.Video are stored as Image but
+        // contain mp4/gif bytes. Detect via BlobRef extension and bail out instead of crashing
+        // BitmapImage decode on non-image content.
+        if (!string.IsNullOrEmpty(record.BlobRef))
+        {
+            var ext = System.IO.Path.GetExtension(record.BlobRef).ToLowerInvariant();
+            if (ext is ".mp4" or ".webm" or ".mkv" or ".gif" or ".webp" or ".mov")
+            {
+                _logger.LogInformation("EditorLauncher: item {Id} has video/animation extension {Ext}; skipping", itemId, ext);
+                return;
+            }
+        }
 
         var recents = await _recentsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
         ColorSwatchButton.CurrentRecents = recents;

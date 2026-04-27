@@ -58,13 +58,18 @@ public sealed class CaptureCoordinator
         var ctx = new PipelineContext(_services);
         ctx.Bag[PipelineBagKeys.PayloadBytes] = captured.PngBytes;
         ctx.Bag[PipelineBagKeys.FileExtension] = "png";
+        if (!string.IsNullOrEmpty(region.WindowTitle))
+        {
+            ctx.Bag[PipelineBagKeys.WindowTitle] = region.WindowTitle;
+        }
+        var searchTextPrefix = string.IsNullOrEmpty(region.WindowTitle) ? "Region" : region.WindowTitle;
         ctx.Bag[PipelineBagKeys.NewItem] = new NewItem(
             Kind: ItemKind.Image,
             Source: ItemSource.CaptureRegion,
             CreatedAt: DateTimeOffset.UtcNow,
             Payload: captured.PngBytes,
             PayloadSize: captured.PngBytes.LongLength,
-            SearchText: $"Region {captured.Width}×{captured.Height}");
+            SearchText: $"{searchTextPrefix} {captured.Width}×{captured.Height}");
 
         await _executor.RunAsync(profile, ctx, cancellationToken).ConfigureAwait(false);
     }

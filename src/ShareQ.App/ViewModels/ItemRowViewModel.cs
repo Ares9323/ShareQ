@@ -30,6 +30,7 @@ public sealed class ItemRowViewModel
     {
         if (!string.IsNullOrWhiteSpace(record.SearchText)) return Truncate(record.SearchText!, 200);
         if (record.Kind is ItemKind.Image) return "[image]";
+        if (record.Kind is ItemKind.Video) return "[video]";
         if (record.Kind is ItemKind.Files) return "[files]";
         if (record.Payload.Length == 0) return string.Empty;
         try { return Truncate(Encoding.UTF8.GetString(record.Payload.Span), 200); }

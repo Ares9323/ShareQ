@@ -20,6 +20,14 @@
                        StrokeThickness="1"
                        Fill="Transparent"
                        Visibility="Collapsed" />
+            <!-- Snap-preview rectangle highlighting the window under the cursor (visible only while idle). -->
+            <Rectangle x:Name="SnapRect"
+                       Stroke="#FFD000"
+                       StrokeThickness="2"
+                       StrokeDashArray="4,3"
+                       Fill="#1AFFD000"
+                       Visibility="Collapsed"
+                       IsHitTestVisible="False" />
             <Border x:Name="SizeLabelBorder"
                     Background="#222"
                     BorderBrush="#80FFFFFF"
