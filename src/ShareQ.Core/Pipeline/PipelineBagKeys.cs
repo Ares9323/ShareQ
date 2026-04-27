@@ -1,0 +1,23 @@
+namespace ShareQ.Core.Pipeline;
+
+/// <summary>Well-known string keys used in <see cref="PipelineContext.Bag"/> by baked tasks.</summary>
+public static class PipelineBagKeys
+{
+    /// <summary>The <c>NewItem</c> instance to insert via add-to-history. Type: <c>ShareQ.Storage.Items.NewItem</c>.</summary>
+    public const string NewItem = "new_item";
+
+    /// <summary>Item id assigned after add-to-history. Type: <c>long</c>.</summary>
+    public const string ItemId = "item_id";
+
+    /// <summary>Raw payload bytes a task may write to disk. Type: <c>byte[]</c>.</summary>
+    public const string PayloadBytes = "payload_bytes";
+
+    /// <summary>File extension to use when save-to-file builds a path (e.g. "png", "txt"). Type: <c>string</c>.</summary>
+    public const string FileExtension = "file_extension";
+
+    /// <summary>Absolute path written by save-to-file. Type: <c>string</c>.</summary>
+    public const string LocalPath = "local_path";
+
+    /// <summary>URL produced by an upload task. Type: <c>string</c>.</summary>
+    public const string UploadUrl = "upload_url";
+}

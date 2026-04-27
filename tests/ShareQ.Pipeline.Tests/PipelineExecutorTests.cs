@@ -1,4 +1,5 @@
 using ShareQ.Core.Pipeline;
+using ShareQ.Pipeline.Registry;
 using Xunit;
 
 namespace ShareQ.Pipeline.Tests;
@@ -78,5 +79,138 @@ public class PipelineExecutorTests
     {
         public static readonly EmptyServices Instance = new();
         public object? GetService(Type serviceType) => null;
+    }
+
+    private sealed class ThrowingTask(string id) : IPipelineTask
+    {
+        public string Id => id;
+        public string DisplayName => id;
+        public PipelineTaskKind Kind => PipelineTaskKind.Both;
+        public Task ExecuteAsync(PipelineContext context, System.Text.Json.Nodes.JsonNode? config, CancellationToken cancellationToken)
+            => throw new InvalidOperationException("intentional");
+    }
+
+    [Fact]
+    public async Task RunAsync_ProfileWithEnabledSteps_RunsThemInOrder()
+    {
+        var calls = new List<string>();
+        var registry = new PipelineTaskRegistry(new IPipelineTask[]
+        {
+            new RecordingTask("a", calls),
+            new RecordingTask("b", calls),
+            new RecordingTask("c", calls)
+        });
+        var executor = new PipelineExecutor(registry, Microsoft.Extensions.Logging.Abstractions.NullLogger<PipelineExecutor>.Instance);
+        var ctx = new PipelineContext(EmptyServices.Instance);
+        var profile = new PipelineProfile(
+            Id: "p",
+            DisplayName: "P",
+            Trigger: "test",
+            Steps: new[]
+            {
+                new PipelineStep("a"),
+                new PipelineStep("b"),
+                new PipelineStep("c")
+            });
+
+        await executor.RunAsync(profile, ctx, CancellationToken.None);
+
+        Assert.Equal(new[] { "a", "b", "c" }, calls);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProfileWithDisabledStep_SkipsIt()
+    {
+        var calls = new List<string>();
+        var registry = new PipelineTaskRegistry(new IPipelineTask[]
+        {
+            new RecordingTask("a", calls),
+            new RecordingTask("b", calls)
+        });
+        var executor = new PipelineExecutor(registry, Microsoft.Extensions.Logging.Abstractions.NullLogger<PipelineExecutor>.Instance);
+        var ctx = new PipelineContext(EmptyServices.Instance);
+        var profile = new PipelineProfile(
+            "p", "P", "test",
+            new[]
+            {
+                new PipelineStep("a", Enabled: false),
+                new PipelineStep("b")
+            });
+
+        await executor.RunAsync(profile, ctx, CancellationToken.None);
+
+        Assert.Equal(new[] { "b" }, calls);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProfileWithMissingTask_LogsAndContinues()
+    {
+        var calls = new List<string>();
+        var registry = new PipelineTaskRegistry(new IPipelineTask[]
+        {
+            new RecordingTask("a", calls)
+        });
+        var executor = new PipelineExecutor(registry, Microsoft.Extensions.Logging.Abstractions.NullLogger<PipelineExecutor>.Instance);
+        var ctx = new PipelineContext(EmptyServices.Instance);
+        var profile = new PipelineProfile(
+            "p", "P", "test",
+            new[]
+            {
+                new PipelineStep("a"),
+                new PipelineStep("missing"),
+                new PipelineStep("a")
+            });
+
+        await executor.RunAsync(profile, ctx, CancellationToken.None);
+
+        Assert.Equal(new[] { "a", "a" }, calls);
+        Assert.False(ctx.Aborted);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProfileWithMissingTaskAndAbortOnError_AbortsContext()
+    {
+        var registry = new PipelineTaskRegistry([]);
+        var executor = new PipelineExecutor(registry, Microsoft.Extensions.Logging.Abstractions.NullLogger<PipelineExecutor>.Instance);
+        var ctx = new PipelineContext(EmptyServices.Instance);
+        var profile = new PipelineProfile(
+            "p", "P", "test",
+            new[] { new PipelineStep("missing", AbortOnError: true) });
+
+        await executor.RunAsync(profile, ctx, CancellationToken.None);
+
+        Assert.True(ctx.Aborted);
+        Assert.Contains("missing", ctx.AbortReason);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProfileTaskThrows_LogsAndContinuesByDefault()
+    {
+        var registry = new PipelineTaskRegistry(new IPipelineTask[] { new ThrowingTask("boom") });
+        var executor = new PipelineExecutor(registry, Microsoft.Extensions.Logging.Abstractions.NullLogger<PipelineExecutor>.Instance);
+        var ctx = new PipelineContext(EmptyServices.Instance);
+        var profile = new PipelineProfile(
+            "p", "P", "test",
+            new[] { new PipelineStep("boom") });
+
+        await executor.RunAsync(profile, ctx, CancellationToken.None);
+
+        Assert.False(ctx.Aborted);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProfileTaskThrowsWithAbortOnError_AbortsContext()
+    {
+        var registry = new PipelineTaskRegistry(new IPipelineTask[] { new ThrowingTask("boom") });
+        var executor = new PipelineExecutor(registry, Microsoft.Extensions.Logging.Abstractions.NullLogger<PipelineExecutor>.Instance);
+        var ctx = new PipelineContext(EmptyServices.Instance);
+        var profile = new PipelineProfile(
+            "p", "P", "test",
+            new[] { new PipelineStep("boom", AbortOnError: true) });
+
+        await executor.RunAsync(profile, ctx, CancellationToken.None);
+
+        Assert.True(ctx.Aborted);
+        Assert.Contains("boom", ctx.AbortReason);
     }
 }
