@@ -25,6 +25,7 @@ public static class ShapeGripLayout
         BlurShape b => RectGrips(b.X, b.Y, b.Width, b.Height, 0),
         PixelateShape p => RectGrips(p.X, p.Y, p.Width, p.Height, 0),
         SpotlightShape s => RectGrips(s.X, s.Y, s.Width, s.Height, 0),
+        ImageShape i => RectGrips(i.X, i.Y, i.Width, i.Height, rotateGripOffset),
         _ => []
     };
 
@@ -54,6 +55,7 @@ public static class ShapeGripLayout
         BlurShape b => (b.X + b.Width / 2, b.Y + b.Height / 2),
         PixelateShape p => (p.X + p.Width / 2, p.Y + p.Height / 2),
         SpotlightShape s => (s.X + s.Width / 2, s.Y + s.Height / 2),
+        ImageShape i => (i.X + i.Width / 2, i.Y + i.Height / 2),
         _ => (0, 0)
     };
 
@@ -62,6 +64,7 @@ public static class ShapeGripLayout
         RectangleShape r => r.Rotation,
         EllipseShape e => e.Rotation,
         TextShape t => t.Rotation,
+        ImageShape i => i.Rotation,
         _ => 0
     };
 

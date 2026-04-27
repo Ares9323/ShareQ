@@ -23,6 +23,11 @@ public static class GripDrag
         SpotlightShape sp => ResizeRect(new RectShim(sp.X, sp.Y, sp.Width, sp.Height), grip, px, py, shiftHeld) is { } box3
             ? sp with { X = box3.X, Y = box3.Y, Width = box3.W, Height = box3.H }
             : null,
+        ImageShape i when grip == GripKind.Rotate => i with { Rotation = AngleFromPivot(i.X + i.Width / 2, i.Y + i.Height / 2, px, py, shiftHeld) },
+        // ImageShape's Shift preserves the *original* aspect ratio (W/H), not a square.
+        ImageShape i => ResizeRect(new RectShim(i.X, i.Y, i.Width, i.Height), grip, px, py, shiftHeld, aspectRatio: i.Height > 0 ? i.Width / i.Height : 1) is { } box4
+            ? i with { X = box4.X, Y = box4.Y, Width = box4.W, Height = box4.H }
+            : null,
         RectangleShape r => ResizeRect(new RectShim(r.X, r.Y, r.Width, r.Height), grip, px, py, shiftHeld) is { } box
             ? r with { X = box.X, Y = box.Y, Width = box.W, Height = box.H }
             : null,
@@ -55,8 +60,10 @@ public static class GripDrag
     };
 
     /// <summary>Compute the new (X, Y, Width, Height) for a resized rectangle. The shape interface
-    /// is shared with EllipseShape via <see cref="RectShim"/>.</summary>
-    private static (double X, double Y, double W, double H)? ResizeRect(IRectLike s, GripKind grip, double px, double py, bool shiftHeld)
+    /// is shared via <see cref="RectShim"/>. <paramref name="aspectRatio"/> (W/H) drives Shift behavior:
+    /// <c>1</c> = square (rectangle/ellipse default), any other positive value = preserve that aspect
+    /// (used by ImageShape to lock to its original ratio).</summary>
+    private static (double X, double Y, double W, double H)? ResizeRect(IRectLike s, GripKind grip, double px, double py, bool shiftHeld, double aspectRatio = 1)
     {
         // Identify the "fixed corner" — the diagonal opposite of the dragged grip — for resizing.
         double fixedX, fixedY;
@@ -79,19 +86,27 @@ public static class GripDrag
         var newW = freeX ? Math.Abs(px - fixedX) : s.Width;
         var newH = freeY ? Math.Abs(py - fixedY) : s.Height;
 
-        if (shiftHeld && freeX && freeY)
+        if (shiftHeld && freeX && freeY && aspectRatio > 0)
         {
-            // Aspect-ratio constraint: lock both dimensions to the larger of the two scales.
-            var size = Math.Max(newW, newH);
-            // Anchor at the fixed corner, expand toward the drag direction.
-            var dirX = Math.Sign(px - fixedX);
-            var dirY = Math.Sign(py - fixedY);
-            if (dirX == 0) dirX = 1;
-            if (dirY == 0) dirY = 1;
-            newX = dirX > 0 ? fixedX : fixedX - size;
-            newY = dirY > 0 ? fixedY : fixedY - size;
-            newW = size;
-            newH = size;
+            // Lock to the supplied aspect ratio (W/H). Pick whichever dimension is "more dragged"
+            // and derive the other; the fixed corner stays put, the rest expands toward the drag.
+            double constrainedW, constrainedH;
+            if (newW / aspectRatio >= newH)
+            {
+                constrainedW = newW;
+                constrainedH = newW / aspectRatio;
+            }
+            else
+            {
+                constrainedH = newH;
+                constrainedW = newH * aspectRatio;
+            }
+            var dirX = Math.Sign(px - fixedX); if (dirX == 0) dirX = 1;
+            var dirY = Math.Sign(py - fixedY); if (dirY == 0) dirY = 1;
+            newX = dirX > 0 ? fixedX : fixedX - constrainedW;
+            newY = dirY > 0 ? fixedY : fixedY - constrainedH;
+            newW = constrainedW;
+            newH = constrainedH;
         }
 
         // Clamp to a minimum so we don't end up with degenerate zero-size shapes.

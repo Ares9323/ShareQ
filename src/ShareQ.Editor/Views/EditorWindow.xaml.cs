@@ -179,6 +179,7 @@ public partial class EditorWindow : FluentWindow
     private void OnSpotlightToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Spotlight;
     private void OnCropToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Crop;
     private void OnResizeClicked(object sender, RoutedEventArgs e) => OpenResizeDialog();
+    private void OnImageClicked(object sender, RoutedEventArgs e) => InsertImageFromFile();
 
     private void RefreshToolButtonHighlight()
     {
@@ -206,6 +207,67 @@ public partial class EditorWindow : FluentWindow
     }
     private void OnUndoClicked(object sender, RoutedEventArgs e) => _vm.UndoCommand.Execute(null);
     private void OnRedoClicked(object sender, RoutedEventArgs e) => _vm.RedoCommand.Execute(null);
+    private void InsertImageFromFile()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Insert image",
+            Filter = "Images (*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp)|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp|All files (*.*)|*.*",
+            CheckFileExists = true
+        };
+        if (dlg.ShowDialog(this) != true) return;
+
+        BitmapSource bs;
+        try
+        {
+            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bmp.UriSource = new Uri(dlg.FileName);
+            bmp.EndInit();
+            bmp.Freeze();
+            bs = bmp;
+        }
+        catch (Exception) { return; }
+
+        InsertImageShape(bs);
+    }
+
+    private void PasteImageFromClipboard()
+    {
+        BitmapSource? bs;
+        try
+        {
+            if (!System.Windows.Clipboard.ContainsImage()) return;
+            bs = System.Windows.Clipboard.GetImage();
+        }
+        catch (System.Runtime.InteropServices.COMException) { return; }
+        if (bs is null) return;
+        InsertImageShape(bs);
+    }
+
+    /// <summary>Encode <paramref name="bs"/> as PNG, fit to ~50% of the canvas, center, add as ImageShape.</summary>
+    private void InsertImageShape(BitmapSource bs)
+    {
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bs));
+        using var ms = new System.IO.MemoryStream();
+        encoder.Save(ms);
+        var bytes = ms.ToArray();
+
+        var canvasW = DrawingCanvas.Width > 0 ? DrawingCanvas.Width : bs.PixelWidth;
+        var canvasH = DrawingCanvas.Height > 0 ? DrawingCanvas.Height : bs.PixelHeight;
+        var maxW = canvasW * 0.5;
+        var maxH = canvasH * 0.5;
+        var scale = Math.Min(1.0, Math.Min(maxW / bs.PixelWidth, maxH / bs.PixelHeight));
+        var w = bs.PixelWidth * scale;
+        var h = bs.PixelHeight * scale;
+        var x = (canvasW - w) / 2;
+        var y = (canvasH - h) / 2;
+
+        _vm.AddImageShape(new ImageShape(x, y, w, h, bytes));
+    }
+
     private void OpenResizeDialog()
     {
         if (SourceImage.Source is not BitmapSource src) return;
@@ -250,6 +312,7 @@ public partial class EditorWindow : FluentWindow
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
         if (ctrl && e.Key == Key.Z) { _vm.UndoCommand.Execute(null); e.Handled = true; return; }
         if (ctrl && e.Key == Key.Y) { _vm.RedoCommand.Execute(null); e.Handled = true; return; }
+        if (ctrl && e.Key == Key.V) { PasteImageFromClipboard(); e.Handled = true; return; }
 
         if (e.Key == Key.Delete || e.Key == Key.Back)
         {
@@ -276,6 +339,7 @@ public partial class EditorWindow : FluentWindow
             case Key.X: _vm.CurrentTool = EditorTool.Pixelate; e.Handled = true; break;
             case Key.O: _vm.CurrentTool = EditorTool.Spotlight; e.Handled = true; break;
             case Key.C: _vm.CurrentTool = EditorTool.Crop; e.Handled = true; break;
+            case Key.I: InsertImageFromFile(); e.Handled = true; break;
             default: break;
         }
     }
@@ -618,6 +682,7 @@ public partial class EditorWindow : FluentWindow
         BlurShape b => b with { X = b.X + dx, Y = b.Y + dy },
         PixelateShape p => p with { X = p.X + dx, Y = p.Y + dy },
         SpotlightShape sp => sp with { X = sp.X + dx, Y = sp.Y + dy },
+        ImageShape i => i with { X = i.X + dx, Y = i.Y + dy },
         _ => s
     };
 
@@ -788,6 +853,7 @@ public partial class EditorWindow : FluentWindow
                 RectangleShape r => r with { Rotation = deg },
                 EllipseShape e => e with { Rotation = deg },
                 TextShape t => t with { Rotation = deg },
+                ImageShape i => i with { Rotation = deg },
                 _ => null
             };
             if (updated is not null) _vm.LiveReplaceShape(s, updated);
@@ -1255,6 +1321,7 @@ public partial class EditorWindow : FluentWindow
         BlurShape b => (b.X, b.Y, b.Width, b.Height),
         PixelateShape p => (p.X, p.Y, p.Width, p.Height),
         SpotlightShape s => (s.X, s.Y, s.Width, s.Height),
+        ImageShape i => (i.X, i.Y, i.Width, i.Height),
         _ => (0, 0, 0, 0)
     };
 
@@ -1292,6 +1359,7 @@ public partial class EditorWindow : FluentWindow
             BlurShape b => CreateBlur(b),
             PixelateShape p => CreatePixelate(p),
             SpotlightShape s => CreateSpotlight(s),
+            ImageShape i => CreateImage(i),
             _ => throw new NotSupportedException($"Unknown shape kind: {shape.GetType().Name}")
         };
         // Drawn shapes never intercept clicks: hit-testing happens geometrically via ShapeHitTester.
@@ -1557,6 +1625,30 @@ public partial class EditorWindow : FluentWindow
         host.Children.Add(img);
     }
 
+    private static UIElement CreateImage(ImageShape i)
+    {
+        var bmp = new System.Windows.Media.Imaging.BitmapImage();
+        bmp.BeginInit();
+        bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+        bmp.StreamSource = new System.IO.MemoryStream(i.PngBytes);
+        bmp.EndInit();
+        bmp.Freeze();
+        var img = new System.Windows.Controls.Image
+        {
+            Source = bmp,
+            Stretch = Stretch.Fill,
+            Width = i.Width,
+            Height = i.Height
+        };
+        Canvas.SetLeft(img, i.X);
+        Canvas.SetTop(img, i.Y);
+        if (i.Rotation != 0)
+        {
+            img.RenderTransform = new RotateTransform(i.Rotation, i.Width / 2, i.Height / 2);
+        }
+        return img;
+    }
+
     private static UIElement EmptyRectFor(double x, double y, double w, double h)
     {
         var r = new System.Windows.Shapes.Rectangle { Width = Math.Max(0, w), Height = Math.Max(0, h), Fill = Brushes.Transparent };
@@ -1645,8 +1737,8 @@ public partial class EditorWindow : FluentWindow
         var showTextSection = textShapes.Count > 0 || _vm.CurrentTool == EditorTool.Text;
         SelTextStyleSection.Visibility = showTextSection ? Visibility.Visible : Visibility.Collapsed;
 
-        // Rotation section: only single-selection of a rotatable shape (rect/ellipse/text).
-        var rotatable = sels.Count == 1 && sels[0] is RectangleShape or EllipseShape or TextShape;
+        // Rotation section: only single-selection of a rotatable shape (rect/ellipse/text/image).
+        var rotatable = sels.Count == 1 && sels[0] is RectangleShape or EllipseShape or TextShape or ImageShape;
         SelRotationSection.Visibility = rotatable ? Visibility.Visible : Visibility.Collapsed;
 
         // Effect section: single-selection of an effect shape (blur/pixelate/spotlight).

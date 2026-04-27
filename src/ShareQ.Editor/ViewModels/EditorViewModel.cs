@@ -103,6 +103,13 @@ public sealed partial class EditorViewModel : ObservableObject
         _commands.Execute(new AddShapeCommand(shape), Shapes);
     }
 
+    public void AddImageShape(ImageShape shape)
+    {
+        if (shape.IsEmpty) return;
+        _commands.Execute(new AddShapeCommand(shape), Shapes);
+        SetSelection([shape]);
+    }
+
     public void ResetStepCounter()
     {
         if (_tools[EditorTool.StepCounter] is StepCounterTool t) t.Reset();

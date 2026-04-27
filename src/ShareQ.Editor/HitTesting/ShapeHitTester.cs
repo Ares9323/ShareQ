@@ -28,8 +28,18 @@ public static class ShapeHitTester
         BlurShape b => HitRectRegion(b.X, b.Y, b.Width, b.Height, px, py),
         PixelateShape p => HitRectRegion(p.X, p.Y, p.Width, p.Height, px, py),
         SpotlightShape s => HitRectRegion(s.X, s.Y, s.Width, s.Height, px, py),
+        // Image: rotate-aware solid rect (whole interior is hittable, unlike effect shapes).
+        ImageShape i => HitImageRotated(i, px, py),
         _ => false
     };
+
+    private static bool HitImageRotated(ImageShape i, double px, double py)
+    {
+        var cx = i.X + i.Width / 2;
+        var cy = i.Y + i.Height / 2;
+        var (qx, qy) = UnrotateAroundCenter(px, py, cx, cy, i.Rotation);
+        return qx >= i.X && qx <= i.X + i.Width && qy >= i.Y && qy <= i.Y + i.Height;
+    }
 
     /// <summary>Hit the perimeter of a rect region (for effect shapes whose interior is "see-through"
     /// in editing terms — clicking the middle should not block clicks on shapes underneath).</summary>
