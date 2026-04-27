@@ -128,15 +128,21 @@ public partial class ColorSwatchButton : UserControl
 
     private Border BuildSwatch(ShapeColor c)
     {
+        var inner = new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            Background = c.IsTransparent ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb(c.A, c.R, c.G, c.B))
+        };
         var preview = new Border
         {
             Width = 24, Height = 24, Margin = new Thickness(2),
             BorderBrush = Brushes.Gray,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(12),
-            Background = c.IsTransparent ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb(c.A, c.R, c.G, c.B)),
+            Background = (DrawingBrush)Resources["CheckerBrush"]!,
             Cursor = Cursors.Hand,
-            Tag = c
+            Tag = c,
+            Child = inner
         };
         preview.MouseLeftButtonUp += (_, _) =>
         {

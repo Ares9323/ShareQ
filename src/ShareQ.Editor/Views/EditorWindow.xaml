@@ -88,14 +88,33 @@
                 <StackPanel x:Name="SelectedShapeStack" Visibility="Collapsed">
                     <TextBlock x:Name="SelectedShapeKindText" Foreground="White" Margin="0,0,0,12" />
 
-                    <TextBlock Text="Outline" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
-                    <views:ColorSwatchButton x:Name="SelOutlineSwatch" Margin="0,0,0,12" />
-
-                    <TextBlock Text="Fill" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
-                    <views:ColorSwatchButton x:Name="SelFillSwatch" Margin="0,0,0,12" />
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Outline" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                            <views:ColorSwatchButton x:Name="SelOutlineSwatch" HorizontalAlignment="Left" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" x:Name="SelFillSection">
+                            <TextBlock Text="Fill" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                            <views:ColorSwatchButton x:Name="SelFillSwatch" HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </Grid>
 
                     <TextBlock Text="Stroke" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
                     <Slider x:Name="SelStrokeSlider" Minimum="1" Maximum="20" Margin="0,0,0,12" />
+
+                    <ui:Button Content="Apply current"
+                               HorizontalAlignment="Stretch"
+                               Margin="0,0,0,4"
+                               ToolTip="Apply the toolbar's current outline/fill/stroke to the selected shape(s)"
+                               Click="OnApplyCurrentClicked" />
+                    <ui:Button Content="Set as current"
+                               HorizontalAlignment="Stretch"
+                               ToolTip="Use the selected shape's outline/fill/stroke as the toolbar's current values"
+                               Click="OnSetAsCurrentClicked" />
                 </StackPanel>
             </StackPanel>
         </Border>

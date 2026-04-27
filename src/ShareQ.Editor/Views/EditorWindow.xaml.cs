@@ -435,6 +435,35 @@ public partial class EditorWindow : FluentWindow
         }
     }
 
+    /// <summary>Apply the toolbar's current outline/fill/stroke to every selected shape in one gesture.
+    /// The selection's live-edit snapshot was captured when the shapes were selected, so this
+    /// commits as a single undo step per shape (same machinery as drag-to-move).</summary>
+    private void OnApplyCurrentClicked(object sender, RoutedEventArgs e)
+    {
+        if (_vm.SelectedShapes.Count == 0) return;
+        var outline = _vm.OutlineColor;
+        var fill = _vm.FillColor;
+        var stroke = _vm.StrokeWidth;
+
+        foreach (var s in _vm.SelectedShapes.ToList())
+        {
+            var updated = ApplyStrokeWidth(ApplyFillColor(ApplyOutlineColor(s, outline), fill), stroke);
+            _vm.LiveReplaceShape(s, updated);
+        }
+        RefreshPropertyPanel();
+    }
+
+    /// <summary>Adopt the selected shape's outline/fill/stroke as the toolbar's current values.
+    /// On multi-selection, takes the first shape's values.</summary>
+    private void OnSetAsCurrentClicked(object sender, RoutedEventArgs e)
+    {
+        if (_vm.SelectedShapes.Count == 0) return;
+        var s = _vm.SelectedShapes[0];
+        _vm.OutlineColor = s.Outline;
+        _vm.FillColor = s.Fill;
+        _vm.StrokeWidth = s.StrokeWidth;
+    }
+
     private static Shape ApplyOutlineColor(Shape s, ShapeColor c) => s switch
     {
         RectangleShape r => r with { Outline = c },
@@ -452,6 +481,8 @@ public partial class EditorWindow : FluentWindow
         // Arrow/Line/Freehand have no fill semantics; ignore.
         _ => s
     };
+
+    private static bool ShapeSupportsFill(Shape s) => s is RectangleShape or EllipseShape;
 
     private static Shape ApplyStrokeWidth(Shape s, double w) => s switch
     {
@@ -696,11 +727,17 @@ public partial class EditorWindow : FluentWindow
         NoSelectionText.Visibility = Visibility.Collapsed;
         SelectedShapeStack.Visibility = Visibility.Visible;
 
+        // Hide the Fill block when no selected shape supports fill (arrows/lines/freehand).
+        var anyFillCapable = sels.Any(ShapeSupportsFill);
+        SelFillSection.Visibility = anyFillCapable ? Visibility.Visible : Visibility.Collapsed;
+
         // For multi-selection, show common values where all selected shapes agree;
         // otherwise show a sensible placeholder (the user can still pick a value to apply to all).
         var first = sels[0];
         var allSameOutline = sels.All(s => s.Outline == first.Outline);
-        var allSameFill = sels.All(s => s.Fill == first.Fill);
+        var fillCapable = sels.Where(ShapeSupportsFill).ToList();
+        var allSameFill = fillCapable.Count > 0 && fillCapable.All(s => s.Fill == fillCapable[0].Fill);
+        var fillRef = fillCapable.Count > 0 ? fillCapable[0].Fill : ShapeColor.Transparent;
         var allSameStroke = sels.All(s => Math.Abs(s.StrokeWidth - first.StrokeWidth) < 0.01);
 
         _suppressLiveUpdates = true;
@@ -711,7 +748,7 @@ public partial class EditorWindow : FluentWindow
                 : $"{sels.Count} shapes selected";
 
             SelOutlineSwatch.SelectedColor = allSameOutline ? first.Outline : ShapeColor.Black;
-            SelFillSwatch.SelectedColor = allSameFill ? first.Fill : ShapeColor.Transparent;
+            SelFillSwatch.SelectedColor = allSameFill ? fillRef : ShapeColor.Transparent;
             SelStrokeSlider.Value = allSameStroke ? first.StrokeWidth : 2;
         }
         finally
