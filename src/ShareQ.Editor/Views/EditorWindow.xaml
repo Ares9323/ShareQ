@@ -109,6 +109,20 @@
                         <Slider x:Name="SelStrokeSlider" Minimum="1" Maximum="20" Margin="0,0,0,12" />
                     </StackPanel>
 
+                    <StackPanel x:Name="SelRotationSection" Visibility="Collapsed" Margin="0,0,0,12">
+                        <TextBlock Text="Rotation" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Slider Grid.Column="0" x:Name="SelRotationSlider" Minimum="-180" Maximum="180" VerticalAlignment="Center" />
+                            <TextBox Grid.Column="1" x:Name="SelRotationBox"
+                                     Width="44" Margin="6,0,0,0" Padding="2"
+                                     VerticalAlignment="Center" TextAlignment="Right" />
+                        </Grid>
+                    </StackPanel>
+
                     <StackPanel x:Name="SelTextStyleSection" Visibility="Collapsed" Margin="0,0,0,12">
                         <TextBlock Text="Text color" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
                         <views:ColorSwatchButton x:Name="SelTextColorSwatch" HorizontalAlignment="Left" Margin="0,0,0,8" />

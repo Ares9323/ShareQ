@@ -7,7 +7,8 @@ public sealed record TextShape(
     TextStyle Style,
     ShapeColor Outline,
     ShapeColor Fill,
-    double StrokeWidth)
+    double StrokeWidth,
+    double Rotation = 0)
     : Shape(Outline, Fill, StrokeWidth)
 {
     public bool IsEmpty => string.IsNullOrWhiteSpace(Text);

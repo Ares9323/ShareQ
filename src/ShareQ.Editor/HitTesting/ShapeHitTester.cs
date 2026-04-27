@@ -18,15 +18,51 @@ public static class ShapeHitTester
 
     public static bool IsHit(Shape shape, double px, double py) => shape switch
     {
-        RectangleShape r => HitRect(r, px, py),
-        EllipseShape e => HitEllipse(e, px, py),
+        RectangleShape r => HitRect(r, UnrotateAroundCenter(px, py, r.X + r.Width / 2, r.Y + r.Height / 2, r.Rotation)),
+        EllipseShape e => HitEllipse(e, UnrotateAroundCenter(px, py, e.X + e.Width / 2, e.Y + e.Height / 2, e.Rotation)),
         ArrowShape a => HitSegment(a.FromX, a.FromY, a.ToX, a.ToY, a.StrokeWidth, px, py),
         LineShape l => HitSegment(l.FromX, l.FromY, l.ToX, l.ToY, l.StrokeWidth, px, py),
         FreehandShape f => HitFreehand(f, px, py),
-        TextShape t => HitText(t, px, py),
+        TextShape t => HitTextRotated(t, px, py),
         StepCounterShape c => HitStepCounter(c, px, py),
         _ => false
     };
+
+    /// <summary>Rotate <paramref name="px"/>,<paramref name="py"/> by -<paramref name="degrees"/> around
+    /// (<paramref name="cx"/>,<paramref name="cy"/>). Used to hit-test a rotated shape against its
+    /// non-rotated geometry.</summary>
+    public static (double X, double Y) UnrotateAroundCenter(double px, double py, double cx, double cy, double degrees)
+    {
+        if (degrees == 0) return (px, py);
+        var rad = -degrees * Math.PI / 180.0;
+        var cos = Math.Cos(rad);
+        var sin = Math.Sin(rad);
+        var dx = px - cx;
+        var dy = py - cy;
+        return (cx + dx * cos - dy * sin, cy + dx * sin + dy * cos);
+    }
+
+    private static bool HitRect(RectangleShape r, (double X, double Y) p) => HitRect(r, p.X, p.Y);
+
+    private static bool HitEllipse(EllipseShape e, (double X, double Y) p) => HitEllipse(e, p.X, p.Y);
+
+    private static bool HitTextRotated(TextShape t, double px, double py)
+    {
+        // The rotation pivot of a TextShape is the center of its bbox.
+        var (w, h) = TextBboxSize(t);
+        var cx = t.X + w / 2;
+        var cy = t.Y + h / 2;
+        var (qx, qy) = UnrotateAroundCenter(px, py, cx, cy, t.Rotation);
+        return HitText(t, qx, qy);
+    }
+
+    private static (double Width, double Height) TextBboxSize(TextShape t)
+    {
+        var lines = t.Text.Length == 0 ? new[] { "" } : t.Text.Split('\n');
+        var maxLen = 0;
+        foreach (var line in lines) if (line.Length > maxLen) maxLen = line.Length;
+        return (Math.Max(8, maxLen * t.Style.FontSize * 0.55), lines.Length * t.Style.FontSize * 1.2);
+    }
 
     private static bool HitText(TextShape t, double px, double py)
     {

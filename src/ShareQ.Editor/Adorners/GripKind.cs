@@ -10,5 +10,7 @@ public enum GripKind
     // 2-grip endpoint for line/arrow
     From, To,
     // Single grip for text font-size / stepcounter radius
-    Resize
+    Resize,
+    // Rotation grip floating above the shape (rect / ellipse / text)
+    Rotate
 }

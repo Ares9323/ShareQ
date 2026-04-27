@@ -91,6 +91,9 @@ public partial class EditorWindow : FluentWindow
         swatchColorDesc?.AddValueChanged(SelOutlineSwatch, (_, _) => OnSelOutlineChanged());
         swatchColorDesc?.AddValueChanged(SelFillSwatch, (_, _) => OnSelFillChanged());
         SelStrokeSlider.ValueChanged += (_, _) => OnSelStrokeChanged();
+        SelRotationSlider.ValueChanged += (_, _) => OnSelRotationSliderChanged();
+        SelRotationBox.LostFocus += (_, _) => OnSelRotationBoxCommitted();
+        SelRotationBox.KeyDown += (_, ev) => { if (ev.Key == Key.Enter) OnSelRotationBoxCommitted(); };
 
         // Populate font combo with all system fonts (sorted alphabetically) and wrap in a CollectionView
         // so we can apply a substring (not just prefix) filter when the user types into the editable combo.
@@ -251,7 +254,8 @@ public partial class EditorWindow : FluentWindow
             if (_vm.SelectedShapes.Count == 1)
             {
                 var sel = _vm.SelectedShapes[0];
-                var grip = ShapeGripLayout.HitTest(sel, p.X, p.Y, ShapeGripLayout.DefaultHitTolerance / _zoom);
+                var rotOffset = sel is RectangleShape or EllipseShape or TextShape ? 25.0 / _zoom : 0;
+                var grip = ShapeGripLayout.HitTest(sel, p.X, p.Y, ShapeGripLayout.DefaultHitTolerance / _zoom, rotOffset);
                 if (grip != GripKind.None)
                 {
                     _activeGrip = grip;
@@ -389,7 +393,9 @@ public partial class EditorWindow : FluentWindow
             if (DrawingCanvas.Cursor != null) DrawingCanvas.Cursor = null;
             return;
         }
-        var grip = ShapeGripLayout.HitTest(_vm.SelectedShapes[0], p.X, p.Y, ShapeGripLayout.DefaultHitTolerance / _zoom);
+        var sel = _vm.SelectedShapes[0];
+        var rotOffset = sel is RectangleShape or EllipseShape or TextShape ? 25.0 / _zoom : 0;
+        var grip = ShapeGripLayout.HitTest(sel, p.X, p.Y, ShapeGripLayout.DefaultHitTolerance / _zoom, rotOffset);
         Cursor? c = grip switch
         {
             GripKind.TopLeft or GripKind.BottomRight or GripKind.Resize => Cursors.SizeNWSE,
@@ -397,6 +403,7 @@ public partial class EditorWindow : FluentWindow
             GripKind.Top or GripKind.Bottom => Cursors.SizeNS,
             GripKind.Left or GripKind.Right => Cursors.SizeWE,
             GripKind.From or GripKind.To => Cursors.Hand,
+            GripKind.Rotate => Cursors.Cross,
             _ => null
         };
         if (DrawingCanvas.Cursor != c) DrawingCanvas.Cursor = c;
@@ -578,6 +585,45 @@ public partial class EditorWindow : FluentWindow
         }
     }
 
+    private void OnSelRotationSliderChanged()
+    {
+        if (_suppressLiveUpdates) return;
+        var deg = SelRotationSlider.Value;
+        SelRotationBox.Text = ((int)Math.Round(deg)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        ApplyRotation(deg);
+    }
+
+    private void OnSelRotationBoxCommitted()
+    {
+        if (_suppressLiveUpdates) return;
+        if (!double.TryParse(SelRotationBox.Text, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var v))
+        {
+            SelRotationBox.Text = ((int)Math.Round(SelRotationSlider.Value)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return;
+        }
+        v = ((v + 180) % 360 + 360) % 360 - 180;
+        _suppressLiveUpdates = true;
+        try { SelRotationSlider.Value = v; }
+        finally { _suppressLiveUpdates = false; }
+        ApplyRotation(v);
+    }
+
+    private void ApplyRotation(double deg)
+    {
+        foreach (var s in _vm.SelectedShapes.ToList())
+        {
+            Shape? updated = s switch
+            {
+                RectangleShape r => r with { Rotation = deg },
+                EllipseShape e => e with { Rotation = deg },
+                TextShape t => t with { Rotation = deg },
+                _ => null
+            };
+            if (updated is not null) _vm.LiveReplaceShape(s, updated);
+        }
+    }
+
     private void BeginInlineTextEdit(double x, double y, TextShape? existing)
     {
         CommitInlineTextEdit();
@@ -606,6 +652,11 @@ public partial class EditorWindow : FluentWindow
         };
         Canvas.SetLeft(_activeTextBox, x);
         Canvas.SetTop(_activeTextBox, y);
+        if (existing is { Rotation: var rot } && rot != 0)
+        {
+            var existingBounds = TextBounds(existing);
+            _activeTextBox.RenderTransform = new RotateTransform(rot, existingBounds.Width / 2, existingBounds.Height / 2);
+        }
         DrawingCanvas.Children.Add(_activeTextBox);
         _activeTextBox.KeyDown += OnInlineTextBoxKeyDown;
         var tb = _activeTextBox;
@@ -652,8 +703,9 @@ public partial class EditorWindow : FluentWindow
         }
 
         // The TextShape's Outline is unused for rendering (foreground comes from Style.Color);
-        // we still set it for hit-testing parity with other shapes.
-        var shape = new TextShape(x, y, text, style, style.Color, ShapeColor.Transparent, 1);
+        // we still set it for hit-testing parity with other shapes. Preserve rotation on edit.
+        var rotation = existing?.Rotation ?? 0;
+        var shape = new TextShape(x, y, text, style, style.Color, ShapeColor.Transparent, 1, rotation);
         if (existing is null)
         {
             _vm.AddTextShape(shape);
@@ -954,6 +1006,7 @@ public partial class EditorWindow : FluentWindow
         foreach (var s in _vm.SelectedShapes)
         {
             var b = ComputeBounds(s);
+            var rotation = ShapeGripLayout.RotationOf(s);
             var box = new System.Windows.Shapes.Rectangle
             {
                 Width = b.Width + 8, Height = b.Height + 8,
@@ -965,29 +1018,52 @@ public partial class EditorWindow : FluentWindow
             };
             Canvas.SetLeft(box, b.X - 4);
             Canvas.SetTop(box, b.Y - 4);
+            if (rotation != 0)
+            {
+                // Pivot is the bbox center, expressed in the rectangle's local coords.
+                box.RenderTransform = new RotateTransform(rotation, (b.Width + 8) / 2, (b.Height + 8) / 2);
+            }
             DrawingCanvas.Children.Add(box);
         }
 
         // Edit grips only for single-selection in Select tool. Multi-select keeps just the dashed boxes.
         // Grips are sized in canvas units; we apply an inverse zoom transform so they keep a constant
-        // 8×8-pixel screen footprint regardless of zoom level.
+        // 8×8-pixel screen footprint regardless of zoom level. For rotated shapes, the grip layout
+        // is computed in local (non-rotated) coordinates, then a RotateTransform is applied to each
+        // grip around the shape's pivot so they follow the rotation visually.
         if (_vm.CurrentTool == EditorTool.Select && _vm.SelectedShapes.Count == 1)
         {
+            var sel = _vm.SelectedShapes[0];
             var inv = 1.0 / _zoom;
-            foreach (var g in ShapeGripLayout.GripsFor(_vm.SelectedShapes[0]))
+            var rotation = ShapeGripLayout.RotationOf(sel);
+            var pivot = ShapeGripLayout.PivotOf(sel);
+            var rotateOffset = sel is RectangleShape or EllipseShape or TextShape ? 25.0 / _zoom : 0;
+
+            foreach (var g in ShapeGripLayout.GripsFor(sel, rotateOffset))
             {
+                var isRotateGrip = g.Kind == GripKind.Rotate;
                 var grip = new System.Windows.Shapes.Rectangle
                 {
                     Width = 8, Height = 8,
                     Stroke = new SolidColorBrush(Color.FromArgb(255, 80, 200, 255)),
                     StrokeThickness = 1.5,
-                    Fill = Brushes.White,
+                    Fill = isRotateGrip ? new SolidColorBrush(Color.FromArgb(255, 80, 200, 255)) : Brushes.White,
+                    RadiusX = isRotateGrip ? 4 : 0,
+                    RadiusY = isRotateGrip ? 4 : 0,
                     Tag = "adorner",
-                    IsHitTestVisible = false,
-                    RenderTransform = new ScaleTransform(inv, inv, 4, 4)
+                    IsHitTestVisible = false
                 };
                 Canvas.SetLeft(grip, g.X - 4);
                 Canvas.SetTop(grip, g.Y - 4);
+                var transforms = new TransformGroup();
+                transforms.Children.Add(new ScaleTransform(inv, inv, 4, 4));
+                if (rotation != 0)
+                {
+                    // RotateTransform is applied in the grip's local coords, so the pivot must be
+                    // expressed relative to the grip's top-left (Canvas.SetLeft = g.X - 4).
+                    transforms.Children.Add(new RotateTransform(rotation, pivot.X - (g.X - 4), pivot.Y - (g.Y - 4)));
+                }
+                grip.RenderTransform = transforms;
                 DrawingCanvas.Children.Add(grip);
             }
         }
@@ -1055,6 +1131,12 @@ public partial class EditorWindow : FluentWindow
         };
         Canvas.SetLeft(rect, r.X);
         Canvas.SetTop(rect, r.Y);
+        if (r.Rotation != 0)
+        {
+            // RotateTransform's center is in the element's own coordinate system (origin top-left),
+            // so the geometric center is (Width/2, Height/2).
+            rect.RenderTransform = new RotateTransform(r.Rotation, r.Width / 2, r.Height / 2);
+        }
         return rect;
     }
 
@@ -1070,6 +1152,10 @@ public partial class EditorWindow : FluentWindow
         };
         Canvas.SetLeft(ellipse, e.X);
         Canvas.SetTop(ellipse, e.Y);
+        if (e.Rotation != 0)
+        {
+            ellipse.RenderTransform = new RotateTransform(e.Rotation, e.Width / 2, e.Height / 2);
+        }
         return ellipse;
     }
 
@@ -1148,6 +1234,10 @@ public partial class EditorWindow : FluentWindow
         };
         Canvas.SetLeft(tb, t.X);
         Canvas.SetTop(tb, t.Y);
+        if (t.Rotation != 0)
+        {
+            tb.RenderTransform = new RotateTransform(t.Rotation, bounds.Width / 2, bounds.Height / 2);
+        }
         return tb;
     }
 
@@ -1238,6 +1328,10 @@ public partial class EditorWindow : FluentWindow
         var showTextSection = textShapes.Count > 0 || _vm.CurrentTool == EditorTool.Text;
         SelTextStyleSection.Visibility = showTextSection ? Visibility.Visible : Visibility.Collapsed;
 
+        // Rotation section: only single-selection of a rotatable shape (rect/ellipse/text).
+        var rotatable = sels.Count == 1 && sels[0] is RectangleShape or EllipseShape or TextShape;
+        SelRotationSection.Visibility = rotatable ? Visibility.Visible : Visibility.Collapsed;
+
         // For multi-selection, show common values where all selected shapes agree;
         // otherwise show a sensible placeholder (the user can still pick a value to apply to all).
         var first = sels[0];
@@ -1257,6 +1351,14 @@ public partial class EditorWindow : FluentWindow
             SelOutlineSwatch.SelectedColor = allSameOutline ? first.Outline : ShapeColor.Black;
             SelFillSwatch.SelectedColor = allSameFill ? fillRef : ShapeColor.Transparent;
             SelStrokeSlider.Value = allSameStroke ? first.StrokeWidth : 2;
+
+            if (rotatable)
+            {
+                var rot = ShapeGripLayout.RotationOf(sels[0]);
+                rot = ((rot + 180) % 360 + 360) % 360 - 180;
+                SelRotationSlider.Value = rot;
+                SelRotationBox.Text = ((int)Math.Round(rot)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
 
             if (textShapes.Count > 0)
             {

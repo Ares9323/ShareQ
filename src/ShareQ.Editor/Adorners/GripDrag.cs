@@ -11,6 +11,9 @@ public static class GripDrag
     /// text/stepcounter behave the same as without shift.</param>
     public static Shape? Transform(Shape start, GripKind grip, double px, double py, bool shiftHeld) => start switch
     {
+        RectangleShape r when grip == GripKind.Rotate => r with { Rotation = AngleFromPivot(r.X + r.Width / 2, r.Y + r.Height / 2, px, py, shiftHeld) },
+        EllipseShape e when grip == GripKind.Rotate => e with { Rotation = AngleFromPivot(e.X + e.Width / 2, e.Y + e.Height / 2, px, py, shiftHeld) },
+        TextShape txt when grip == GripKind.Rotate => txt with { Rotation = AngleFromPivot(TextCenterX(txt), TextCenterY(txt), px, py, shiftHeld) },
         RectangleShape r => ResizeRect(new RectShim(r.X, r.Y, r.Width, r.Height), grip, px, py, shiftHeld) is { } box
             ? r with { X = box.X, Y = box.Y, Width = box.W, Height = box.H }
             : null,
@@ -86,6 +89,36 @@ public static class GripDrag
         if (newW < 1) newW = 1;
         if (newH < 1) newH = 1;
         return (newX, newY, newW, newH);
+    }
+
+    /// <summary>The Rotate grip lives ABOVE the shape (negative Y from pivot) when Rotation == 0,
+    /// so we offset the raw atan2 by 90° to get a clean 0° = "no rotation". Shift snaps to 15° steps.</summary>
+    private static double AngleFromPivot(double cx, double cy, double px, double py, bool shiftHeld)
+    {
+        var dx = px - cx;
+        var dy = py - cy;
+        if (dx == 0 && dy == 0) return 0;
+        var deg = Math.Atan2(dy, dx) * 180.0 / Math.PI + 90.0;
+        if (shiftHeld) deg = Math.Round(deg / 15.0) * 15.0;
+        // Normalize to [-180, 180): more intuitive than [0, 360) — left = negative, right = positive.
+        deg = ((deg + 180) % 360 + 360) % 360 - 180;
+        return deg;
+    }
+
+    private static double TextCenterX(TextShape t)
+    {
+        var lines = t.Text.Length == 0 ? new[] { "" } : t.Text.Split('\n');
+        var maxLen = 0;
+        foreach (var line in lines) if (line.Length > maxLen) maxLen = line.Length;
+        var w = Math.Max(8, maxLen * t.Style.FontSize * 0.55);
+        return t.X + w / 2;
+    }
+
+    private static double TextCenterY(TextShape t)
+    {
+        var lines = t.Text.Length == 0 ? new[] { "" } : t.Text.Split('\n');
+        var h = lines.Length * t.Style.FontSize * 1.2;
+        return t.Y + h / 2;
     }
 
     private static (double X, double Y) SnapEndpoint(double anchorX, double anchorY, double px, double py, bool shiftHeld)
