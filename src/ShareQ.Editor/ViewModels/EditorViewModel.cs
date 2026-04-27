@@ -23,7 +23,9 @@ public sealed partial class EditorViewModel : ObservableObject
             [EditorTool.Arrow] = new ArrowTool(),
             [EditorTool.Line] = new LineTool(),
             [EditorTool.Ellipse] = new EllipseTool(),
-            [EditorTool.Freehand] = new FreehandTool()
+            [EditorTool.Freehand] = new FreehandTool(),
+            [EditorTool.Text] = new TextTool(TextStyle.Default),
+            [EditorTool.StepCounter] = new StepCounterTool()
         };
         _activeTool = _tools[EditorTool.Rectangle];
         Shapes = [];
@@ -48,6 +50,9 @@ public sealed partial class EditorViewModel : ObservableObject
 
     [ObservableProperty]
     private double _strokeWidth = 2;
+
+    [ObservableProperty]
+    private TextStyle _currentTextStyle = TextStyle.Default;
 
     [ObservableProperty]
     private Shape? _selectedShape;
@@ -81,6 +86,24 @@ public sealed partial class EditorViewModel : ObservableObject
         if (value != EditorTool.Select) SetSelection([]);
     }
 
+    partial void OnCurrentTextStyleChanged(TextStyle value)
+    {
+        // Refresh the TextTool so the next click uses the new style.
+        _tools[EditorTool.Text] = new TextTool(value);
+        if (CurrentTool == EditorTool.Text) _activeTool = _tools[EditorTool.Text];
+    }
+
+    public void AddTextShape(TextShape shape)
+    {
+        if (shape.IsEmpty) return;
+        _commands.Execute(new AddShapeCommand(shape), Shapes);
+    }
+
+    public void ResetStepCounter()
+    {
+        if (_tools[EditorTool.StepCounter] is StepCounterTool t) t.Reset();
+    }
+
     partial void OnSelectedShapeChanged(Shape? value)
     {
         // Suppress when LiveReplaceShape is about to update both SelectedShapes and SelectedShape.
@@ -98,6 +121,12 @@ public sealed partial class EditorViewModel : ObservableObject
 
     public void BeginGesture(double x, double y)
     {
+        // Re-derive the next step number from the current shape set so undo/delete reuses freed numbers.
+        if (_activeTool is StepCounterTool sct)
+        {
+            var maxN = Shapes.OfType<StepCounterShape>().Select(s => s.Number).DefaultIfEmpty(0).Max();
+            sct.SetNext(maxN + 1);
+        }
         _activeTool.Begin(x, y, OutlineColor, FillColor, StrokeWidth);
         OnPropertyChanged(nameof(PreviewShape));
     }
@@ -114,6 +143,10 @@ public sealed partial class EditorViewModel : ObservableObject
         if (committed is not null)
         {
             _commands.Execute(new AddShapeCommand(committed), Shapes);
+            // Auto-select the just-drawn shape so the property panel shows its attributes.
+            // The active tool stays as-is — the user can keep drawing more shapes; the next
+            // BeginGesture will not clear the selection (only a tool switch does).
+            SetSelection([committed]);
         }
         OnPropertyChanged(nameof(PreviewShape));
     }

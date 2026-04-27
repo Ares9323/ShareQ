@@ -23,8 +23,27 @@ public static class ShapeHitTester
         ArrowShape a => HitSegment(a.FromX, a.FromY, a.ToX, a.ToY, a.StrokeWidth, px, py),
         LineShape l => HitSegment(l.FromX, l.FromY, l.ToX, l.ToY, l.StrokeWidth, px, py),
         FreehandShape f => HitFreehand(f, px, py),
+        TextShape t => HitText(t, px, py),
+        StepCounterShape c => HitStepCounter(c, px, py),
         _ => false
     };
+
+    private static bool HitText(TextShape t, double px, double py)
+    {
+        var lines = t.Text.Length == 0 ? new[] { "" } : t.Text.Split('\n');
+        var maxLen = 0;
+        foreach (var line in lines) if (line.Length > maxLen) maxLen = line.Length;
+        var width = Math.Max(8, maxLen * t.Style.FontSize * 0.55);
+        var height = lines.Length * t.Style.FontSize * 1.2;
+        return px >= t.X && px <= t.X + width && py >= t.Y && py <= t.Y + height;
+    }
+
+    private static bool HitStepCounter(StepCounterShape c, double px, double py)
+    {
+        var dx = px - c.CenterX;
+        var dy = py - c.CenterY;
+        return dx * dx + dy * dy <= c.Radius * c.Radius;
+    }
 
     private static bool HitRect(RectangleShape r, double x, double y)
     {

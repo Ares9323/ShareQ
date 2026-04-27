@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using ShareQ.Editor.Adorners;
 using ShareQ.Editor.HitTesting;
 using ShareQ.Editor.Model;
 using ShareQ.Editor.Tools;
@@ -40,6 +41,16 @@ public partial class EditorWindow : FluentWindow
     private List<Shape> _liveEditOriginals = [];
     private bool _suppressLiveUpdates;
 
+    // Inline text editing: a TextBox is parented to the canvas at the click point.
+    // _editingTextShape is non-null only when modifying an existing TextShape.
+    private System.Windows.Controls.TextBox? _activeTextBox;
+    private TextShape? _editingTextShape;
+
+    // Grip drag state (resize / endpoint / font-size). Only active for single-selection in Select tool.
+    private GripKind _activeGrip = GripKind.None;
+    private Shape? _gripStartShape;
+    private double _gripAnchorX, _gripAnchorY;
+
     public EditorWindow(EditorViewModel viewModel)
     {
         InitializeComponent();
@@ -61,7 +72,7 @@ public partial class EditorWindow : FluentWindow
             if (e.PropertyName == nameof(EditorViewModel.PreviewShape)) RedrawPreview();
             if (e.PropertyName == nameof(EditorViewModel.SourcePngBytes)) LoadSourceImage();
             if (e.PropertyName == nameof(EditorViewModel.SelectedShape)) OnSelectedShapeChanged();
-            if (e.PropertyName == nameof(EditorViewModel.CurrentTool)) RefreshToolButtonHighlight();
+            if (e.PropertyName == nameof(EditorViewModel.CurrentTool)) { CommitInlineTextEdit(); RefreshToolButtonHighlight(); RefreshPropertyPanel(); }
         };
         _vm.SelectedShapes.CollectionChanged += (_, e) =>
         {
@@ -81,8 +92,32 @@ public partial class EditorWindow : FluentWindow
         swatchColorDesc?.AddValueChanged(SelFillSwatch, (_, _) => OnSelFillChanged());
         SelStrokeSlider.ValueChanged += (_, _) => OnSelStrokeChanged();
 
+        // Populate font combo with all system fonts (sorted alphabetically) and wrap in a CollectionView
+        // so we can apply a substring (not just prefix) filter when the user types into the editable combo.
+        var systemFonts = Fonts.SystemFontFamilies
+            .Select(f => f.Source)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        SelFontFamilyCombo.ItemsSource = systemFonts;
+        WireFontFilter(SelFontFamilyCombo, systemFonts);
+
+        SelFontFamilyCombo.SelectionChanged += (_, _) => OnSelTextStyleChanged();
+        SelFontSizeSlider.ValueChanged += (_, _) => OnSelFontSizeSliderChanged();
+        SelFontSizeBox.LostFocus += (_, _) => OnSelFontSizeBoxCommitted();
+        SelFontSizeBox.KeyDown += (_, ev) => { if (ev.Key == Key.Enter) OnSelFontSizeBoxCommitted(); };
+        SelBoldCheck.Checked += (_, _) => OnSelTextStyleChanged();
+        SelBoldCheck.Unchecked += (_, _) => OnSelTextStyleChanged();
+        SelItalicCheck.Checked += (_, _) => OnSelTextStyleChanged();
+        SelItalicCheck.Unchecked += (_, _) => OnSelTextStyleChanged();
+
+        var swatchColorDescAlt = System.ComponentModel.DependencyPropertyDescriptor.FromProperty(
+            ColorSwatchButton.SelectedColorProperty, typeof(ColorSwatchButton));
+        swatchColorDescAlt?.AddValueChanged(SelTextColorSwatch, (_, _) => OnSelTextStyleChanged());
+
         Loaded += (_, _) => { LoadSourceImage(); RefreshPropertyPanel(); RefreshToolButtonHighlight(); };
-        Closing += (_, _) => CommitPendingLiveEdit();
+        Closing += (_, _) => { CommitInlineTextEdit(); CommitPendingLiveEdit(); };
     }
 
     public bool Saved { get; private set; }
@@ -109,6 +144,8 @@ public partial class EditorWindow : FluentWindow
     private void OnLineToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Line;
     private void OnEllipseToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Ellipse;
     private void OnFreehandToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Freehand;
+    private void OnTextToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Text;
+    private void OnStepToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.StepCounter;
 
     private void RefreshToolButtonHighlight()
     {
@@ -119,7 +156,9 @@ public partial class EditorWindow : FluentWindow
             (Btn: ArrowToolBtn, Tool: EditorTool.Arrow),
             (Btn: LineToolBtn, Tool: EditorTool.Line),
             (Btn: EllipseToolBtn, Tool: EditorTool.Ellipse),
-            (Btn: FreehandToolBtn, Tool: EditorTool.Freehand)
+            (Btn: FreehandToolBtn, Tool: EditorTool.Freehand),
+            (Btn: TextToolBtn, Tool: EditorTool.Text),
+            (Btn: StepToolBtn, Tool: EditorTool.StepCounter)
         };
         foreach (var (btn, tool) in buttons)
         {
@@ -152,6 +191,8 @@ public partial class EditorWindow : FluentWindow
         _zoom = clamped;
         CanvasHost.LayoutTransform = new ScaleTransform(_zoom, _zoom);
         ZoomLabel.Text = $"{_zoom * 100:F0}%";
+        // Grips are sized in screen pixels via inverse zoom; refresh so the new factor applies.
+        RefreshSelectionAdorner();
     }
 
     private void OnWindowKeyDown(object sender, KeyEventArgs e)
@@ -181,20 +222,57 @@ public partial class EditorWindow : FluentWindow
             case Key.L: _vm.CurrentTool = EditorTool.Line; e.Handled = true; break;
             case Key.E: _vm.CurrentTool = EditorTool.Ellipse; e.Handled = true; break;
             case Key.P: _vm.CurrentTool = EditorTool.Freehand; e.Handled = true; break;
+            case Key.T: _vm.CurrentTool = EditorTool.Text; e.Handled = true; break;
+            case Key.N: _vm.CurrentTool = EditorTool.StepCounter; e.Handled = true; break;
             default: break;
         }
     }
 
     private void OnCanvasMouseDown(object sender, MouseButtonEventArgs e)
     {
+        // We listen on the ScrollViewer so clicks outside the bitmap area still hit shapes
+        // (DrawingCanvas with Transparent Background only hit-tests within Width×Height).
+        // Filter out clicks on scrollbar parts and on the inline TextBox editor.
+        if (IsScrollBarOrInputControl(e.OriginalSource as DependencyObject)) return;
         var p = e.GetPosition(DrawingCanvas);
+
+        if (_vm.CurrentTool == EditorTool.Text)
+        {
+            BeginInlineTextEdit(p.X, p.Y, existing: null);
+            e.Handled = true;
+            return;
+        }
 
         if (_vm.CurrentTool == EditorTool.Select)
         {
             var shiftPressed = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+
+            // Grip hit-test takes priority over shape hit-test, but only on single-selection.
+            if (_vm.SelectedShapes.Count == 1)
+            {
+                var sel = _vm.SelectedShapes[0];
+                var grip = ShapeGripLayout.HitTest(sel, p.X, p.Y, ShapeGripLayout.DefaultHitTolerance / _zoom);
+                if (grip != GripKind.None)
+                {
+                    _activeGrip = grip;
+                    _gripStartShape = sel;
+                    _gripAnchorX = p.X;
+                    _gripAnchorY = p.Y;
+                    DrawingCanvas.CaptureMouse();
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             var hit = ShapeHitTester.HitTest(_vm.Shapes, p.X, p.Y);
             if (hit is not null)
             {
+                if (e.ClickCount == 2 && hit is TextShape ts)
+                {
+                    BeginInlineTextEdit(ts.X, ts.Y, existing: ts);
+                    e.Handled = true;
+                    return;
+                }
                 if (shiftPressed)
                 {
                     // Shift+Click: toggle in selection set. No drag.
@@ -254,11 +332,19 @@ public partial class EditorWindow : FluentWindow
 
     private void OnCanvasMouseMove(object sender, MouseEventArgs e)
     {
+        // Cursor feedback on grip hover (independent of mouse button state).
+        UpdateCursorForGripHover(e.GetPosition(DrawingCanvas));
+
         if (e.LeftButton != MouseButtonState.Pressed) return;
 
         if (_vm.CurrentTool == EditorTool.Select)
         {
             var p = e.GetPosition(DrawingCanvas);
+            if (_activeGrip != GripKind.None && _gripStartShape is not null)
+            {
+                ApplyGripDrag(p.X, p.Y);
+                return;
+            }
             if (_isMarqueeing && _marqueeRect is not null)
             {
                 var x = Math.Min(_marqueeStartX, p.X);
@@ -281,6 +367,52 @@ public partial class EditorWindow : FluentWindow
         var pos = e.GetPosition(DrawingCanvas);
         var (cx, cy) = ApplyShiftConstraint(pos.X, pos.Y);
         _vm.UpdateGesture(cx, cy);
+    }
+
+    /// <summary>True when the originating element is a scrollbar part or a text input — don't treat
+    /// such clicks as canvas gestures.</summary>
+    private static bool IsScrollBarOrInputControl(DependencyObject? d)
+    {
+        while (d is not null)
+        {
+            if (d is System.Windows.Controls.Primitives.ScrollBar) return true;
+            if (d is System.Windows.Controls.TextBox tb && (tb.Tag as string) == "inline-text-editor") return true;
+            d = System.Windows.Media.VisualTreeHelper.GetParent(d);
+        }
+        return false;
+    }
+
+    private void UpdateCursorForGripHover(System.Windows.Point p)
+    {
+        if (_vm.CurrentTool != EditorTool.Select || _vm.SelectedShapes.Count != 1)
+        {
+            if (DrawingCanvas.Cursor != null) DrawingCanvas.Cursor = null;
+            return;
+        }
+        var grip = ShapeGripLayout.HitTest(_vm.SelectedShapes[0], p.X, p.Y, ShapeGripLayout.DefaultHitTolerance / _zoom);
+        Cursor? c = grip switch
+        {
+            GripKind.TopLeft or GripKind.BottomRight or GripKind.Resize => Cursors.SizeNWSE,
+            GripKind.TopRight or GripKind.BottomLeft => Cursors.SizeNESW,
+            GripKind.Top or GripKind.Bottom => Cursors.SizeNS,
+            GripKind.Left or GripKind.Right => Cursors.SizeWE,
+            GripKind.From or GripKind.To => Cursors.Hand,
+            _ => null
+        };
+        if (DrawingCanvas.Cursor != c) DrawingCanvas.Cursor = c;
+    }
+
+    /// <summary>Apply a grip drag by computing a new shape from the original snapshot and current pointer.
+    /// We always recompute from <see cref="_gripStartShape"/> (not the previous tick) so the result is
+    /// monotonic in the drag distance — no cumulative drift.</summary>
+    private void ApplyGripDrag(double x, double y)
+    {
+        if (_gripStartShape is null || _vm.SelectedShapes.Count == 0) return;
+        var current = _vm.SelectedShapes[0];
+        var shiftPressed = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+        var updated = GripDrag.Transform(_gripStartShape, _activeGrip, x, y, shiftPressed);
+        if (updated is null || ReferenceEquals(updated, current)) return;
+        _vm.LiveReplaceShape(current, updated);
     }
 
     /// <summary>Translate every selected shape by (dx, dy) relative to the move-anchor's recorded snapshot.
@@ -311,6 +443,15 @@ public partial class EditorWindow : FluentWindow
     {
         if (_vm.CurrentTool == EditorTool.Select)
         {
+            if (_activeGrip != GripKind.None)
+            {
+                _activeGrip = GripKind.None;
+                _gripStartShape = null;
+                DrawingCanvas.ReleaseMouseCapture();
+                // Grip drag commit happens via OnSelectionSetChanged → CommitPendingLiveEdit
+                // when selection changes, or via Closing.
+                return;
+            }
             if (_isMarqueeing && _marqueeRect is not null)
             {
                 var p = e.GetPosition(DrawingCanvas);
@@ -374,6 +515,8 @@ public partial class EditorWindow : FluentWindow
         ArrowShape a => a with { FromX = a.FromX + dx, FromY = a.FromY + dy, ToX = a.ToX + dx, ToY = a.ToY + dy },
         LineShape l => l with { FromX = l.FromX + dx, FromY = l.FromY + dy, ToX = l.ToX + dx, ToY = l.ToY + dy },
         FreehandShape f => f with { Points = f.Points.Select(p => (p.X + dx, p.Y + dy)).ToList() },
+        TextShape t => t with { X = t.X + dx, Y = t.Y + dy },
+        StepCounterShape c => c with { CenterX = c.CenterX + dx, CenterY = c.CenterY + dy },
         _ => s
     };
 
@@ -435,6 +578,235 @@ public partial class EditorWindow : FluentWindow
         }
     }
 
+    private void BeginInlineTextEdit(double x, double y, TextShape? existing)
+    {
+        CommitInlineTextEdit();
+
+        var style = existing?.Style ?? _vm.CurrentTextStyle;
+        var initialText = existing?.Text ?? "";
+
+        _editingTextShape = existing;
+        _activeTextBox = new System.Windows.Controls.TextBox
+        {
+            Text = initialText,
+            FontFamily = new FontFamily(style.FontFamily),
+            FontSize = style.FontSize,
+            FontWeight = style.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStyle = style.Italic ? FontStyles.Italic : FontStyles.Normal,
+            Foreground = ToBrush(style.Color),
+            TextAlignment = ToTextAlignment(style.Align),
+            Background = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(180, 80, 200, 255)),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(2),
+            MinWidth = 60,
+            AcceptsReturn = true,
+            AcceptsTab = false,
+            Tag = "inline-text-editor"
+        };
+        Canvas.SetLeft(_activeTextBox, x);
+        Canvas.SetTop(_activeTextBox, y);
+        DrawingCanvas.Children.Add(_activeTextBox);
+        _activeTextBox.KeyDown += OnInlineTextBoxKeyDown;
+        var tb = _activeTextBox;
+        tb.Loaded += (_, _) =>
+        {
+            // Wire LostFocus only after focus has been acquired, otherwise the very first
+            // focus arrival from Loaded fires LostFocus immediately and commits-empty.
+            tb.Focus();
+            Keyboard.Focus(tb);
+            tb.SelectAll();
+            tb.LostFocus += (_, _) => CommitInlineTextEdit();
+        };
+
+        if (existing is not null) RedrawAll();
+    }
+
+    private void OnInlineTextBoxKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape) { CancelInlineTextEdit(); e.Handled = true; return; }
+        if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Shift) != ModifierKeys.Shift)
+        {
+            CommitInlineTextEdit();
+            e.Handled = true;
+        }
+    }
+
+    private void CommitInlineTextEdit()
+    {
+        if (_activeTextBox is null) return;
+        var text = _activeTextBox.Text;
+        var x = Canvas.GetLeft(_activeTextBox);
+        var y = Canvas.GetTop(_activeTextBox);
+
+        DrawingCanvas.Children.Remove(_activeTextBox);
+        var existing = _editingTextShape;
+        var style = existing?.Style ?? _vm.CurrentTextStyle;
+        _activeTextBox = null;
+        _editingTextShape = null;
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            if (existing is not null) _vm.RemoveShapes([existing]);
+            return;
+        }
+
+        // The TextShape's Outline is unused for rendering (foreground comes from Style.Color);
+        // we still set it for hit-testing parity with other shapes.
+        var shape = new TextShape(x, y, text, style, style.Color, ShapeColor.Transparent, 1);
+        if (existing is null)
+        {
+            _vm.AddTextShape(shape);
+            // Auto-select the new text WITHOUT switching tool — symmetric to drawing tools
+            // (CommitGesture does the same). The user can immediately tweak font/color/size/align
+            // from the panel and a fresh click on the canvas creates another text.
+            _vm.SetSelection([shape]);
+        }
+        else
+        {
+            _vm.ApplyShapeEdit(existing, shape);
+        }
+    }
+
+    private void CancelInlineTextEdit()
+    {
+        if (_activeTextBox is null) return;
+        DrawingCanvas.Children.Remove(_activeTextBox);
+        _activeTextBox = null;
+        _editingTextShape = null;
+        RedrawAll();
+    }
+
+    private double _currentTextSize = TextStyle.Default.FontSize;
+
+    private void OnSelFontSizeSliderChanged()
+    {
+        if (_suppressLiveUpdates) return;
+        _currentTextSize = SelFontSizeSlider.Value;
+        SelFontSizeBox.Text = ((int)Math.Round(_currentTextSize)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        OnSelTextStyleChanged();
+    }
+
+    private void OnSelFontSizeBoxCommitted()
+    {
+        if (_suppressLiveUpdates) return;
+        if (!double.TryParse(SelFontSizeBox.Text, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var v))
+        {
+            SelFontSizeBox.Text = ((int)Math.Round(_currentTextSize)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return;
+        }
+        v = Math.Max(1, v);
+        _currentTextSize = v;
+        // Update slider only if value fits its bounds; otherwise let the slider sit at its max.
+        _suppressLiveUpdates = true;
+        try { SelFontSizeSlider.Value = Math.Clamp(v, SelFontSizeSlider.Minimum, SelFontSizeSlider.Maximum); }
+        finally { _suppressLiveUpdates = false; }
+        OnSelTextStyleChanged();
+    }
+
+    private void OnSelAlignLeftClicked(object sender, RoutedEventArgs e) => SetTextAlign(TextAlign.Left);
+    private void OnSelAlignCenterClicked(object sender, RoutedEventArgs e) => SetTextAlign(TextAlign.Center);
+    private void OnSelAlignRightClicked(object sender, RoutedEventArgs e) => SetTextAlign(TextAlign.Right);
+
+    private void SetTextAlign(TextAlign a)
+    {
+        if (_suppressLiveUpdates) return;
+        ApplyTextStyle(a);
+        RefreshAlignToggles(a);
+    }
+
+    private void RefreshAlignToggles(TextAlign a)
+    {
+        SelAlignLeftBtn.IsChecked = a == TextAlign.Left;
+        SelAlignCenterBtn.IsChecked = a == TextAlign.Center;
+        SelAlignRightBtn.IsChecked = a == TextAlign.Right;
+    }
+
+    private void OnSelTextStyleChanged() => ApplyTextStyle(null);
+
+    /// <summary>Read every field of the text panel, build a TextStyle and push it to <see cref="EditorViewModel.CurrentTextStyle"/>
+    /// and to all selected TextShapes. <paramref name="alignOverride"/> lets the alignment buttons short-circuit
+    /// the read of the toggle buttons (which haven't toggled yet at click time).</summary>
+    private void ApplyTextStyle(TextAlign? alignOverride)
+    {
+        if (_suppressLiveUpdates) return;
+        var family = SelFontFamilyCombo.SelectedItem as string ?? "Segoe UI";
+        var size = _currentTextSize;
+        var bold = SelBoldCheck.IsChecked == true;
+        var italic = SelItalicCheck.IsChecked == true;
+        var color = SelTextColorSwatch.SelectedColor;
+        var align = alignOverride ?? CurrentAlignFromToggles();
+        var newStyle = new TextStyle(family, size, bold, italic, color, align);
+
+        _vm.CurrentTextStyle = newStyle;
+
+        foreach (var s in _vm.SelectedShapes.OfType<TextShape>().ToList())
+        {
+            _vm.LiveReplaceShape(s, s with { Style = newStyle });
+        }
+    }
+
+    /// <summary>Hook a substring (case-insensitive) filter to the editable font ComboBox.
+    /// WPF's built-in <c>IsTextSearchEnabled</c> only does prefix matching, which misses entries like
+    /// "MS Gothic" when the user types "gothic". This wires the internal TextBox's TextChanged event
+    /// to a <see cref="ICollectionView.Filter"/> on the ComboBox's items.</summary>
+    private static void WireFontFilter(ComboBox combo, List<string> allFonts)
+    {
+        var view = System.Windows.Data.CollectionViewSource.GetDefaultView(allFonts);
+        var currentFilter = "";
+        view.Filter = obj =>
+        {
+            if (string.IsNullOrEmpty(currentFilter)) return true;
+            return obj is string s && s.Contains(currentFilter, StringComparison.OrdinalIgnoreCase);
+        };
+        combo.ItemsSource = view;
+
+        combo.AddHandler(System.Windows.Controls.Primitives.TextBoxBase.TextChangedEvent,
+            new System.Windows.Controls.TextChangedEventHandler((_, _) =>
+            {
+                var text = combo.Text ?? "";
+                // Don't re-filter when the user has just committed a selection (text matches selected item exactly).
+                if (combo.SelectedItem is string sel && string.Equals(sel, text, StringComparison.Ordinal))
+                {
+                    if (currentFilter.Length > 0)
+                    {
+                        currentFilter = "";
+                        view.Refresh();
+                    }
+                    return;
+                }
+                currentFilter = text;
+                view.Refresh();
+                if (!string.IsNullOrEmpty(currentFilter)) combo.IsDropDownOpen = true;
+            }));
+    }
+
+    private TextAlign CurrentAlignFromToggles()
+    {
+        if (SelAlignCenterBtn.IsChecked == true) return TextAlign.Center;
+        if (SelAlignRightBtn.IsChecked == true) return TextAlign.Right;
+        return TextAlign.Left;
+    }
+
+    private void ApplyDefaultsToTextSection()
+    {
+        _suppressLiveUpdates = true;
+        try
+        {
+            var s = _vm.CurrentTextStyle;
+            if (SelFontFamilyCombo.Items.Contains(s.FontFamily)) SelFontFamilyCombo.SelectedItem = s.FontFamily;
+            _currentTextSize = s.FontSize;
+            SelFontSizeSlider.Value = Math.Clamp(_currentTextSize, SelFontSizeSlider.Minimum, SelFontSizeSlider.Maximum);
+            SelFontSizeBox.Text = ((int)Math.Round(_currentTextSize)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            SelBoldCheck.IsChecked = s.Bold;
+            SelItalicCheck.IsChecked = s.Italic;
+            SelTextColorSwatch.SelectedColor = s.Color;
+            RefreshAlignToggles(s.Align);
+        }
+        finally { _suppressLiveUpdates = false; }
+    }
+
     /// <summary>Apply the toolbar's current outline/fill/stroke to every selected shape in one gesture.
     /// The selection's live-edit snapshot was captured when the shapes were selected, so this
     /// commits as a single undo step per shape (same machinery as drag-to-move).</summary>
@@ -471,6 +843,8 @@ public partial class EditorWindow : FluentWindow
         ArrowShape a => a with { Outline = c },
         LineShape l => l with { Outline = c },
         FreehandShape f => f with { Outline = c },
+        TextShape t => t with { Outline = c },
+        StepCounterShape sc => sc with { Outline = c },
         _ => s
     };
 
@@ -478,11 +852,18 @@ public partial class EditorWindow : FluentWindow
     {
         RectangleShape r => r with { Fill = c },
         EllipseShape e => e with { Fill = c },
-        // Arrow/Line/Freehand have no fill semantics; ignore.
+        StepCounterShape sc => sc with { Fill = c },
+        // Arrow/Line/Freehand/Text have no fill semantics; ignore.
         _ => s
     };
 
-    private static bool ShapeSupportsFill(Shape s) => s is RectangleShape or EllipseShape;
+    private static bool ShapeSupportsFill(Shape s) => s is RectangleShape or EllipseShape or StepCounterShape;
+
+    /// <summary>True for shapes that visually use the Outline color. TextShape uses Style.Color instead.</summary>
+    private static bool ShapeSupportsOutline(Shape s) => s is not TextShape;
+
+    /// <summary>True for shapes that visually use StrokeWidth. TextShape uses FontSize for sizing.</summary>
+    private static bool ShapeSupportsStroke(Shape s) => s is not TextShape;
 
     private static Shape ApplyStrokeWidth(Shape s, double w) => s switch
     {
@@ -491,6 +872,8 @@ public partial class EditorWindow : FluentWindow
         ArrowShape a => a with { StrokeWidth = w },
         LineShape l => l with { StrokeWidth = w },
         FreehandShape f => f with { StrokeWidth = w },
+        StepCounterShape sc => sc with { StrokeWidth = w },
+        // TextShape uses Style.FontSize, not StrokeWidth — ignore.
         _ => s
     };
 
@@ -535,10 +918,12 @@ public partial class EditorWindow : FluentWindow
         DrawingCanvas.Children.Clear();
         foreach (var shape in _vm.Shapes)
         {
+            if (ReferenceEquals(shape, _editingTextShape)) continue;
             DrawingCanvas.Children.Add(MakeUiElement(shape));
         }
         RedrawPreview();
         RefreshSelectionAdorner();
+        if (_activeTextBox is not null) DrawingCanvas.Children.Add(_activeTextBox);
     }
 
     private void RedrawPreview()
@@ -582,6 +967,30 @@ public partial class EditorWindow : FluentWindow
             Canvas.SetTop(box, b.Y - 4);
             DrawingCanvas.Children.Add(box);
         }
+
+        // Edit grips only for single-selection in Select tool. Multi-select keeps just the dashed boxes.
+        // Grips are sized in canvas units; we apply an inverse zoom transform so they keep a constant
+        // 8×8-pixel screen footprint regardless of zoom level.
+        if (_vm.CurrentTool == EditorTool.Select && _vm.SelectedShapes.Count == 1)
+        {
+            var inv = 1.0 / _zoom;
+            foreach (var g in ShapeGripLayout.GripsFor(_vm.SelectedShapes[0]))
+            {
+                var grip = new System.Windows.Shapes.Rectangle
+                {
+                    Width = 8, Height = 8,
+                    Stroke = new SolidColorBrush(Color.FromArgb(255, 80, 200, 255)),
+                    StrokeThickness = 1.5,
+                    Fill = Brushes.White,
+                    Tag = "adorner",
+                    IsHitTestVisible = false,
+                    RenderTransform = new ScaleTransform(inv, inv, 4, 4)
+                };
+                Canvas.SetLeft(grip, g.X - 4);
+                Canvas.SetTop(grip, g.Y - 4);
+                DrawingCanvas.Children.Add(grip);
+            }
+        }
     }
 
     private static (double X, double Y, double Width, double Height) ComputeBounds(Shape shape) => shape switch
@@ -591,8 +1000,20 @@ public partial class EditorWindow : FluentWindow
         ArrowShape a => (Math.Min(a.FromX, a.ToX), Math.Min(a.FromY, a.ToY), Math.Abs(a.ToX - a.FromX), Math.Abs(a.ToY - a.FromY)),
         LineShape l => (Math.Min(l.FromX, l.ToX), Math.Min(l.FromY, l.ToY), Math.Abs(l.ToX - l.FromX), Math.Abs(l.ToY - l.FromY)),
         FreehandShape f => FreehandBounds(f),
+        TextShape t => TextBounds(t),
+        StepCounterShape c => (c.CenterX - c.Radius, c.CenterY - c.Radius, c.Radius * 2, c.Radius * 2),
         _ => (0, 0, 0, 0)
     };
+
+    private static (double X, double Y, double Width, double Height) TextBounds(TextShape t)
+    {
+        var lines = t.Text.Length == 0 ? new[] { "" } : t.Text.Split('\n');
+        var maxLen = 0;
+        foreach (var line in lines) if (line.Length > maxLen) maxLen = line.Length;
+        var w = Math.Max(8, maxLen * t.Style.FontSize * 0.55);
+        var h = lines.Length * t.Style.FontSize * 1.2;
+        return (t.X, t.Y, w, h);
+    }
 
     private static (double X, double Y, double Width, double Height) FreehandBounds(FreehandShape f)
     {
@@ -613,6 +1034,8 @@ public partial class EditorWindow : FluentWindow
             ArrowShape a => CreateArrow(a),
             LineShape l => CreateLine(l),
             FreehandShape f => CreateFreehand(f),
+            TextShape t => CreateText(t),
+            StepCounterShape c => CreateStepCounter(c),
             _ => throw new NotSupportedException($"Unknown shape kind: {shape.GetType().Name}")
         };
         // Drawn shapes never intercept clicks: hit-testing happens geometrically via ShapeHitTester.
@@ -707,6 +1130,65 @@ public partial class EditorWindow : FluentWindow
         return poly;
     }
 
+    private static UIElement CreateText(TextShape t)
+    {
+        // Width must be explicitly set for TextAlignment to take effect on short lines.
+        // Without Width, TextBlock auto-sizes to its content and Center/Right look identical to Left.
+        var bounds = TextBounds(t);
+        var tb = new System.Windows.Controls.TextBlock
+        {
+            Text = t.Text,
+            FontFamily = new FontFamily(t.Style.FontFamily),
+            FontSize = t.Style.FontSize,
+            FontWeight = t.Style.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStyle = t.Style.Italic ? FontStyles.Italic : FontStyles.Normal,
+            Foreground = ToBrush(t.Style.Color),
+            TextAlignment = ToTextAlignment(t.Style.Align),
+            Width = bounds.Width
+        };
+        Canvas.SetLeft(tb, t.X);
+        Canvas.SetTop(tb, t.Y);
+        return tb;
+    }
+
+    private static System.Windows.TextAlignment ToTextAlignment(TextAlign a) => a switch
+    {
+        TextAlign.Center => System.Windows.TextAlignment.Center,
+        TextAlign.Right => System.Windows.TextAlignment.Right,
+        _ => System.Windows.TextAlignment.Left
+    };
+
+    private static UIElement CreateStepCounter(StepCounterShape c)
+    {
+        var grid = new Grid
+        {
+            Width = c.Radius * 2,
+            Height = c.Radius * 2
+        };
+        var ellipse = new System.Windows.Shapes.Ellipse
+        {
+            Width = c.Radius * 2,
+            Height = c.Radius * 2,
+            Stroke = ToBrush(c.Outline),
+            StrokeThickness = c.StrokeWidth,
+            Fill = c.Fill.IsTransparent ? ToBrush(c.Outline) : ToBrush(c.Fill)
+        };
+        var text = new System.Windows.Controls.TextBlock
+        {
+            Text = c.Number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            Foreground = Brushes.White,
+            FontWeight = FontWeights.Bold,
+            FontSize = c.Radius * 0.9,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        grid.Children.Add(ellipse);
+        grid.Children.Add(text);
+        Canvas.SetLeft(grid, c.CenterX - c.Radius);
+        Canvas.SetTop(grid, c.CenterY - c.Radius);
+        return grid;
+    }
+
     private static SolidColorBrush ToBrush(ShapeColor c)
         => c.IsTransparent
             ? (SolidColorBrush)System.Windows.Media.Brushes.Transparent
@@ -717,6 +1199,19 @@ public partial class EditorWindow : FluentWindow
         var sels = _vm.SelectedShapes;
         if (sels.Count == 0)
         {
+            // Empty selection but Text tool active: show only the text-style section pre-filled with defaults.
+            if (_vm.CurrentTool == EditorTool.Text)
+            {
+                NoSelectionText.Visibility = Visibility.Collapsed;
+                SelectedShapeStack.Visibility = Visibility.Visible;
+                SelectedShapeKindText.Text = "New text — defaults";
+                SelOutlineFillRow.Visibility = Visibility.Collapsed;
+                SelStrokeSection.Visibility = Visibility.Collapsed;
+                SelTextStyleSection.Visibility = Visibility.Visible;
+                ApplyDefaultsToTextSection();
+                RefreshSelectionAdorner();
+                return;
+            }
             NoSelectionText.Visibility = Visibility.Visible;
             NoSelectionText.Text = "Select a shape to edit its properties (V tool, then click).";
             SelectedShapeStack.Visibility = Visibility.Collapsed;
@@ -727,9 +1222,21 @@ public partial class EditorWindow : FluentWindow
         NoSelectionText.Visibility = Visibility.Collapsed;
         SelectedShapeStack.Visibility = Visibility.Visible;
 
-        // Hide the Fill block when no selected shape supports fill (arrows/lines/freehand).
+        // Hide the Fill block when no selected shape supports fill (arrows/lines/freehand/text).
         var anyFillCapable = sels.Any(ShapeSupportsFill);
         SelFillSection.Visibility = anyFillCapable ? Visibility.Visible : Visibility.Collapsed;
+
+        // Hide outline + stroke for text-only selections (text uses Style.Color and FontSize).
+        var anyOutlineCapable = sels.Any(ShapeSupportsOutline);
+        var anyStrokeCapable = sels.Any(ShapeSupportsStroke);
+        SelOutlineSection.Visibility = anyOutlineCapable ? Visibility.Visible : Visibility.Collapsed;
+        SelStrokeSection.Visibility = anyStrokeCapable ? Visibility.Visible : Visibility.Collapsed;
+        // If both outline and fill are hidden the row collapses entirely (saves vertical space).
+        SelOutlineFillRow.Visibility = (anyOutlineCapable || anyFillCapable) ? Visibility.Visible : Visibility.Collapsed;
+
+        var textShapes = sels.OfType<TextShape>().ToList();
+        var showTextSection = textShapes.Count > 0 || _vm.CurrentTool == EditorTool.Text;
+        SelTextStyleSection.Visibility = showTextSection ? Visibility.Visible : Visibility.Collapsed;
 
         // For multi-selection, show common values where all selected shapes agree;
         // otherwise show a sensible placeholder (the user can still pick a value to apply to all).
@@ -750,6 +1257,30 @@ public partial class EditorWindow : FluentWindow
             SelOutlineSwatch.SelectedColor = allSameOutline ? first.Outline : ShapeColor.Black;
             SelFillSwatch.SelectedColor = allSameFill ? fillRef : ShapeColor.Transparent;
             SelStrokeSlider.Value = allSameStroke ? first.StrokeWidth : 2;
+
+            if (textShapes.Count > 0)
+            {
+                var firstText = textShapes[0];
+                var allSameFamily = textShapes.All(t => t.Style.FontFamily == firstText.Style.FontFamily);
+                var allSameSize = textShapes.All(t => Math.Abs(t.Style.FontSize - firstText.Style.FontSize) < 0.01);
+                var allSameBold = textShapes.All(t => t.Style.Bold == firstText.Style.Bold);
+                var allSameItalic = textShapes.All(t => t.Style.Italic == firstText.Style.Italic);
+                var allSameColor = textShapes.All(t => t.Style.Color == firstText.Style.Color);
+                var allSameAlign = textShapes.All(t => t.Style.Align == firstText.Style.Align);
+
+                if (allSameFamily) SelFontFamilyCombo.SelectedItem = firstText.Style.FontFamily;
+                _currentTextSize = allSameSize ? firstText.Style.FontSize : TextStyle.Default.FontSize;
+                SelFontSizeSlider.Value = Math.Clamp(_currentTextSize, SelFontSizeSlider.Minimum, SelFontSizeSlider.Maximum);
+                SelFontSizeBox.Text = ((int)Math.Round(_currentTextSize)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                SelBoldCheck.IsChecked = allSameBold && firstText.Style.Bold;
+                SelItalicCheck.IsChecked = allSameItalic && firstText.Style.Italic;
+                SelTextColorSwatch.SelectedColor = allSameColor ? firstText.Style.Color : ShapeColor.Red;
+                RefreshAlignToggles(allSameAlign ? firstText.Style.Align : TextAlign.Left);
+            }
+            else
+            {
+                ApplyDefaultsToTextSection();
+            }
         }
         finally
         {

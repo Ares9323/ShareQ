@@ -7,5 +7,7 @@ public enum EditorTool
     Arrow,
     Line,
     Ellipse,
-    Freehand
+    Freehand,
+    Text,
+    StepCounter
 }

@@ -1,5 +1,9 @@
 using System.Text.Json.Nodes;
+using System.Windows;
+using Microsoft.Extensions.Logging;
+using ShareQ.Core.Domain;
 using ShareQ.Core.Pipeline;
+using ShareQ.Storage.Items;
 
 namespace ShareQ.App.Services.PipelineTasks;
 
@@ -8,10 +12,14 @@ public sealed class NotifyToastTask : IPipelineTask
     public const string TaskId = "shareq.notify-toast";
 
     private readonly IToastNotifier _notifier;
+    private readonly EditorLauncher _editorLauncher;
+    private readonly ILogger<NotifyToastTask> _logger;
 
-    public NotifyToastTask(IToastNotifier notifier)
+    public NotifyToastTask(IToastNotifier notifier, EditorLauncher editorLauncher, ILogger<NotifyToastTask> logger)
     {
         _notifier = notifier;
+        _editorLauncher = editorLauncher;
+        _logger = logger;
     }
 
     public string Id => TaskId;
@@ -26,7 +34,22 @@ public sealed class NotifyToastTask : IPipelineTask
         var template = (string?)config?["message"] ?? "Done.";
         var message = ExpandPlaceholders(template, context);
 
-        _notifier.Show(title, message);
+        Action? onClick = null;
+        if (context.Bag.TryGetValue(PipelineBagKeys.ItemId, out var rawId) && rawId is long itemId
+            && context.Bag.TryGetValue(PipelineBagKeys.NewItem, out var rawItem) && rawItem is NewItem item
+            && item.Kind == ItemKind.Image)
+        {
+            onClick = () =>
+            {
+                Application.Current.Dispatcher.InvokeAsync(async () =>
+                {
+                    try { await _editorLauncher.OpenAsync(itemId, CancellationToken.None).ConfigureAwait(true); }
+                    catch (Exception ex) { _logger.LogError(ex, "Toast→editor open failed for item {Id}", itemId); }
+                });
+            };
+        }
+
+        _notifier.Show(title, message, onClick);
         return Task.CompletedTask;
     }
 

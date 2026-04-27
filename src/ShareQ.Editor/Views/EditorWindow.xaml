@@ -32,7 +32,9 @@
                 <ui:Button x:Name="ArrowToolBtn" Content="A Arrow" Margin="0,0,4,0" Click="OnArrowToolClicked" />
                 <ui:Button x:Name="LineToolBtn" Content="L Line" Margin="0,0,4,0" Click="OnLineToolClicked" />
                 <ui:Button x:Name="EllipseToolBtn" Content="E Ellipse" Margin="0,0,4,0" Click="OnEllipseToolClicked" />
-                <ui:Button x:Name="FreehandToolBtn" Content="P Freehand" Margin="0,0,16,0" Click="OnFreehandToolClicked" />
+                <ui:Button x:Name="FreehandToolBtn" Content="P Freehand" Margin="0,0,4,0" Click="OnFreehandToolClicked" />
+                <ui:Button x:Name="TextToolBtn" Content="T Text" Margin="0,0,4,0" Click="OnTextToolClicked" />
+                <ui:Button x:Name="StepToolBtn" Content="N Step" Margin="0,0,16,0" Click="OnStepToolClicked" />
 
                 <TextBlock Text="Outline:" Foreground="White" VerticalAlignment="Center" Margin="0,0,4,0" />
                 <views:ColorSwatchButton x:Name="OutlineSwatch" Margin="0,0,16,0" />
@@ -65,14 +67,13 @@
                       HorizontalScrollBarVisibility="Auto"
                       VerticalScrollBarVisibility="Auto"
                       PreviewMouseWheel="OnCanvasMouseWheel"
+                      PreviewMouseLeftButtonDown="OnCanvasMouseDown"
+                      PreviewMouseMove="OnCanvasMouseMove"
+                      PreviewMouseLeftButtonUp="OnCanvasMouseUp"
                       Background="#1A1A1A">
             <Grid x:Name="CanvasHost" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Image x:Name="SourceImage" />
-                <Canvas x:Name="DrawingCanvas"
-                        Background="Transparent"
-                        MouseLeftButtonDown="OnCanvasMouseDown"
-                        MouseMove="OnCanvasMouseMove"
-                        MouseLeftButtonUp="OnCanvasMouseUp" />
+                <Canvas x:Name="DrawingCanvas" Background="Transparent" />
             </Grid>
         </ScrollViewer>
 
@@ -88,12 +89,12 @@
                 <StackPanel x:Name="SelectedShapeStack" Visibility="Collapsed">
                     <TextBlock x:Name="SelectedShapeKindText" Foreground="White" Margin="0,0,0,12" />
 
-                    <Grid Margin="0,0,0,12">
+                    <Grid x:Name="SelOutlineFillRow" Margin="0,0,0,12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
+                        <StackPanel Grid.Column="0" x:Name="SelOutlineSection">
                             <TextBlock Text="Outline" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
                             <views:ColorSwatchButton x:Name="SelOutlineSwatch" HorizontalAlignment="Left" />
                         </StackPanel>
@@ -103,8 +104,46 @@
                         </StackPanel>
                     </Grid>
 
-                    <TextBlock Text="Stroke" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
-                    <Slider x:Name="SelStrokeSlider" Minimum="1" Maximum="20" Margin="0,0,0,12" />
+                    <StackPanel x:Name="SelStrokeSection">
+                        <TextBlock Text="Stroke" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                        <Slider x:Name="SelStrokeSlider" Minimum="1" Maximum="20" Margin="0,0,0,12" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="SelTextStyleSection" Visibility="Collapsed" Margin="0,0,0,12">
+                        <TextBlock Text="Text color" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                        <views:ColorSwatchButton x:Name="SelTextColorSwatch" HorizontalAlignment="Left" Margin="0,0,0,8" />
+
+                        <TextBlock Text="Font" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                        <ComboBox x:Name="SelFontFamilyCombo"
+                                  Margin="0,0,0,8"
+                                  IsEditable="True"
+                                  IsTextSearchEnabled="False"
+                                  StaysOpenOnEdit="True" />
+
+                        <TextBlock Text="Size" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Slider Grid.Column="0" x:Name="SelFontSizeSlider" Minimum="8" Maximum="96" VerticalAlignment="Center" />
+                            <TextBox Grid.Column="1" x:Name="SelFontSizeBox"
+                                     Width="44" Margin="6,0,0,0" Padding="2"
+                                     VerticalAlignment="Center" TextAlignment="Right" />
+                        </Grid>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <CheckBox x:Name="SelBoldCheck" Content="Bold" Foreground="White" Margin="0,0,12,0" />
+                            <CheckBox x:Name="SelItalicCheck" Content="Italic" Foreground="White" />
+                        </StackPanel>
+
+                        <TextBlock Text="Alignment" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                        <StackPanel Orientation="Horizontal">
+                            <ToggleButton x:Name="SelAlignLeftBtn" Content="L" Width="32" Margin="0,0,4,0" Click="OnSelAlignLeftClicked" />
+                            <ToggleButton x:Name="SelAlignCenterBtn" Content="C" Width="32" Margin="0,0,4,0" Click="OnSelAlignCenterClicked" />
+                            <ToggleButton x:Name="SelAlignRightBtn" Content="R" Width="32" Click="OnSelAlignRightClicked" />
+                        </StackPanel>
+                    </StackPanel>
 
                     <ui:Button Content="Apply current"
                                HorizontalAlignment="Stretch"

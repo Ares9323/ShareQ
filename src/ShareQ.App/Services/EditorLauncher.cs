@@ -58,11 +58,13 @@ public sealed class EditorLauncher
         vm.FillColor = defaults.Fill;
         vm.StrokeWidth = defaults.StrokeWidth;
         vm.CurrentTool = defaults.Tool;
+        vm.CurrentTextStyle = defaults.TextStyle;
+        vm.ResetStepCounter();
         window.Owner = System.Windows.Application.Current.MainWindow;
         window.ShowDialog();
 
         await _defaultsStore.SaveAsync(
-            new EditorDefaults(vm.OutlineColor, vm.FillColor, vm.StrokeWidth, vm.CurrentTool),
+            new EditorDefaults(vm.OutlineColor, vm.FillColor, vm.StrokeWidth, vm.CurrentTool, vm.CurrentTextStyle),
             CancellationToken.None).ConfigureAwait(false);
 
         if (!window.Saved) return;

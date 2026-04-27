@@ -12,6 +12,9 @@ public sealed class TrayIconService : IDisposable
     private readonly ILogger<TrayIconService> _logger;
     private readonly TaskbarIcon _icon;
     private MainWindow? _mainWindow;
+    // Click handler bound to the most recently shown toast. Cleared after the toast closes
+    // so a click on a stale balloon (which Windows still routes through after dismissal) is a no-op.
+    private Action? _pendingToastClick;
 
     public TrayIconService(ILogger<TrayIconService> logger)
     {
@@ -34,6 +37,18 @@ public sealed class TrayIconService : IDisposable
         // ShowNotification() requires the underlying Win32 NOTIFYICONDATA to be created.
         // The TaskbarIcon WPF wrapper sometimes defers this until first message; force it now.
         _icon.ForceCreate();
+
+        _icon.TrayBalloonTipClicked += OnTrayBalloonTipClicked;
+        _icon.TrayBalloonTipClosed += (_, _) => _pendingToastClick = null;
+    }
+
+    private void OnTrayBalloonTipClicked(object sender, RoutedEventArgs e)
+    {
+        var handler = _pendingToastClick;
+        _pendingToastClick = null;
+        if (handler is null) return;
+        try { handler(); }
+        catch (Exception ex) { _logger.LogError(ex, "Toast click handler threw"); }
     }
 
     public void Attach(MainWindow window) => _mainWindow = window;
@@ -60,16 +75,16 @@ public sealed class TrayIconService : IDisposable
         return item;
     }
 
-    public void ShowToast(string title, string message)
+    public void ShowToast(string title, string message, Action? onClick = null)
     {
+        _pendingToastClick = onClick;
         try
         {
             _icon.ShowNotification(title, message, H.NotifyIcon.Core.NotificationIcon.Info);
         }
         catch (Exception ex)
         {
-            // Some H.NotifyIcon builds and OS configurations don't expose ShowNotification reliably.
-            // Log and continue — the screenshot has already been saved/added to history at this point.
+            _pendingToastClick = null;
             _logger.LogWarning(ex, "Tray toast failed; capture pipeline continues");
         }
     }
