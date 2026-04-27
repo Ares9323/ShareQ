@@ -20,7 +20,8 @@ public sealed record ItemRecord(
     string? UploadedUrl,
     string? UploaderId,
     ReadOnlyMemory<byte> Payload,
-    string? SearchText)
+    string? SearchText,
+    ReadOnlyMemory<byte>? Thumbnail = null)
 {
     public Item ToDomain() => new(
         Id: Id,

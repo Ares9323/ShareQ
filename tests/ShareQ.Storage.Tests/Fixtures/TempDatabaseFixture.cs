@@ -26,7 +26,7 @@ public sealed class TempDatabaseFixture : IAsyncDisposable
         Options = new StorageOptions { RootDirectoryOverride = RootDirectory };
         Paths = new StoragePathResolver(Microsoft.Extensions.Options.Options.Create(Options));
 
-        var migrations = new IMigration[] { new Migration001InitialSchema() };
+        var migrations = new IMigration[] { new Migration001InitialSchema(), new Migration002Thumbnail() };
         Database = new ShareQDatabase(Paths, new MigrationRunner(migrations), NullLogger<ShareQDatabase>.Instance);
     }
 

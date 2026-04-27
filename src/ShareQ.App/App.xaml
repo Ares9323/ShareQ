@@ -15,6 +15,7 @@
             <cv:NotNullToVisibilityConverter x:Key="NotNullToVisibility" />
             <cv:NullToVisibilityConverter x:Key="NullToVisibility" />
             <cv:NonEmptyToVisibilityConverter x:Key="NonEmptyToVisibility" />
+            <cv:BytesToImageConverter x:Key="BytesToImage" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -6,7 +6,7 @@ namespace ShareQ.App.ViewModels;
 
 public sealed class ItemRowViewModel
 {
-    public ItemRowViewModel(ItemRecord record)
+    public ItemRowViewModel(ItemRecord record, int displayIndex)
     {
         Id = record.Id;
         Kind = record.Kind;
@@ -14,6 +14,8 @@ public sealed class ItemRowViewModel
         Pinned = record.Pinned;
         SourceProcess = record.SourceProcess ?? string.Empty;
         Preview = BuildPreview(record);
+        Thumbnail = record.Thumbnail?.ToArray();
+        DisplayIndex = displayIndex;
     }
 
     public long Id { get; }
@@ -22,6 +24,14 @@ public sealed class ItemRowViewModel
     public bool Pinned { get; }
     public string SourceProcess { get; }
     public string Preview { get; }
+    /// <summary>Pre-generated PNG thumbnail bytes for image items, null otherwise.</summary>
+    public byte[]? Thumbnail { get; }
+    public bool HasThumbnail => Thumbnail is { Length: > 0 };
+
+    /// <summary>0-based position in the popup. Used to render a Ctrl+N hint badge for rows 0..8.</summary>
+    public int DisplayIndex { get; }
+    public string IndexBadge => DisplayIndex < 9 ? (DisplayIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
+    public bool HasIndexBadge => DisplayIndex < 9;
 
     public string KindLabel => Kind.ToString();
     public string Age => FormatAge(DateTimeOffset.UtcNow - CapturedAt);

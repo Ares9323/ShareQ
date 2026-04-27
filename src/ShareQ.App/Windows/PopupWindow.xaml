@@ -45,23 +45,55 @@
                     <Border Padding="8" Margin="0,2" Background="#252525" CornerRadius="4">
                         <Grid>
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="{Binding Preview}"
-                                           TextTrimming="CharacterEllipsis"
-                                           Foreground="White" />
-                                <TextBlock Margin="0,4,0,0"
-                                           Foreground="#888"
+                            <!-- Ctrl+N quick-paste badge for the first 9 rows. -->
+                            <Border Grid.Column="0"
+                                    Width="22" Height="22"
+                                    Margin="0,0,8,0"
+                                    Background="#3A3A3A"
+                                    CornerRadius="3"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding HasIndexBadge, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="{Binding IndexBadge}"
+                                           Foreground="#DDD"
                                            FontSize="11"
-                                           Text="{Binding KindLabel}" />
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Border>
+                            <!-- Thumbnail (only for image rows that have a pre-generated PNG) -->
+                            <Border Grid.Column="1"
+                                    Width="56" Height="56"
+                                    Margin="0,0,10,0"
+                                    Background="#1A1A1A"
+                                    BorderBrush="#444" BorderThickness="1"
+                                    Visibility="{Binding HasThumbnail, Converter={StaticResource BoolToVisibility}}">
+                                <Image Source="{Binding Thumbnail, Converter={StaticResource BytesToImage}}"
+                                       Stretch="Uniform" />
+                            </Border>
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Preview}"
+                                           Foreground="White"
+                                           FontSize="13"
+                                           TextWrapping="Wrap"
+                                           MaxHeight="60"
+                                           TextTrimming="CharacterEllipsis" />
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                    <TextBlock Foreground="#888" FontSize="11" Text="{Binding KindLabel}" />
+                                    <TextBlock Foreground="#666" FontSize="11" Text=" · " />
+                                    <TextBlock Foreground="#888" FontSize="11" Text="{Binding SourceProcess}"
+                                               TextTrimming="CharacterEllipsis" MaxWidth="200" />
+                                </StackPanel>
                             </StackPanel>
-                            <TextBlock Grid.Column="1"
-                                       VerticalAlignment="Center"
-                                       Foreground="#888"
-                                       FontSize="11"
-                                       Text="{Binding Age}" />
+                            <StackPanel Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                <TextBlock Foreground="#888" FontSize="11" Text="{Binding Age}" HorizontalAlignment="Right" />
+                                <TextBlock Foreground="Gold" FontSize="11" Text="📌" HorizontalAlignment="Right"
+                                           Visibility="{Binding Pinned, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
                         </Grid>
                     </Border>
                 </DataTemplate>
@@ -71,6 +103,6 @@
         <TextBlock Grid.Row="2"
                    Foreground="#666"
                    FontSize="11"
-                   Text="↑↓ navigate · Enter paste · Esc close" />
+                   Text="↑↓ navigate · Enter paste · Ctrl+1-9 quick paste · Ctrl+P pin · Esc close" />
     </Grid>
 </Window>

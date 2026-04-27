@@ -9,4 +9,5 @@ public sealed record ItemQuery(
     bool? Pinned = null,
     bool IncludeDeleted = false,
     string? Search = null,
-    bool IncludePayload = true);
+    bool IncludePayload = true,
+    bool IncludeThumbnail = true);

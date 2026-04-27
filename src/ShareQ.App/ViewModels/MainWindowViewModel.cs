@@ -171,7 +171,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         var previousId = SelectedItem?.Id;
         Items.Clear();
-        foreach (var r in rows) Items.Add(new ItemRowViewModel(r));
+        for (var i = 0; i < rows.Count; i++) Items.Add(new ItemRowViewModel(rows[i], displayIndex: i));
 
         StatusText = $"{Items.Count} item{(Items.Count == 1 ? "" : "s")}";
         // Keep the user's selection across reloads when possible.

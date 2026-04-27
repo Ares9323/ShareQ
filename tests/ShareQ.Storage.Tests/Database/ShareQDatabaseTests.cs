@@ -7,7 +7,7 @@ namespace ShareQ.Storage.Tests.Database;
 public class ShareQDatabaseTests
 {
     [Fact]
-    public async Task InitializeAsync_OnFreshDirectory_CreatesSchemaAtVersion1()
+    public async Task InitializeAsync_OnFreshDirectory_CreatesSchemaAtLatestVersion()
     {
         await using var fixture = await new TempDatabaseFixture().InitializeAsync();
 
@@ -16,7 +16,8 @@ public class ShareQDatabaseTests
         cmd.CommandText = "SELECT MAX(version) FROM schema_version;";
         var version = (long)(await cmd.ExecuteScalarAsync())!;
 
-        Assert.Equal(1, version);
+        // Migration002Thumbnail bumps the schema to v2.
+        Assert.Equal(2, version);
     }
 
     [Fact]
@@ -66,7 +67,8 @@ public class ShareQDatabaseTests
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM schema_version;";
         var rowCount = (long)(await cmd.ExecuteScalarAsync())!;
-        Assert.Equal(1, rowCount);
+        // One row per applied migration (v1 + v2).
+        Assert.Equal(2, rowCount);
     }
 
     [Fact]

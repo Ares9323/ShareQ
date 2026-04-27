@@ -31,9 +31,9 @@ public sealed partial class PopupWindowViewModel : ObservableObject
         var query = new ItemQuery(Limit: 200, Search: NormalizeSearch(SearchText), IncludePayload: false);
         var loaded = await _items.ListAsync(query, cancellationToken).ConfigureAwait(false);
         Rows.Clear();
-        foreach (var record in loaded)
+        for (var i = 0; i < loaded.Count; i++)
         {
-            Rows.Add(new ItemRowViewModel(record));
+            Rows.Add(new ItemRowViewModel(loaded[i], displayIndex: i));
         }
         SelectedRow = Rows.FirstOrDefault();
     }
@@ -50,6 +50,18 @@ public sealed partial class PopupWindowViewModel : ObservableObject
         var index = SelectedRow is null ? 0 : Rows.IndexOf(SelectedRow);
         index = Math.Clamp(index + delta, 0, Rows.Count - 1);
         SelectedRow = Rows[index];
+    }
+
+    [RelayCommand]
+    private async Task TogglePinSelectedAsync()
+    {
+        if (SelectedRow is not { } row) return;
+        var keepId = row.Id;
+        await _items.SetPinnedAsync(row.Id, !row.Pinned, CancellationToken.None).ConfigureAwait(true);
+        await RefreshAsync(CancellationToken.None).ConfigureAwait(true);
+        // Pinning floats the row to the top of the pinned group; keep it selected so the user can
+        // quickly unpin or paste.
+        SelectedRow = Rows.FirstOrDefault(r => r.Id == keepId) ?? Rows.FirstOrDefault();
     }
 
     private static string? NormalizeSearch(string text)

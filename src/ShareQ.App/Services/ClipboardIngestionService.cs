@@ -52,12 +52,19 @@ public sealed class ClipboardIngestionService : IDisposable
             var decision = _gate.Evaluate();
             if (!decision.Allow)
             {
-                _logger.LogDebug("Clipboard event dropped: {Reason}", decision.Reason);
+                _logger.LogInformation("Clipboard event dropped by gate: {Reason}", decision.Reason);
                 return;
             }
 
             var change = _reader.ReadCurrent(_ownerHwnd);
-            if (change is null) return;
+            if (change is null)
+            {
+                _logger.LogInformation("Clipboard event dropped: reader returned null (no recognized format)");
+                return;
+            }
+
+            _logger.LogInformation("Clipboard event captured: format={Format} payloadBytes={Bytes} source={Source}",
+                change.Format, change.Payload.Length, change.SourceProcess);
 
             var newItem = MapToNewItem(change);
             var profile = await _profiles.GetAsync(DefaultPipelineProfiles.OnClipboardId, CancellationToken.None).ConfigureAwait(false);

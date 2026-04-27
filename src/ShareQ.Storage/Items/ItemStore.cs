@@ -19,16 +19,34 @@ public sealed class ItemStore : IItemStore
     {
         ArgumentNullException.ThrowIfNull(item);
         var conn = _database.GetOpenConnection();
+
+        // Dedup: if the most recent non-deleted item has the same kind and identical payload,
+        // bump its created_at instead of inserting a duplicate (e.g. user pastes "ciao" 5 times).
+        var dedupId = await TryDedupAsync(conn, item, cancellationToken).ConfigureAwait(false);
+        if (dedupId is not null)
+        {
+            ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.Added, dedupId.Value));
+            return dedupId.Value;
+        }
+
         var encoded = _serializer.Encode(item.Payload);
+
+        // Pre-generate a small PNG thumbnail for image items so the popup/timeline can render
+        // previews without decrypting the full payload (the heavy DPAPI cost).
+        byte[]? thumbnail = null;
+        if (item.Kind == ItemKind.Image)
+        {
+            thumbnail = ThumbnailGenerator.TryGenerate(item.Payload, maxSide: 96);
+        }
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             INSERT INTO items
                 (kind, source, created_at, pinned, source_process, source_window,
-                 payload, payload_size, blob_ref, uploaded_url, uploader_id, search_text)
+                 payload, payload_size, blob_ref, uploaded_url, uploader_id, search_text, thumbnail)
             VALUES
                 ($kind, $source, $created_at, $pinned, $source_process, $source_window,
-                 $payload, $payload_size, $blob_ref, $uploaded_url, $uploader_id, $search_text);
+                 $payload, $payload_size, $blob_ref, $uploaded_url, $uploader_id, $search_text, $thumbnail);
             SELECT last_insert_rowid();
             """;
         cmd.Parameters.AddWithValue("$kind", item.Kind.ToString());
@@ -43,6 +61,7 @@ public sealed class ItemStore : IItemStore
         cmd.Parameters.AddWithValue("$uploaded_url", (object?)item.UploadedUrl ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$uploader_id", (object?)item.UploaderId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$search_text", (object?)item.SearchText ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$thumbnail", (object?)thumbnail ?? DBNull.Value);
 
         var newId = (long)(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false))!;
         ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.Added, newId));
@@ -71,7 +90,8 @@ public sealed class ItemStore : IItemStore
         // don't pay the per-row DPAPI decryption cost — for 200 image rows that's the difference
         // between instant and several seconds.
         var payloadColumn = query.IncludePayload ? "payload" : "NULL AS payload";
-        var sql = new System.Text.StringBuilder($"SELECT items.id, items.kind, items.source, items.created_at, items.payload_size, items.pinned, items.deleted_at, items.source_process, items.source_window, items.blob_ref, items.uploaded_url, items.uploader_id, items.search_text, {payloadColumn} FROM items");
+        var thumbnailColumn = query.IncludeThumbnail ? "thumbnail" : "NULL AS thumbnail";
+        var sql = new System.Text.StringBuilder($"SELECT items.id, items.kind, items.source, items.created_at, items.payload_size, items.pinned, items.deleted_at, items.source_process, items.source_window, items.blob_ref, items.uploaded_url, items.uploader_id, items.search_text, {payloadColumn}, {thumbnailColumn} FROM items");
         var hasFts = !string.IsNullOrWhiteSpace(query.Search);
         if (hasFts)
         {
@@ -84,7 +104,8 @@ public sealed class ItemStore : IItemStore
         if (query.Pinned is not null) sql.Append(" AND items.pinned = $pinned");
         if (hasFts) sql.Append(" AND items_fts.search_text MATCH $search");
 
-        sql.Append(" ORDER BY items.created_at DESC LIMIT $limit OFFSET $offset;");
+        // Pinned rows always float to the top; within each group, newest first.
+        sql.Append(" ORDER BY items.pinned DESC, items.created_at DESC LIMIT $limit OFFSET $offset;");
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = sql.ToString();
@@ -182,6 +203,52 @@ public sealed class ItemStore : IItemStore
         return rows == 1;
     }
 
+    private async Task<long?> TryDedupAsync(SqliteConnection conn, NewItem item, CancellationToken cancellationToken)
+    {
+        // Check the latest non-deleted row with matching kind + payload_size. payload_size acts as
+        // a cheap pre-filter so we only decrypt when there's a real chance of equality.
+        await using var probeCmd = conn.CreateCommand();
+        probeCmd.CommandText = """
+            SELECT id, payload FROM items
+            WHERE deleted_at IS NULL
+              AND kind = $kind
+              AND payload_size = $size
+            ORDER BY created_at DESC
+            LIMIT 1;
+            """;
+        probeCmd.Parameters.AddWithValue("$kind", item.Kind.ToString());
+        probeCmd.Parameters.AddWithValue("$size", item.PayloadSize);
+
+        long candidateId;
+        byte[] candidateEncrypted;
+        await using (var reader = await probeCmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) return null;
+            candidateId = reader.GetInt64(0);
+            if (reader.IsDBNull(1)) return null;
+            candidateEncrypted = (byte[])reader[1];
+        }
+
+        // The most recent overall must be this same row; otherwise something newer of a different
+        // kind has landed in between, so it's no longer a "consecutive" duplicate.
+        await using (var latestCmd = conn.CreateCommand())
+        {
+            latestCmd.CommandText = "SELECT id FROM items WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 1;";
+            var latestId = (long)(await latestCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false))!;
+            if (latestId != candidateId) return null;
+        }
+
+        var candidatePlain = _serializer.Decode(candidateEncrypted);
+        if (!candidatePlain.AsSpan().SequenceEqual(item.Payload.Span)) return null;
+
+        await using var bumpCmd = conn.CreateCommand();
+        bumpCmd.CommandText = "UPDATE items SET created_at = $created WHERE id = $id;";
+        bumpCmd.Parameters.AddWithValue("$created", item.CreatedAt.ToUnixTimeMilliseconds());
+        bumpCmd.Parameters.AddWithValue("$id", candidateId);
+        await bumpCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        return candidateId;
+    }
+
     private async Task<bool> UpdateScalarAsync(string sql, long id, object value, CancellationToken cancellationToken)
     {
         var conn = _database.GetOpenConnection();
@@ -202,6 +269,15 @@ public sealed class ItemStore : IItemStore
             var encryptedPayload = (byte[])reader["payload"];
             plaintext = _serializer.Decode(encryptedPayload);
         }
+        // Thumbnail column was added in v2 — older queries (or this same query when IncludeThumbnail
+        // is false) leave it null. The column might also not exist if a test reader uses a v1 schema.
+        ReadOnlyMemory<byte>? thumbnail = null;
+        try
+        {
+            var thumbOrd = reader.GetOrdinal("thumbnail");
+            if (!reader.IsDBNull(thumbOrd)) thumbnail = (byte[])reader["thumbnail"];
+        }
+        catch (IndexOutOfRangeException) { /* v1 schema — no thumbnail column */ }
         return new ItemRecord(
             Id: reader.GetInt64(reader.GetOrdinal("id")),
             Kind: Enum.Parse<ItemKind>(reader.GetString(reader.GetOrdinal("kind"))),
@@ -217,7 +293,8 @@ public sealed class ItemStore : IItemStore
             UploadedUrl: NullableString(reader, "uploaded_url"),
             UploaderId: NullableString(reader, "uploader_id"),
             Payload: plaintext,
-            SearchText: NullableString(reader, "search_text"));
+            SearchText: NullableString(reader, "search_text"),
+            Thumbnail: thumbnail);
     }
 
     private static string? NullableString(SqliteDataReader reader, string column)

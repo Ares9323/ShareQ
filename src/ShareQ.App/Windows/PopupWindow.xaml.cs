@@ -15,7 +15,8 @@ public partial class PopupWindow : Window
 
         Loaded += (_, _) => SearchBox.Focus();
         Deactivated += (_, _) => Hide();
-        KeyDown += OnKeyDown;
+        // PreviewKeyDown (tunneling) so the Window sees Ctrl+digits before the SearchBox swallows them.
+        PreviewKeyDown += OnKeyDown;
         ResultsList.MouseDoubleClick += OnResultsListDoubleClick;
     }
 
@@ -43,10 +44,12 @@ public partial class PopupWindow : Window
                 break;
             case Key.Down:
                 ViewModel.MoveSelectionCommand.Execute(1);
+                ScrollSelectedIntoView();
                 e.Handled = true;
                 break;
             case Key.Up:
                 ViewModel.MoveSelectionCommand.Execute(-1);
+                ScrollSelectedIntoView();
                 e.Handled = true;
                 break;
             case Key.Enter:
@@ -58,7 +61,34 @@ public partial class PopupWindow : Window
                 e.Handled = true;
                 break;
             default:
+                // Ctrl+P toggles pin on the selected row. Plain "P" can't be used because the search
+                // box always holds focus and P is a valid search character.
+                if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control && e.Key == Key.P)
+                {
+                    ViewModel.TogglePinSelectedCommand.Execute(null);
+                    e.Handled = true;
+                    break;
+                }
+                // Ctrl+1..9: quick-paste row N (1-indexed). Avoids collision with typing in SearchBox.
+                if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control
+                    && e.Key >= Key.D1 && e.Key <= Key.D9)
+                {
+                    var idx = e.Key - Key.D1;
+                    if (idx >= 0 && idx < ViewModel.Rows.Count)
+                    {
+                        var quick = ViewModel.Rows[idx];
+                        Hide();
+                        PasteRequested?.Invoke(this, quick.Id);
+                    }
+                    e.Handled = true;
+                }
                 break;
         }
+    }
+
+    private void ScrollSelectedIntoView()
+    {
+        if (ViewModel.SelectedRow is null) return;
+        ResultsList.ScrollIntoView(ViewModel.SelectedRow);
     }
 }
