@@ -21,9 +21,13 @@ using ShareQ.Storage.DependencyInjection;
 
 namespace ShareQ.App;
 
+// CA1001 doesn't apply: WPF Application is not IDisposable but has OnExit which we use for cleanup.
+#pragma warning disable CA1001
 public partial class App : Application
+#pragma warning restore CA1001
 {
     private IHost? _host;
+    private KeyboardHook? _keyboardHook;
 
     public IServiceProvider Services => _host?.Services
         ?? throw new InvalidOperationException("Host not initialized.");
@@ -149,6 +153,18 @@ public partial class App : Application
             "Hotkey registration — popup(Ctrl+Alt+V): {PopupOk}, incognito(Ctrl+Alt+I): {IncoOk}, capture-region(Ctrl+Alt+R): {CaptureOk}, screen-color-picker(Ctrl+Shift+P): {PickerOk}, record(Ctrl+Alt+S): {RecOk}, record-gif(Ctrl+Alt+G): {RecGifOk}",
             popupOk, incoOk, captureOk, pickerOk, recordOk, recordGifOk);
 
+        // Win+V is reserved by Windows for the native clipboard history; RegisterHotKey can't bind
+        // it, so we use a low-level keyboard hook (same trick PowerToys KeyboardManager uses) and
+        // suppress the keystroke before Windows sees it.
+        _keyboardHook = new KeyboardHook();
+        _keyboardHook.Register(HotkeyModifiers.Win, 0x56, () => // Win+V
+        {
+            var controller = _host.Services.GetRequiredService<PopupWindowController>();
+            Dispatcher.InvokeAsync(() => _ = controller.ShowAsync());
+        });
+        try { _keyboardHook.Install(); hotkeyLogger.LogInformation("Win+V intercepted via low-level keyboard hook."); }
+        catch (Exception ex) { hotkeyLogger.LogWarning(ex, "Failed to install keyboard hook for Win+V"); }
+
         var ingestion = _host.Services.GetRequiredService<ClipboardIngestionService>();
         ingestion.Start(helper.Handle);
     }
@@ -205,6 +221,7 @@ public partial class App : Application
 
     protected override async void OnExit(ExitEventArgs e)
     {
+        _keyboardHook?.Dispose();
         if (_host is not null)
         {
             _host.Services.GetService<ClipboardIngestionService>()?.Dispose();

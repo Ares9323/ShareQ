@@ -1,0 +1,146 @@
+using System.Runtime.InteropServices;
+
+namespace ShareQ.Hotkeys;
+
+/// <summary>Low-level keyboard hook (WH_KEYBOARD_LL) for intercepting key combinations the OS would
+/// normally consume itself — most importantly Win+V, which Windows reserves for its native clipboard
+/// history and which RegisterHotKey cannot bind. Same pattern as PowerToys KeyboardManager.</summary>
+public sealed class KeyboardHook : IDisposable
+{
+    private readonly List<HookBinding> _bindings = [];
+    private readonly object _bindingsLock = new();
+    private readonly LowLevelKeyboardProc _hookProc;
+    private IntPtr _hookHandle = IntPtr.Zero;
+
+    public KeyboardHook()
+    {
+        _hookProc = HookProc; // keep delegate rooted so the GC doesn't move/collect it
+    }
+
+    /// <summary>Register a key combination to intercept. <paramref name="callback"/> runs on the hook
+    /// thread (which is the message-pump thread of whoever installed the hook) — keep it fast and
+    /// dispatch heavy work elsewhere.</summary>
+    public void Register(HotkeyModifiers modifiers, uint vkCode, Action callback, bool suppress = true)
+    {
+        ArgumentNullException.ThrowIfNull(callback);
+        lock (_bindingsLock)
+        {
+            _bindings.Add(new HookBinding(modifiers, vkCode, callback, suppress));
+        }
+    }
+
+    public void Install()
+    {
+        if (_hookHandle != IntPtr.Zero) return;
+        // Per Win32 docs, hMod for WH_KEYBOARD_LL must be the module containing the hook proc, but
+        // any non-null HMODULE in the same process actually works (the OS only checks it's loaded).
+        _hookHandle = SetWindowsHookEx(WH_KEYBOARD_LL, _hookProc, GetModuleHandle(null!), 0);
+        if (_hookHandle == IntPtr.Zero)
+        {
+            throw new InvalidOperationException($"SetWindowsHookEx failed: {Marshal.GetLastWin32Error()}");
+        }
+    }
+
+    public void Uninstall()
+    {
+        if (_hookHandle != IntPtr.Zero)
+        {
+            _ = UnhookWindowsHookEx(_hookHandle);
+            _hookHandle = IntPtr.Zero;
+        }
+    }
+
+    private IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (nCode < 0) return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+        // Only inspect key-down events (keyup would fire callbacks twice).
+        if (wParam != (IntPtr)WM_KEYDOWN && wParam != (IntPtr)WM_SYSKEYDOWN)
+            return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+
+        var data = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
+        // Skip events we (or another tool) injected via SendInput, otherwise we recurse.
+        if ((data.flags & LLKHF_INJECTED) != 0)
+            return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+
+        var modifiers = ReadModifiers();
+
+        HookBinding? matched = null;
+        lock (_bindingsLock)
+        {
+            foreach (var b in _bindings)
+            {
+                if (b.VkCode == data.vkCode && b.Modifiers == modifiers)
+                {
+                    matched = b;
+                    break;
+                }
+            }
+        }
+
+        if (matched is null) return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+
+        // Fire the callback off the hook thread so a slow callback doesn't trip the Windows hook
+        // timeout (which would cause the OS to silently uninstall us).
+        ThreadPool.QueueUserWorkItem(_ =>
+        {
+            try { matched.Callback(); }
+            catch { /* swallow — host should log inside the callback */ }
+        });
+
+        return matched.Suppress ? (IntPtr)1 : CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+    }
+
+    private static HotkeyModifiers ReadModifiers()
+    {
+        var m = HotkeyModifiers.None;
+        if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) m |= HotkeyModifiers.Control;
+        if ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0) m |= HotkeyModifiers.Alt;
+        if ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) m |= HotkeyModifiers.Shift;
+        if ((GetAsyncKeyState(VK_LWIN) & 0x8000) != 0) m |= HotkeyModifiers.Win;
+        if ((GetAsyncKeyState(VK_RWIN) & 0x8000) != 0) m |= HotkeyModifiers.Win;
+        return m;
+    }
+
+    public void Dispose() => Uninstall();
+
+    private sealed record HookBinding(HotkeyModifiers Modifiers, uint VkCode, Action Callback, bool Suppress);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KBDLLHOOKSTRUCT
+    {
+        public uint vkCode;
+        public uint scanCode;
+        public uint flags;
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
+
+    private const int WH_KEYBOARD_LL = 13;
+    private const int WM_KEYDOWN = 0x0100;
+    private const int WM_SYSKEYDOWN = 0x0104;
+    private const uint LLKHF_INJECTED = 0x00000010;
+
+    private const int VK_SHIFT = 0x10;
+    private const int VK_CONTROL = 0x11;
+    private const int VK_MENU = 0x12; // Alt
+    private const int VK_LWIN = 0x5B;
+    private const int VK_RWIN = 0x5C;
+
+    private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+    private static extern IntPtr GetModuleHandle([MarshalAs(UnmanagedType.LPWStr)] string? lpModuleName);
+}
