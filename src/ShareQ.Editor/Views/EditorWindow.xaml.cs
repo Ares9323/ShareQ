@@ -95,6 +95,12 @@ public partial class EditorWindow : FluentWindow
         swatchColorDesc?.AddValueChanged(SelFillSwatch, (_, _) => OnSelFillChanged());
         SelStrokeSlider.ValueChanged += (_, _) => OnSelStrokeChanged();
         SelRotationSlider.ValueChanged += (_, _) => OnSelRotationSliderChanged();
+        SelEffectSlider.ValueChanged += (_, _) => OnSelEffectSliderChanged();
+        SelEffectBox.LostFocus += (_, _) => OnSelEffectBoxCommitted();
+        SelEffectBox.KeyDown += (_, ev) => { if (ev.Key == Key.Enter) OnSelEffectBoxCommitted(); };
+        SelEffectSecondarySlider.ValueChanged += (_, _) => OnSelEffectSecondarySliderChanged();
+        SelEffectSecondaryBox.LostFocus += (_, _) => OnSelEffectSecondaryBoxCommitted();
+        SelEffectSecondaryBox.KeyDown += (_, ev) => { if (ev.Key == Key.Enter) OnSelEffectSecondaryBoxCommitted(); };
         SelRotationBox.LostFocus += (_, _) => OnSelRotationBoxCommitted();
         SelRotationBox.KeyDown += (_, ev) => { if (ev.Key == Key.Enter) OnSelRotationBoxCommitted(); };
 
@@ -168,6 +174,9 @@ public partial class EditorWindow : FluentWindow
     private void OnFreehandToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Freehand;
     private void OnTextToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Text;
     private void OnStepToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.StepCounter;
+    private void OnBlurToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Blur;
+    private void OnPixelateToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Pixelate;
+    private void OnSpotlightToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Spotlight;
 
     private void RefreshToolButtonHighlight()
     {
@@ -180,7 +189,10 @@ public partial class EditorWindow : FluentWindow
             (Btn: EllipseToolBtn, Tool: EditorTool.Ellipse),
             (Btn: FreehandToolBtn, Tool: EditorTool.Freehand),
             (Btn: TextToolBtn, Tool: EditorTool.Text),
-            (Btn: StepToolBtn, Tool: EditorTool.StepCounter)
+            (Btn: StepToolBtn, Tool: EditorTool.StepCounter),
+            (Btn: BlurToolBtn, Tool: EditorTool.Blur),
+            (Btn: PixelateToolBtn, Tool: EditorTool.Pixelate),
+            (Btn: SpotlightToolBtn, Tool: EditorTool.Spotlight)
         };
         foreach (var (btn, tool) in buttons)
         {
@@ -247,6 +259,9 @@ public partial class EditorWindow : FluentWindow
             case Key.P: _vm.CurrentTool = EditorTool.Freehand; e.Handled = true; break;
             case Key.T: _vm.CurrentTool = EditorTool.Text; e.Handled = true; break;
             case Key.N: _vm.CurrentTool = EditorTool.StepCounter; e.Handled = true; break;
+            case Key.B: _vm.CurrentTool = EditorTool.Blur; e.Handled = true; break;
+            case Key.X: _vm.CurrentTool = EditorTool.Pixelate; e.Handled = true; break;
+            case Key.O: _vm.CurrentTool = EditorTool.Spotlight; e.Handled = true; break;
             default: break;
         }
     }
@@ -586,6 +601,9 @@ public partial class EditorWindow : FluentWindow
         FreehandShape f => f with { Points = f.Points.Select(p => (p.X + dx, p.Y + dy)).ToList() },
         TextShape t => t with { X = t.X + dx, Y = t.Y + dy },
         StepCounterShape c => c with { CenterX = c.CenterX + dx, CenterY = c.CenterY + dy },
+        BlurShape b => b with { X = b.X + dx, Y = b.Y + dy },
+        PixelateShape p => p with { X = p.X + dx, Y = p.Y + dy },
+        SpotlightShape sp => sp with { X = sp.X + dx, Y = sp.Y + dy },
         _ => s
     };
 
@@ -669,6 +687,82 @@ public partial class EditorWindow : FluentWindow
         try { SelRotationSlider.Value = v; }
         finally { _suppressLiveUpdates = false; }
         ApplyRotation(v);
+    }
+
+    private void OnSelEffectSliderChanged()
+    {
+        if (_suppressLiveUpdates) return;
+        var v = SelEffectSlider.Value;
+        SelEffectBox.Text = ((int)Math.Round(v)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        ApplyEffectParam(v);
+    }
+
+    private void OnSelEffectBoxCommitted()
+    {
+        if (_suppressLiveUpdates) return;
+        if (!double.TryParse(SelEffectBox.Text, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var v))
+        {
+            SelEffectBox.Text = ((int)Math.Round(SelEffectSlider.Value)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return;
+        }
+        v = Math.Max(SelEffectSlider.Minimum, v);
+        _suppressLiveUpdates = true;
+        try { SelEffectSlider.Value = Math.Clamp(v, SelEffectSlider.Minimum, SelEffectSlider.Maximum); }
+        finally { _suppressLiveUpdates = false; }
+        ApplyEffectParam(v);
+    }
+
+    private void OnSelEffectSecondarySliderChanged()
+    {
+        if (_suppressLiveUpdates) return;
+        var v = SelEffectSecondarySlider.Value;
+        SelEffectSecondaryBox.Text = ((int)Math.Round(v)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        ApplyEffectSecondaryParam(v);
+    }
+
+    private void OnSelEffectSecondaryBoxCommitted()
+    {
+        if (_suppressLiveUpdates) return;
+        if (!double.TryParse(SelEffectSecondaryBox.Text, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var v))
+        {
+            SelEffectSecondaryBox.Text = ((int)Math.Round(SelEffectSecondarySlider.Value)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return;
+        }
+        v = Math.Max(SelEffectSecondarySlider.Minimum, v);
+        _suppressLiveUpdates = true;
+        try { SelEffectSecondarySlider.Value = Math.Clamp(v, SelEffectSecondarySlider.Minimum, SelEffectSecondarySlider.Maximum); }
+        finally { _suppressLiveUpdates = false; }
+        ApplyEffectSecondaryParam(v);
+    }
+
+    private void ApplyEffectParam(double v)
+    {
+        foreach (var s in _vm.SelectedShapes.ToList())
+        {
+            Shape? updated = s switch
+            {
+                BlurShape b => b with { Radius = Math.Max(0, v) },
+                PixelateShape p => p with { BlockSize = (int)Math.Max(2, Math.Round(v)) },
+                SpotlightShape sp => sp with { DimAmount = Math.Clamp(v / 100.0, 0, 1) },
+                _ => null
+            };
+            if (updated is not null) _vm.LiveReplaceShape(s, updated);
+        }
+    }
+
+    private void ApplyEffectSecondaryParam(double v)
+    {
+        foreach (var s in _vm.SelectedShapes.ToList())
+        {
+            Shape? updated = s switch
+            {
+                SpotlightShape sp => sp with { BlurRadius = Math.Max(0, v) },
+                _ => null
+            };
+            if (updated is not null) _vm.LiveReplaceShape(s, updated);
+        }
     }
 
     private void ApplyRotation(double deg)
@@ -973,11 +1067,15 @@ public partial class EditorWindow : FluentWindow
 
     private static bool ShapeSupportsFill(Shape s) => s is RectangleShape or EllipseShape or StepCounterShape;
 
-    /// <summary>True for shapes that visually use the Outline color. TextShape uses Style.Color instead.</summary>
-    private static bool ShapeSupportsOutline(Shape s) => s is not TextShape;
+    /// <summary>True for shapes that visually use the Outline color. TextShape uses Style.Color
+    /// instead, and effect shapes (blur/pixelate/spotlight) have no colored stroke at all.</summary>
+    private static bool ShapeSupportsOutline(Shape s) =>
+        s is RectangleShape or EllipseShape or ArrowShape or LineShape or FreehandShape or StepCounterShape;
 
-    /// <summary>True for shapes that visually use StrokeWidth. TextShape uses FontSize for sizing.</summary>
-    private static bool ShapeSupportsStroke(Shape s) => s is not TextShape;
+    /// <summary>True for shapes that visually use StrokeWidth. TextShape uses FontSize, effect shapes
+    /// have no stroke.</summary>
+    private static bool ShapeSupportsStroke(Shape s) =>
+        s is RectangleShape or EllipseShape or ArrowShape or LineShape or FreehandShape or StepCounterShape;
 
     private static Shape ApplyStrokeWidth(Shape s, double w) => s switch
     {
@@ -1140,6 +1238,9 @@ public partial class EditorWindow : FluentWindow
         FreehandShape f => FreehandBounds(f),
         TextShape t => TextBounds(t),
         StepCounterShape c => (c.CenterX - c.Radius, c.CenterY - c.Radius, c.Radius * 2, c.Radius * 2),
+        BlurShape b => (b.X, b.Y, b.Width, b.Height),
+        PixelateShape p => (p.X, p.Y, p.Width, p.Height),
+        SpotlightShape s => (s.X, s.Y, s.Width, s.Height),
         _ => (0, 0, 0, 0)
     };
 
@@ -1163,7 +1264,7 @@ public partial class EditorWindow : FluentWindow
         return (minX, minY, maxX - minX, maxY - minY);
     }
 
-    private static UIElement MakeUiElement(Shape shape)
+    private UIElement MakeUiElement(Shape shape)
     {
         UIElement ui = shape switch
         {
@@ -1174,6 +1275,9 @@ public partial class EditorWindow : FluentWindow
             FreehandShape f => CreateFreehand(f),
             TextShape t => CreateText(t),
             StepCounterShape c => CreateStepCounter(c),
+            BlurShape b => CreateBlur(b),
+            PixelateShape p => CreatePixelate(p),
+            SpotlightShape s => CreateSpotlight(s),
             _ => throw new NotSupportedException($"Unknown shape kind: {shape.GetType().Name}")
         };
         // Drawn shapes never intercept clicks: hit-testing happens geometrically via ShapeHitTester.
@@ -1310,6 +1414,143 @@ public partial class EditorWindow : FluentWindow
         _ => System.Windows.TextAlignment.Left
     };
 
+    private UIElement CreateBlur(BlurShape b)
+    {
+        if (SourceImage.Source is not BitmapSource src) return EmptyRectFor(b.X, b.Y, b.Width, b.Height);
+        // Crop the source to the rect so the BlurEffect operates only on the relevant region —
+        // applying it to the full-size image and clipping creates an offset halo.
+        var ix = (int)Math.Max(0, Math.Floor(b.X));
+        var iy = (int)Math.Max(0, Math.Floor(b.Y));
+        var iw = (int)Math.Min(src.PixelWidth - ix, Math.Ceiling(b.Width));
+        var ih = (int)Math.Min(src.PixelHeight - iy, Math.Ceiling(b.Height));
+        if (iw <= 0 || ih <= 0) return EmptyRectFor(b.X, b.Y, b.Width, b.Height);
+
+        var cropped = new System.Windows.Media.Imaging.CroppedBitmap(src, new Int32Rect(ix, iy, iw, ih));
+        var img = new System.Windows.Controls.Image
+        {
+            Source = cropped,
+            Stretch = Stretch.Fill,
+            Width = iw,
+            Height = ih,
+            // Clip the effect so the blur halo doesn't bleed outside the rect.
+            Clip = new RectangleGeometry(new Rect(0, 0, iw, ih)),
+            Effect = new System.Windows.Media.Effects.BlurEffect
+            {
+                Radius = b.Radius,
+                KernelType = System.Windows.Media.Effects.KernelType.Gaussian
+            }
+        };
+        Canvas.SetLeft(img, ix);
+        Canvas.SetTop(img, iy);
+        return img;
+    }
+
+    private UIElement CreatePixelate(PixelateShape p)
+    {
+        if (SourceImage.Source is not BitmapSource src) return EmptyRectFor(p.X, p.Y, p.Width, p.Height);
+        var blockSize = Math.Max(2, p.BlockSize);
+        var ix = (int)Math.Max(0, Math.Floor(p.X));
+        var iy = (int)Math.Max(0, Math.Floor(p.Y));
+        var iw = (int)Math.Min(src.PixelWidth - ix, Math.Ceiling(p.Width));
+        var ih = (int)Math.Min(src.PixelHeight - iy, Math.Ceiling(p.Height));
+        if (iw <= 0 || ih <= 0) return EmptyRectFor(p.X, p.Y, p.Width, p.Height);
+
+        var cropped = new System.Windows.Media.Imaging.CroppedBitmap(src, new Int32Rect(ix, iy, iw, ih));
+        var smallW = Math.Max(1, iw / blockSize);
+        var smallH = Math.Max(1, ih / blockSize);
+        // Downscale via a scaling transform; the upscale happens in the Image's Stretch=Fill with NearestNeighbor.
+        var down = new System.Windows.Media.Imaging.TransformedBitmap(cropped,
+            new ScaleTransform((double)smallW / iw, (double)smallH / ih));
+        var img = new System.Windows.Controls.Image
+        {
+            Source = down,
+            Stretch = Stretch.Fill,
+            Width = iw,
+            Height = ih
+        };
+        System.Windows.Media.RenderOptions.SetBitmapScalingMode(img, System.Windows.Media.BitmapScalingMode.NearestNeighbor);
+        Canvas.SetLeft(img, ix);
+        Canvas.SetTop(img, iy);
+        return img;
+    }
+
+    private UIElement CreateSpotlight(SpotlightShape s)
+    {
+        var canvasW = DrawingCanvas.Width > 0 ? DrawingCanvas.Width : (SourceImage.Source as BitmapSource)?.PixelWidth ?? 0;
+        var canvasH = DrawingCanvas.Height > 0 ? DrawingCanvas.Height : (SourceImage.Source as BitmapSource)?.PixelHeight ?? 0;
+
+        // Even-odd geometry covers the canvas with a hole at the spotlight rect.
+        var outer = new RectangleGeometry(new Rect(0, 0, canvasW, canvasH));
+        var inner = new RectangleGeometry(new Rect(s.X, s.Y, s.Width, s.Height));
+        var combined = new GeometryGroup { FillRule = FillRule.EvenOdd };
+        combined.Children.Add(outer);
+        combined.Children.Add(inner);
+
+        // Use a Canvas (not Grid) so absolute Canvas.SetLeft/Top on children works for the blur strips.
+        var canvasHost = new Canvas { Width = canvasW, Height = canvasH };
+
+        // Blur layer: instead of one full-size Image with Effect (which produces phantom duplicates
+        // because the effect's expanded bounds escape the Clip), crop the four U-strips around the
+        // spotlight rect and blur each one in place.
+        if (s.BlurRadius > 0 && SourceImage.Source is BitmapSource src)
+        {
+            var sx = (int)Math.Max(0, Math.Floor(s.X));
+            var sy = (int)Math.Max(0, Math.Floor(s.Y));
+            var sw = (int)Math.Min(src.PixelWidth - sx, Math.Ceiling(s.Width));
+            var sh = (int)Math.Min(src.PixelHeight - sy, Math.Ceiling(s.Height));
+            // Top strip
+            AddBlurStrip(canvasHost, src, 0, 0, src.PixelWidth, sy, s.BlurRadius);
+            // Bottom strip
+            AddBlurStrip(canvasHost, src, 0, sy + sh, src.PixelWidth, src.PixelHeight - (sy + sh), s.BlurRadius);
+            // Left strip (between top and bottom strips)
+            AddBlurStrip(canvasHost, src, 0, sy, sx, sh, s.BlurRadius);
+            // Right strip
+            AddBlurStrip(canvasHost, src, sx + sw, sy, src.PixelWidth - (sx + sw), sh, s.BlurRadius);
+        }
+
+        // Dim layer on top.
+        var alpha = (byte)Math.Round(Math.Clamp(s.DimAmount, 0, 1) * 255);
+        var dimPath = new System.Windows.Shapes.Path
+        {
+            Data = combined,
+            Fill = new SolidColorBrush(Color.FromArgb(alpha, 0, 0, 0))
+        };
+        canvasHost.Children.Add(dimPath);
+        Canvas.SetLeft(canvasHost, 0);
+        Canvas.SetTop(canvasHost, 0);
+        return canvasHost;
+    }
+
+    private static void AddBlurStrip(Canvas host, BitmapSource src, int x, int y, int w, int h, double blurRadius)
+    {
+        if (w <= 0 || h <= 0) return;
+        var cropped = new System.Windows.Media.Imaging.CroppedBitmap(src, new Int32Rect(x, y, w, h));
+        var img = new System.Windows.Controls.Image
+        {
+            Source = cropped,
+            Stretch = Stretch.Fill,
+            Width = w,
+            Height = h,
+            Clip = new RectangleGeometry(new Rect(0, 0, w, h)),
+            Effect = new System.Windows.Media.Effects.BlurEffect
+            {
+                Radius = blurRadius,
+                KernelType = System.Windows.Media.Effects.KernelType.Gaussian
+            }
+        };
+        Canvas.SetLeft(img, x);
+        Canvas.SetTop(img, y);
+        host.Children.Add(img);
+    }
+
+    private static UIElement EmptyRectFor(double x, double y, double w, double h)
+    {
+        var r = new System.Windows.Shapes.Rectangle { Width = Math.Max(0, w), Height = Math.Max(0, h), Fill = Brushes.Transparent };
+        Canvas.SetLeft(r, x);
+        Canvas.SetTop(r, y);
+        return r;
+    }
+
     private static UIElement CreateStepCounter(StepCounterShape c)
     {
         var grid = new Grid
@@ -1394,6 +1635,10 @@ public partial class EditorWindow : FluentWindow
         var rotatable = sels.Count == 1 && sels[0] is RectangleShape or EllipseShape or TextShape;
         SelRotationSection.Visibility = rotatable ? Visibility.Visible : Visibility.Collapsed;
 
+        // Effect section: single-selection of an effect shape (blur/pixelate/spotlight).
+        var isEffect = sels.Count == 1 && sels[0] is BlurShape or PixelateShape or SpotlightShape;
+        SelEffectSection.Visibility = isEffect ? Visibility.Visible : Visibility.Collapsed;
+
         // For multi-selection, show common values where all selected shapes agree;
         // otherwise show a sensible placeholder (the user can still pick a value to apply to all).
         var first = sels[0];
@@ -1420,6 +1665,36 @@ public partial class EditorWindow : FluentWindow
                 rot = ((rot + 180) % 360 + 360) % 360 - 180;
                 SelRotationSlider.Value = rot;
                 SelRotationBox.Text = ((int)Math.Round(rot)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            if (isEffect)
+            {
+                switch (sels[0])
+                {
+                    case BlurShape b:
+                        SelEffectLabel.Text = "Blur radius (px)";
+                        SelEffectSlider.Minimum = 0; SelEffectSlider.Maximum = 60;
+                        SelEffectSlider.Value = Math.Clamp(b.Radius, 0, 60);
+                        SelEffectBox.Text = ((int)Math.Round(b.Radius)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        break;
+                    case PixelateShape p:
+                        SelEffectLabel.Text = "Pixel block size";
+                        SelEffectSlider.Minimum = 2; SelEffectSlider.Maximum = 60;
+                        SelEffectSlider.Value = Math.Clamp(p.BlockSize, 2, 60);
+                        SelEffectBox.Text = p.BlockSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        break;
+                    case SpotlightShape sp:
+                        SelEffectLabel.Text = "Spotlight dim (%)";
+                        SelEffectSlider.Minimum = 0; SelEffectSlider.Maximum = 100;
+                        SelEffectSlider.Value = Math.Round(sp.DimAmount * 100);
+                        SelEffectBox.Text = ((int)Math.Round(sp.DimAmount * 100)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        SelEffectSecondaryLabel.Text = "Spotlight blur (px)";
+                        SelEffectSecondarySlider.Minimum = 0; SelEffectSecondarySlider.Maximum = 60;
+                        SelEffectSecondarySlider.Value = Math.Clamp(sp.BlurRadius, 0, 60);
+                        SelEffectSecondaryBox.Text = ((int)Math.Round(sp.BlurRadius)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        break;
+                }
+                SelEffectSecondarySection.Visibility = sels[0] is SpotlightShape ? Visibility.Visible : Visibility.Collapsed;
             }
 
             if (textShapes.Count > 0)

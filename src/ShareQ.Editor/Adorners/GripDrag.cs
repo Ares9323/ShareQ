@@ -14,6 +14,15 @@ public static class GripDrag
         RectangleShape r when grip == GripKind.Rotate => r with { Rotation = AngleFromPivot(r.X + r.Width / 2, r.Y + r.Height / 2, px, py, shiftHeld) },
         EllipseShape e when grip == GripKind.Rotate => e with { Rotation = AngleFromPivot(e.X + e.Width / 2, e.Y + e.Height / 2, px, py, shiftHeld) },
         TextShape txt when grip == GripKind.Rotate => txt with { Rotation = AngleFromPivot(TextCenterX(txt), TextCenterY(txt), px, py, shiftHeld) },
+        BlurShape b => ResizeRect(new RectShim(b.X, b.Y, b.Width, b.Height), grip, px, py, shiftHeld) is { } box1
+            ? b with { X = box1.X, Y = box1.Y, Width = box1.W, Height = box1.H }
+            : null,
+        PixelateShape p => ResizeRect(new RectShim(p.X, p.Y, p.Width, p.Height), grip, px, py, shiftHeld) is { } box2
+            ? p with { X = box2.X, Y = box2.Y, Width = box2.W, Height = box2.H }
+            : null,
+        SpotlightShape sp => ResizeRect(new RectShim(sp.X, sp.Y, sp.Width, sp.Height), grip, px, py, shiftHeld) is { } box3
+            ? sp with { X = box3.X, Y = box3.Y, Width = box3.W, Height = box3.H }
+            : null,
         RectangleShape r => ResizeRect(new RectShim(r.X, r.Y, r.Width, r.Height), grip, px, py, shiftHeld) is { } box
             ? r with { X = box.X, Y = box.Y, Width = box.W, Height = box.H }
             : null,

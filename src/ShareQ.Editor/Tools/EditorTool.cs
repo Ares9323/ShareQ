@@ -9,5 +9,8 @@ public enum EditorTool
     Ellipse,
     Freehand,
     Text,
-    StepCounter
+    StepCounter,
+    Blur,
+    Pixelate,
+    Spotlight
 }

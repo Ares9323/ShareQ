@@ -25,8 +25,28 @@ public static class ShapeHitTester
         FreehandShape f => HitFreehand(f, px, py),
         TextShape t => HitTextRotated(t, px, py),
         StepCounterShape c => HitStepCounter(c, px, py),
+        BlurShape b => HitRectRegion(b.X, b.Y, b.Width, b.Height, px, py),
+        PixelateShape p => HitRectRegion(p.X, p.Y, p.Width, p.Height, px, py),
+        SpotlightShape s => HitRectRegion(s.X, s.Y, s.Width, s.Height, px, py),
         _ => false
     };
+
+    /// <summary>Hit the perimeter of a rect region (for effect shapes whose interior is "see-through"
+    /// in editing terms — clicking the middle should not block clicks on shapes underneath).</summary>
+    private static bool HitRectRegion(double x, double y, double w, double h, double px, double py)
+    {
+        // Generous hit zone on the border so users can grab a thin frame easily.
+        const double Tol = 6.0;
+        if (px < x - Tol || px > x + w + Tol || py < y - Tol || py > y + h + Tol) return false;
+        var distLeft = Math.Abs(px - x);
+        var distRight = Math.Abs(px - (x + w));
+        var distTop = Math.Abs(py - y);
+        var distBottom = Math.Abs(py - (y + h));
+        var insideX = px >= x && px <= x + w;
+        var insideY = py >= y && py <= y + h;
+        return (insideY && (distLeft < Tol || distRight < Tol))
+            || (insideX && (distTop < Tol || distBottom < Tol));
+    }
 
     /// <summary>Rotate <paramref name="px"/>,<paramref name="py"/> by -<paramref name="degrees"/> around
     /// (<paramref name="cx"/>,<paramref name="cy"/>). Used to hit-test a rotated shape against its

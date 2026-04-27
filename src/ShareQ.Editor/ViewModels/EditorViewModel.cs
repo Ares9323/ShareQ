@@ -25,7 +25,10 @@ public sealed partial class EditorViewModel : ObservableObject
             [EditorTool.Ellipse] = new EllipseTool(),
             [EditorTool.Freehand] = new FreehandTool(),
             [EditorTool.Text] = new TextTool(TextStyle.Default),
-            [EditorTool.StepCounter] = new StepCounterTool()
+            [EditorTool.StepCounter] = new StepCounterTool(),
+            [EditorTool.Blur] = new BlurTool(),
+            [EditorTool.Pixelate] = new PixelateTool(),
+            [EditorTool.Spotlight] = new SpotlightTool()
         };
         _activeTool = _tools[EditorTool.Rectangle];
         Shapes = [];

@@ -22,6 +22,9 @@ public static class ShapeGripLayout
         LineShape l => [new(GripKind.From, l.FromX, l.FromY), new(GripKind.To, l.ToX, l.ToY)],
         TextShape t => TextGrip(t, rotateGripOffset),
         StepCounterShape c => [new(GripKind.Resize, c.CenterX + c.Radius * 0.707, c.CenterY + c.Radius * 0.707)],
+        BlurShape b => RectGrips(b.X, b.Y, b.Width, b.Height, 0),
+        PixelateShape p => RectGrips(p.X, p.Y, p.Width, p.Height, 0),
+        SpotlightShape s => RectGrips(s.X, s.Y, s.Width, s.Height, 0),
         _ => []
     };
 
@@ -48,6 +51,9 @@ public static class ShapeGripLayout
         EllipseShape e => (e.X + e.Width / 2, e.Y + e.Height / 2),
         TextShape t => TextPivot(t),
         StepCounterShape c => (c.CenterX, c.CenterY),
+        BlurShape b => (b.X + b.Width / 2, b.Y + b.Height / 2),
+        PixelateShape p => (p.X + p.Width / 2, p.Y + p.Height / 2),
+        SpotlightShape s => (s.X + s.Width / 2, s.Y + s.Height / 2),
         _ => (0, 0)
     };
 

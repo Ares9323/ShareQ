@@ -34,7 +34,10 @@
                 <ui:Button x:Name="EllipseToolBtn" Content="E Ellipse" Margin="0,0,4,0" Click="OnEllipseToolClicked" />
                 <ui:Button x:Name="FreehandToolBtn" Content="P Freehand" Margin="0,0,4,0" Click="OnFreehandToolClicked" />
                 <ui:Button x:Name="TextToolBtn" Content="T Text" Margin="0,0,4,0" Click="OnTextToolClicked" />
-                <ui:Button x:Name="StepToolBtn" Content="N Step" Margin="0,0,16,0" Click="OnStepToolClicked" />
+                <ui:Button x:Name="StepToolBtn" Content="N Step" Margin="0,0,4,0" Click="OnStepToolClicked" />
+                <ui:Button x:Name="BlurToolBtn" Content="B Blur" Margin="0,0,4,0" Click="OnBlurToolClicked" />
+                <ui:Button x:Name="PixelateToolBtn" Content="X Pixelate" Margin="0,0,4,0" Click="OnPixelateToolClicked" />
+                <ui:Button x:Name="SpotlightToolBtn" Content="O Spotlight" Margin="0,0,16,0" Click="OnSpotlightToolClicked" />
 
                 <TextBlock Text="Outline:" Foreground="White" VerticalAlignment="Center" Margin="0,0,4,0" />
                 <views:ColorSwatchButton x:Name="OutlineSwatch" Margin="0,0,16,0" />
@@ -107,6 +110,33 @@
                     <StackPanel x:Name="SelStrokeSection">
                         <TextBlock Text="Stroke" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
                         <Slider x:Name="SelStrokeSlider" Minimum="1" Maximum="20" Margin="0,0,0,12" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="SelEffectSection" Visibility="Collapsed" Margin="0,0,0,12">
+                        <TextBlock x:Name="SelEffectLabel" Text="Effect" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Slider Grid.Column="0" x:Name="SelEffectSlider" VerticalAlignment="Center" />
+                            <TextBox Grid.Column="1" x:Name="SelEffectBox"
+                                     Width="44" Margin="6,0,0,0" Padding="2"
+                                     VerticalAlignment="Center" TextAlignment="Right" />
+                        </Grid>
+                        <StackPanel x:Name="SelEffectSecondarySection" Visibility="Collapsed">
+                            <TextBlock x:Name="SelEffectSecondaryLabel" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Slider Grid.Column="0" x:Name="SelEffectSecondarySlider" VerticalAlignment="Center" />
+                                <TextBox Grid.Column="1" x:Name="SelEffectSecondaryBox"
+                                         Width="44" Margin="6,0,0,0" Padding="2"
+                                         VerticalAlignment="Center" TextAlignment="Right" />
+                            </Grid>
+                        </StackPanel>
                     </StackPanel>
 
                     <StackPanel x:Name="SelRotationSection" Visibility="Collapsed" Margin="0,0,0,12">
