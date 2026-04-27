@@ -1,7 +1,10 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using ShareQ.Capture;
 
 namespace ShareQ.App.Windows;
@@ -10,28 +13,95 @@ public partial class RegionOverlayWindow : Window
 {
     private Point? _dragStart;
     private CaptureRegion? _result;
+    private int _magnifierHalf = 8;            // 17×17 sample by default
+    private const int MagnifierBoxPx = 160;    // displayed magnifier size in DIPs
+    private const int MagnifierCursorOffset = 24;
+    private BitmapSource? _screenSnapshot;
+    private int _screenSnapshotLeft, _screenSnapshotTop;
+    private System.Windows.Threading.DispatcherTimer? _magnifierTimer;
+    private int _lastMagnifierX = int.MinValue, _lastMagnifierY = int.MinValue;
 
     public RegionOverlayWindow()
     {
         InitializeComponent();
 
-        var (left, top, width, height) = VirtualScreen.GetBounds();
-        Left = left;
-        Top = top;
-        Width = width;
-        Height = height;
+        // SystemParameters.VirtualScreen* returns DIPs (DPI-aware), unlike VirtualScreen.GetBounds()
+        // which returns physical pixels. Mixing the two on scaling ≠ 100% makes the window too big
+        // and crops content off the right/bottom.
+        Left = SystemParameters.VirtualScreenLeft;
+        Top = SystemParameters.VirtualScreenTop;
+        Width = SystemParameters.VirtualScreenWidth;
+        Height = SystemParameters.VirtualScreenHeight;
 
         KeyDown += OnKeyDown;
         MouseLeftButtonDown += OnMouseDown;
         MouseMove += OnMouseMove;
         MouseLeftButtonUp += OnMouseUp;
-        Loaded += (_, _) => { Activate(); Focus(); Cursor = Cursors.Cross; };
+        MouseWheel += OnMouseWheel;
+        Loaded += (_, _) =>
+        {
+            Activate(); Focus(); Cursor = Cursors.Cross;
+            MagnifierImage.Width = MagnifierImage.Height = MagnifierBoxPx;
+            UpdateDim(0, 0, 0, 0);
+            // Drive magnifier + cursor coords from a 60Hz timer instead of MouseMove (which fires 200+/s
+            // on high-poll devices and causes redraw-time lag).
+            _magnifierTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render)
+            {
+                Interval = TimeSpan.FromMilliseconds(16)
+            };
+            _magnifierTimer.Tick += (_, _) => TickMagnifier();
+            _magnifierTimer.Start();
+        };
+        Closed += (_, _) => _magnifierTimer?.Stop();
+    }
+
+    private void TickMagnifier()
+    {
+        if (!GetCursorPos(out var pt)) return;
+        if (pt.X == _lastMagnifierX && pt.Y == _lastMagnifierY) return;
+        _lastMagnifierX = pt.X;
+        _lastMagnifierY = pt.Y;
+
+        CursorPosLabel.Text = $"X: {pt.X}  Y: {pt.Y}";
+        CursorPosBorder.Visibility = Visibility.Visible;
+        PositionInBottomRight(CursorPosBorder);
+
+        var cursorInWindow = PointFromScreen(new Point(pt.X, pt.Y));
+        UpdateMagnifier(pt.X, pt.Y, cursorInWindow);
     }
 
     public CaptureRegion? PickRegion()
     {
+        // Snapshot the screen BEFORE showing the overlay — used both as the window background
+        // (so we don't need AllowsTransparency) and by the magnifier preview.
+        TakeScreenSnapshot();
+        if (_screenSnapshot is not null) ScreenshotImage.Source = _screenSnapshot;
         ShowDialog();
         return _result;
+    }
+
+    private void TakeScreenSnapshot()
+    {
+        var (left, top, w, h) = VirtualScreen.GetBounds();
+        try
+        {
+            using var bmp = new System.Drawing.Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (var g = System.Drawing.Graphics.FromImage(bmp))
+            {
+                g.CopyFromScreen(left, top, 0, 0, new System.Drawing.Size(w, h));
+            }
+            var hbm = bmp.GetHbitmap();
+            try
+            {
+                _screenSnapshot = Imaging.CreateBitmapSourceFromHBitmap(hbm, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                _screenSnapshot.Freeze();
+                _screenSnapshotLeft = left;
+                _screenSnapshotTop = top;
+            }
+            finally { _ = DeleteObject(hbm); }
+        }
+        catch (System.ComponentModel.Win32Exception) { _screenSnapshot = null; }
+        catch (ArgumentException) { _screenSnapshot = null; }
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
@@ -53,12 +123,15 @@ public partial class RegionOverlayWindow : Window
         SelectionRect.Height = 0;
         SelectionRect.Visibility = Visibility.Visible;
         SizeLabelBorder.Visibility = Visibility.Visible;
+        // While dragging the cursor-only label is hidden; the selection label takes its place.
+        CursorPosBorder.Visibility = Visibility.Collapsed;
         CaptureMouse();
     }
 
     private void OnMouseMove(object? sender, MouseEventArgs e)
     {
         if (_dragStart is null) return;
+
         var current = e.GetPosition(OverlayCanvas);
         var x = Math.Min(_dragStart.Value.X, current.X);
         var y = Math.Min(_dragStart.Value.Y, current.Y);
@@ -69,10 +142,113 @@ public partial class RegionOverlayWindow : Window
         Canvas.SetTop(SelectionRect, y);
         SelectionRect.Width = w;
         SelectionRect.Height = h;
+        UpdateDim(x, y, w, h);
 
-        SizeLabel.Text = $"{(int)w} × {(int)h}";
-        Canvas.SetLeft(SizeLabelBorder, x + 4);
-        Canvas.SetTop(SizeLabelBorder, y - 22);
+        var (px0, py0) = ToPhysicalPixels(x, y);
+        var pxW = ToPhysicalSize(w, horizontal: true);
+        var pxH = ToPhysicalSize(h, horizontal: false);
+        SizeLabel.Text = $"X: {px0}  Y: {py0}  W: {pxW}  H: {pxH}";
+        Canvas.SetLeft(SizeLabelBorder, x + 6);
+        Canvas.SetTop(SizeLabelBorder, y + 6);
+    }
+
+    /// <summary>Rebuild the dim path so the rect [x,y,w,h] is the "hole" (selection visible),
+    /// everything else is dimmed. Called once on load (full dim, hole = 0×0) and on each drag move.</summary>
+    private void UpdateDim(double x, double y, double w, double h)
+    {
+        var outer = new RectangleGeometry(new Rect(0, 0, ActualWidth, ActualHeight));
+        var hole = new RectangleGeometry(new Rect(x, y, w, h));
+        var combined = new GeometryGroup { FillRule = FillRule.EvenOdd };
+        combined.Children.Add(outer);
+        combined.Children.Add(hole);
+        combined.Freeze();
+        DimPath.Data = combined;
+    }
+
+    private void OnMouseWheel(object? sender, MouseWheelEventArgs e)
+    {
+        // Wheel up: more zoom (smaller sample → bigger pixels). Range [3, 20] half = [7, 41] sample.
+        _magnifierHalf = Math.Clamp(_magnifierHalf + (e.Delta > 0 ? -1 : 1), 3, 20);
+        e.Handled = true;
+    }
+
+    private void UpdateMagnifier(int physicalX, int physicalY, Point cursorInWindow)
+    {
+        var sampleSize = _magnifierHalf * 2 + 1;
+        var snap = _screenSnapshot;
+        if (snap is not null)
+        {
+            // Crop relative to the snapshot's origin (= virtual-screen left/top).
+            var rx = physicalX - _magnifierHalf - _screenSnapshotLeft;
+            var ry = physicalY - _magnifierHalf - _screenSnapshotTop;
+            // Clamp to snapshot bounds so cropping near the edge of the virtual screen doesn't throw.
+            if (rx < 0) rx = 0;
+            if (ry < 0) ry = 0;
+            if (rx + sampleSize > snap.PixelWidth) rx = snap.PixelWidth - sampleSize;
+            if (ry + sampleSize > snap.PixelHeight) ry = snap.PixelHeight - sampleSize;
+            if (rx >= 0 && ry >= 0 && sampleSize > 0)
+            {
+                MagnifierImage.Source = new CroppedBitmap(snap, new Int32Rect(rx, ry, sampleSize, sampleSize));
+            }
+        }
+        var pixSize = (double)MagnifierBoxPx / sampleSize;
+        MagnifierCrosshair.Width = pixSize;
+        MagnifierCrosshair.Height = pixSize;
+
+        MagnifierCoords.Text = $"X: {physicalX}  Y: {physicalY}";
+        MagnifierBorder.Visibility = Visibility.Visible;
+        PositionMagnifierNearCursor(cursorInWindow);
+    }
+
+    private void PositionMagnifierNearCursor(Point cursor)
+    {
+        const double margin = 8;
+        var w = MagnifierBorder.ActualWidth > 0 ? MagnifierBorder.ActualWidth : MagnifierBoxPx + 4;
+        var h = MagnifierBorder.ActualHeight > 0 ? MagnifierBorder.ActualHeight : MagnifierBoxPx + 40;
+
+        // Default: bottom-right of cursor; flip to other side near edges.
+        var x = cursor.X + MagnifierCursorOffset;
+        var y = cursor.Y + MagnifierCursorOffset;
+        if (x + w + margin > ActualWidth) x = cursor.X - MagnifierCursorOffset - w;
+        if (y + h + margin > ActualHeight) y = cursor.Y - MagnifierCursorOffset - h;
+        if (x < margin) x = margin;
+        if (y < margin) y = margin;
+        Canvas.SetLeft(MagnifierBorder, x);
+        Canvas.SetTop(MagnifierBorder, y);
+    }
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteObject(IntPtr hObject);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X; public int Y; }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out POINT lpPoint);
+
+    private (int X, int Y) ToPhysicalPixels(double dipX, double dipY)
+    {
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var (vsLeft, vsTop, _, _) = VirtualScreen.GetBounds();
+        return ((int)Math.Round(dipX * dpi.DpiScaleX) + vsLeft,
+                (int)Math.Round(dipY * dpi.DpiScaleY) + vsTop);
+    }
+
+    private int ToPhysicalSize(double dipSize, bool horizontal)
+    {
+        var dpi = VisualTreeHelper.GetDpi(this);
+        return (int)Math.Round(dipSize * (horizontal ? dpi.DpiScaleX : dpi.DpiScaleY));
+    }
+
+    private void PositionInBottomRight(System.Windows.FrameworkElement el)
+    {
+        const double margin = 16;
+        var w = el.ActualWidth > 0 ? el.ActualWidth : 160;
+        var h = el.ActualHeight > 0 ? el.ActualHeight : 30;
+        Canvas.SetLeft(el, ActualWidth - w - margin);
+        Canvas.SetTop(el, ActualHeight - h - margin);
     }
 
     private void OnMouseUp(object? sender, MouseButtonEventArgs e)

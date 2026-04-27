@@ -26,7 +26,10 @@ public partial class ScreenColorPickerOverlay : Window
         Top = SystemParameters.VirtualScreenTop;
         Width = SystemParameters.VirtualScreenWidth;
         Height = SystemParameters.VirtualScreenHeight;
-        Loaded += (_, _) => Focus();
+        // Force keyboard focus aggressively — Esc must always close the overlay even when focus
+        // policy gets weird with topmost transparent windows.
+        Loaded += (_, _) => { Activate(); Focus(); Keyboard.Focus(this); };
+        PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) { DialogResult = false; Close(); e.Handled = true; } };
     }
 
     /// <summary>Set when ShowDialog returns true. Format: "#RRGGBB".</summary>
