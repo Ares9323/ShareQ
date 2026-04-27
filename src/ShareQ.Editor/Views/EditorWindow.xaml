@@ -6,28 +6,33 @@
                  xmlns:tools="clr-namespace:ShareQ.Editor.Tools"
                  xmlns:views="clr-namespace:ShareQ.Editor.Views"
                  Title="ShareQ — Editor"
-                 Width="1100" Height="800"
+                 Width="1200" Height="820"
                  WindowStartupLocation="CenterScreen"
                  WindowBackdropType="Mica"
-                 ExtendsContentIntoTitleBar="True">
+                 ExtendsContentIntoTitleBar="True"
+                 KeyDown="OnWindowKeyDown">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Title="ShareQ — Editor" />
+        <ui:TitleBar Grid.Row="0" Grid.ColumnSpan="2" Title="ShareQ — Editor" />
 
         <!-- Toolbar -->
-        <Border Grid.Row="1" Padding="12,8" Background="#252525">
+        <Border Grid.Row="1" Grid.ColumnSpan="2" Padding="12,8" Background="#252525">
             <StackPanel Orientation="Horizontal">
-                <ui:Button x:Name="SelectToolButton"
-                           Content="Select" Margin="0,0,4,0"
-                           Click="OnSelectToolClicked" />
-                <ui:Button x:Name="RectangleToolButton"
-                           Content="Rectangle" Margin="0,0,16,0"
-                           Click="OnRectangleToolClicked" />
+                <ui:Button x:Name="SelectToolBtn" Content="V Select" Margin="0,0,4,0" Click="OnSelectToolClicked" />
+                <ui:Button x:Name="RectangleToolBtn" Content="R Rect" Margin="0,0,4,0" Click="OnRectangleToolClicked" />
+                <ui:Button x:Name="ArrowToolBtn" Content="A Arrow" Margin="0,0,4,0" Click="OnArrowToolClicked" />
+                <ui:Button x:Name="LineToolBtn" Content="L Line" Margin="0,0,4,0" Click="OnLineToolClicked" />
+                <ui:Button x:Name="EllipseToolBtn" Content="E Ellipse" Margin="0,0,4,0" Click="OnEllipseToolClicked" />
+                <ui:Button x:Name="FreehandToolBtn" Content="P Freehand" Margin="0,0,16,0" Click="OnFreehandToolClicked" />
 
                 <TextBlock Text="Outline:" Foreground="White" VerticalAlignment="Center" Margin="0,0,4,0" />
                 <views:ColorSwatchButton x:Name="OutlineSwatch" Margin="0,0,16,0" />
@@ -40,17 +45,26 @@
                 <TextBlock Text="{Binding ElementName=StrokeSlider, Path=Value, StringFormat='{}{0:F0}px'}"
                            Foreground="White" VerticalAlignment="Center" Margin="4,0,16,0" />
 
-                <ui:Button Content="Undo" Margin="0,0,16,0" Click="OnUndoClicked" />
+                <ui:Button Content="Undo" Margin="0,0,4,0" Click="OnUndoClicked" />
+                <ui:Button Content="Redo" Margin="0,0,16,0" Click="OnRedoClicked" />
+
+                <ui:Button Content="−" Margin="0,0,4,0" Click="OnZoomOutClicked" />
+                <TextBlock x:Name="ZoomLabel" Text="100%" Foreground="White" VerticalAlignment="Center"
+                           MinWidth="44" TextAlignment="Center" />
+                <ui:Button Content="+" Margin="4,0,4,0" Click="OnZoomInClicked" />
+                <ui:Button Content="1:1" Margin="0,0,16,0" Click="OnZoomResetClicked" />
 
                 <ui:Button x:Name="SaveButton" Content="Save" Appearance="Primary" Margin="0,0,4,0" Click="OnSaveClicked" />
                 <ui:Button x:Name="CancelButton" Content="Cancel" Click="OnCancelClicked" />
             </StackPanel>
         </Border>
 
-        <!-- Canvas area -->
-        <ScrollViewer Grid.Row="2"
+        <!-- Canvas -->
+        <ScrollViewer Grid.Row="2" Grid.Column="0"
+                      x:Name="CanvasScrollViewer"
                       HorizontalScrollBarVisibility="Auto"
                       VerticalScrollBarVisibility="Auto"
+                      PreviewMouseWheel="OnCanvasMouseWheel"
                       Background="#1A1A1A">
             <Grid x:Name="CanvasHost" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Image x:Name="SourceImage" />
@@ -61,5 +75,29 @@
                         MouseLeftButtonUp="OnCanvasMouseUp" />
             </Grid>
         </ScrollViewer>
+
+        <!-- Property panel (right) -->
+        <Border Grid.Row="2" Grid.Column="1"
+                Width="240" Padding="12" Background="#1F1F1F"
+                BorderBrush="#333" BorderThickness="1,0,0,0">
+            <StackPanel x:Name="PropertyPanel">
+                <TextBlock Text="Properties" Foreground="White" FontSize="14" Margin="0,0,0,8" />
+                <TextBlock x:Name="NoSelectionText"
+                           Text="Select a shape to edit its properties (V tool, then click)."
+                           Foreground="#888" TextWrapping="Wrap" />
+                <StackPanel x:Name="SelectedShapeStack" Visibility="Collapsed">
+                    <TextBlock x:Name="SelectedShapeKindText" Foreground="White" Margin="0,0,0,12" />
+
+                    <TextBlock Text="Outline" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                    <views:ColorSwatchButton x:Name="SelOutlineSwatch" Margin="0,0,0,12" />
+
+                    <TextBlock Text="Fill" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                    <views:ColorSwatchButton x:Name="SelFillSwatch" Margin="0,0,0,12" />
+
+                    <TextBlock Text="Stroke" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                    <Slider x:Name="SelStrokeSlider" Minimum="1" Maximum="20" Margin="0,0,0,12" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
     </Grid>
 </ui:FluentWindow>

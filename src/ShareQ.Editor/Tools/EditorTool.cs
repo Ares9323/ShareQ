@@ -3,5 +3,9 @@ namespace ShareQ.Editor.Tools;
 public enum EditorTool
 {
     Select,
-    Rectangle
+    Rectangle,
+    Arrow,
+    Line,
+    Ellipse,
+    Freehand
 }

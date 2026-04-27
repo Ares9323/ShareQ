@@ -71,6 +71,7 @@ public partial class App : Application
                 services.AddSingleton<CaptureCoordinator>();
                 services.AddSingleton<IToastNotifier, TrayToastNotifier>();
                 services.AddSingleton<EditorLauncher>();
+                services.AddSingleton<ShareQ.Editor.Persistence.ColorRecentsStore>();
 
                 services.AddTransient<PopupWindowViewModel>();
                 services.AddTransient<PopupWindow>();

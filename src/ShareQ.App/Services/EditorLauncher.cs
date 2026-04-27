@@ -1,6 +1,7 @@
 using System.Windows.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using ShareQ.Editor.Persistence;
 using ShareQ.Editor.Rendering;
 using ShareQ.Editor.ViewModels;
 using ShareQ.Editor.Views;
@@ -12,12 +13,18 @@ public sealed class EditorLauncher
 {
     private readonly IServiceProvider _services;
     private readonly IItemStore _items;
+    private readonly ColorRecentsStore _recentsStore;
     private readonly ILogger<EditorLauncher> _logger;
 
-    public EditorLauncher(IServiceProvider services, IItemStore items, ILogger<EditorLauncher> logger)
+    public EditorLauncher(
+        IServiceProvider services,
+        IItemStore items,
+        ColorRecentsStore recentsStore,
+        ILogger<EditorLauncher> logger)
     {
         _services = services;
         _items = items;
+        _recentsStore = recentsStore;
         _logger = logger;
     }
 
@@ -30,6 +37,13 @@ public sealed class EditorLauncher
             _logger.LogInformation("EditorLauncher: skipping non-image item {Id}", itemId);
             return;
         }
+
+        var recents = await _recentsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        ColorSwatchButton.CurrentRecents = recents;
+        ColorSwatchButton.OnColorPicked = c =>
+        {
+            _ = _recentsStore.PushAsync(c, CancellationToken.None);
+        };
 
         var window = _services.GetRequiredService<EditorWindow>();
         var vm = (EditorViewModel)window.DataContext;

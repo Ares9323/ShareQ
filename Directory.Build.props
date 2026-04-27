@@ -16,7 +16,7 @@
     <RepositoryUrl>https://github.com/Ares9323/ShareQ</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <!-- Logging-related analyzer rules requiring LoggerMessage source generators are overkill at this stage -->
-    <NoWarn>$(NoWarn);CA1848;CA1873;CA1822;CA1859</NoWarn>
+    <NoWarn>$(NoWarn);CA1848;CA1873;CA1822;CA1859;CA1711</NoWarn>
   </PropertyGroup>
 
   <!-- Test projects: relax rules that conflict with xUnit conventions and test ergonomics -->
