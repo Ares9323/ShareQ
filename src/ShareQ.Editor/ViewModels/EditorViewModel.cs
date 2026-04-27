@@ -28,7 +28,8 @@ public sealed partial class EditorViewModel : ObservableObject
             [EditorTool.StepCounter] = new StepCounterTool(),
             [EditorTool.Blur] = new BlurTool(),
             [EditorTool.Pixelate] = new PixelateTool(),
-            [EditorTool.Spotlight] = new SpotlightTool()
+            [EditorTool.Spotlight] = new SpotlightTool(),
+            [EditorTool.Crop] = new CropTool()
         };
         _activeTool = _tools[EditorTool.Rectangle];
         Shapes = [];
@@ -143,7 +144,12 @@ public sealed partial class EditorViewModel : ObservableObject
     public void CommitGesture(double x, double y)
     {
         var committed = _activeTool.Commit(x, y);
-        if (committed is not null)
+        if (_activeTool is CropTool ct && ct.LastRect is { } cropRect)
+        {
+            ApplyCrop((int)Math.Round(cropRect.X), (int)Math.Round(cropRect.Y),
+                      (int)Math.Round(cropRect.Width), (int)Math.Round(cropRect.Height));
+        }
+        else if (committed is not null)
         {
             _commands.Execute(new AddShapeCommand(committed), Shapes);
             // Auto-select the just-drawn shape so the property panel shows its attributes.
@@ -152,6 +158,18 @@ public sealed partial class EditorViewModel : ObservableObject
             SetSelection([committed]);
         }
         OnPropertyChanged(nameof(PreviewShape));
+    }
+
+    public void ApplyCrop(int cropX, int cropY, int cropW, int cropH)
+    {
+        SetSelection([]);
+        _commands.Execute(new CropCommand(this, cropX, cropY, cropW, cropH), Shapes);
+    }
+
+    public void ApplyResize(int newWidth, int newHeight)
+    {
+        SetSelection([]);
+        _commands.Execute(new ResizeCommand(this, newWidth, newHeight), Shapes);
     }
 
     public void ApplyShapeEdit(Shape oldShape, Shape newShape)

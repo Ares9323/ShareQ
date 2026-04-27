@@ -1,0 +1,84 @@
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using ShareQ.Editor.Model;
+using ShareQ.Editor.ViewModels;
+
+namespace ShareQ.Editor.Commands;
+
+/// <summary>Destructive resize: replaces the source PNG with a scaled version and scales all shapes
+/// proportionally. Stores old PNG + old shapes for undo.</summary>
+public sealed class ResizeCommand : IEditorCommand
+{
+    private readonly EditorViewModel _vm;
+    private readonly int _newW, _newH;
+    private byte[]? _oldPng;
+    private List<Shape>? _oldShapes;
+
+    public ResizeCommand(EditorViewModel vm, int newWidth, int newHeight)
+    {
+        _vm = vm;
+        _newW = Math.Max(1, newWidth);
+        _newH = Math.Max(1, newHeight);
+    }
+
+    public void Apply(ObservableCollection<Shape> shapes)
+    {
+        _oldPng = _vm.SourcePngBytes;
+        _oldShapes = [.. shapes];
+
+        var (resized, sx, sy) = ResizePng(_oldPng, _newW, _newH);
+        if (resized is null) return;
+
+        _vm.SourcePngBytes = resized;
+        shapes.Clear();
+        foreach (var s in _oldShapes) shapes.Add(ScaleShape(s, sx, sy));
+    }
+
+    public void Undo(ObservableCollection<Shape> shapes)
+    {
+        if (_oldPng is null || _oldShapes is null) return;
+        _vm.SourcePngBytes = _oldPng;
+        shapes.Clear();
+        foreach (var s in _oldShapes) shapes.Add(s);
+    }
+
+    private static (byte[]? Png, double ScaleX, double ScaleY) ResizePng(byte[] pngBytes, int newW, int newH)
+    {
+        if (pngBytes.Length == 0) return (null, 1, 1);
+        var bmp = new BitmapImage();
+        bmp.BeginInit();
+        bmp.CacheOption = BitmapCacheOption.OnLoad;
+        bmp.StreamSource = new MemoryStream(pngBytes);
+        bmp.EndInit();
+        bmp.Freeze();
+
+        var sx = (double)newW / bmp.PixelWidth;
+        var sy = (double)newH / bmp.PixelHeight;
+        var scaled = new TransformedBitmap(bmp, new ScaleTransform(sx, sy));
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(scaled));
+        using var ms = new MemoryStream();
+        encoder.Save(ms);
+        return (ms.ToArray(), sx, sy);
+    }
+
+    private static Shape ScaleShape(Shape s, double sx, double sy) => s switch
+    {
+        RectangleShape r => r with { X = r.X * sx, Y = r.Y * sy, Width = r.Width * sx, Height = r.Height * sy, StrokeWidth = r.StrokeWidth * AvgScale(sx, sy) },
+        EllipseShape e => e with { X = e.X * sx, Y = e.Y * sy, Width = e.Width * sx, Height = e.Height * sy, StrokeWidth = e.StrokeWidth * AvgScale(sx, sy) },
+        ArrowShape a => a with { FromX = a.FromX * sx, FromY = a.FromY * sy, ToX = a.ToX * sx, ToY = a.ToY * sy, StrokeWidth = a.StrokeWidth * AvgScale(sx, sy) },
+        LineShape l => l with { FromX = l.FromX * sx, FromY = l.FromY * sy, ToX = l.ToX * sx, ToY = l.ToY * sy, StrokeWidth = l.StrokeWidth * AvgScale(sx, sy) },
+        FreehandShape f => f with { Points = f.Points.Select(p => (p.X * sx, p.Y * sy)).ToList(), StrokeWidth = f.StrokeWidth * AvgScale(sx, sy) },
+        TextShape t => t with { X = t.X * sx, Y = t.Y * sy, Style = t.Style with { FontSize = t.Style.FontSize * AvgScale(sx, sy) } },
+        StepCounterShape c => c with { CenterX = c.CenterX * sx, CenterY = c.CenterY * sy, Radius = c.Radius * AvgScale(sx, sy), StrokeWidth = c.StrokeWidth * AvgScale(sx, sy) },
+        BlurShape b => b with { X = b.X * sx, Y = b.Y * sy, Width = b.Width * sx, Height = b.Height * sy, Radius = b.Radius * AvgScale(sx, sy) },
+        PixelateShape p => p with { X = p.X * sx, Y = p.Y * sy, Width = p.Width * sx, Height = p.Height * sy, BlockSize = (int)Math.Max(2, Math.Round(p.BlockSize * AvgScale(sx, sy))) },
+        SpotlightShape sp => sp with { X = sp.X * sx, Y = sp.Y * sy, Width = sp.Width * sx, Height = sp.Height * sy, BlurRadius = sp.BlurRadius * AvgScale(sx, sy) },
+        _ => s
+    };
+
+    private static double AvgScale(double sx, double sy) => (sx + sy) / 2;
+}

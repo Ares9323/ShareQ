@@ -177,6 +177,8 @@ public partial class EditorWindow : FluentWindow
     private void OnBlurToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Blur;
     private void OnPixelateToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Pixelate;
     private void OnSpotlightToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Spotlight;
+    private void OnCropToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Crop;
+    private void OnResizeClicked(object sender, RoutedEventArgs e) => OpenResizeDialog();
 
     private void RefreshToolButtonHighlight()
     {
@@ -192,7 +194,8 @@ public partial class EditorWindow : FluentWindow
             (Btn: StepToolBtn, Tool: EditorTool.StepCounter),
             (Btn: BlurToolBtn, Tool: EditorTool.Blur),
             (Btn: PixelateToolBtn, Tool: EditorTool.Pixelate),
-            (Btn: SpotlightToolBtn, Tool: EditorTool.Spotlight)
+            (Btn: SpotlightToolBtn, Tool: EditorTool.Spotlight),
+            (Btn: CropToolBtn, Tool: EditorTool.Crop)
         };
         foreach (var (btn, tool) in buttons)
         {
@@ -203,6 +206,16 @@ public partial class EditorWindow : FluentWindow
     }
     private void OnUndoClicked(object sender, RoutedEventArgs e) => _vm.UndoCommand.Execute(null);
     private void OnRedoClicked(object sender, RoutedEventArgs e) => _vm.RedoCommand.Execute(null);
+    private void OpenResizeDialog()
+    {
+        if (SourceImage.Source is not BitmapSource src) return;
+        var dlg = new ResizeDialog(src.PixelWidth, src.PixelHeight) { Owner = this };
+        if (dlg.ShowDialog() == true)
+        {
+            _vm.ApplyResize(dlg.NewWidth, dlg.NewHeight);
+        }
+    }
+
     private void OnSaveClicked(object sender, RoutedEventArgs e) { Saved = true; Close(); }
     private void OnCancelClicked(object sender, RoutedEventArgs e) { Saved = false; Close(); }
 
@@ -262,6 +275,7 @@ public partial class EditorWindow : FluentWindow
             case Key.B: _vm.CurrentTool = EditorTool.Blur; e.Handled = true; break;
             case Key.X: _vm.CurrentTool = EditorTool.Pixelate; e.Handled = true; break;
             case Key.O: _vm.CurrentTool = EditorTool.Spotlight; e.Handled = true; break;
+            case Key.C: _vm.CurrentTool = EditorTool.Crop; e.Handled = true; break;
             default: break;
         }
     }

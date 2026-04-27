@@ -12,5 +12,6 @@ public enum EditorTool
     StepCounter,
     Blur,
     Pixelate,
-    Spotlight
+    Spotlight,
+    Crop
 }
