@@ -9,13 +9,14 @@
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <NeutralLanguage>en-US</NeutralLanguage>
     <Deterministic>true</Deterministic>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Authors>ShareQ contributors</Authors>
     <Product>ShareQ</Product>
     <Copyright>Copyright (c) ShareQ contributors</Copyright>
     <RepositoryUrl>https://github.com/Ares9323/ShareQ</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <!-- Logging-related analyzer rules requiring LoggerMessage source generators are overkill at this stage -->
-    <NoWarn>$(NoWarn);CA1848;CA1873</NoWarn>
+    <NoWarn>$(NoWarn);CA1848;CA1873;CA1822</NoWarn>
   </PropertyGroup>
 
   <!-- Test projects: relax rules that conflict with xUnit conventions and test ergonomics -->
