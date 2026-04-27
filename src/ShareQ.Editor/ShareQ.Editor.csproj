@@ -6,7 +6,14 @@
     <AssemblyName>ShareQ.Editor</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="WPF-UI" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\ShareQ.Core\ShareQ.Core.csproj" />
     <ProjectReference Include="..\ShareQ.Shared\ShareQ.Shared.csproj" />
+    <ProjectReference Include="..\ShareQ.Storage\ShareQ.Storage.csproj" />
   </ItemGroup>
 </Project>

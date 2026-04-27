@@ -12,6 +12,7 @@ using ShareQ.Capture.DependencyInjection;
 using ShareQ.Clipboard;
 using ShareQ.Clipboard.DependencyInjection;
 using ShareQ.Core.Pipeline;
+using ShareQ.Editor.DependencyInjection;
 using ShareQ.Hotkeys;
 using ShareQ.Pipeline.DependencyInjection;
 using ShareQ.Pipeline.Profiles;
@@ -51,6 +52,7 @@ public partial class App : Application
                 services.AddShareQClipboard();
                 services.AddShareQCapture();
                 services.AddShareQPipeline();
+                services.AddShareQEditor();
 
                 // App-side pipeline tasks (registered as IPipelineTask alongside Pipeline's baked tasks).
                 services.AddSingleton<IPipelineTask, CopyImageToClipboardTask>();
@@ -68,6 +70,7 @@ public partial class App : Application
                 services.AddSingleton<PopupWindowController>();
                 services.AddSingleton<CaptureCoordinator>();
                 services.AddSingleton<IToastNotifier, TrayToastNotifier>();
+                services.AddSingleton<EditorLauncher>();
 
                 services.AddTransient<PopupWindowViewModel>();
                 services.AddTransient<PopupWindow>();

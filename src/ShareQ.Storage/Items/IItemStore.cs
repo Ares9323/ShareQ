@@ -12,6 +12,7 @@ public interface IItemStore
     Task<bool> SoftDeleteAsync(long id, CancellationToken cancellationToken);
     Task<bool> RestoreAsync(long id, CancellationToken cancellationToken);
     Task<int> HardDeleteOlderThanAsync(DateTimeOffset cutoff, CancellationToken cancellationToken);
+    Task<bool> UpdatePayloadAsync(long id, ReadOnlyMemory<byte> newPayload, long newPayloadSize, CancellationToken cancellationToken);
 }
 
 public sealed record NewItem(

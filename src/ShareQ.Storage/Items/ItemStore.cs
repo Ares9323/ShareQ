@@ -138,6 +138,20 @@ public sealed class ItemStore : IItemStore
         return await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<bool> UpdatePayloadAsync(long id, ReadOnlyMemory<byte> newPayload, long newPayloadSize, CancellationToken cancellationToken)
+    {
+        var conn = _database.GetOpenConnection();
+        var encoded = _serializer.Encode(newPayload);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE items SET payload = $payload, payload_size = $size WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$payload", encoded);
+        cmd.Parameters.AddWithValue("$size", newPayloadSize);
+        cmd.Parameters.AddWithValue("$id", id);
+        var rows = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        return rows == 1;
+    }
+
     private async Task<bool> UpdateScalarAsync(string sql, long id, object value, CancellationToken cancellationToken)
     {
         var conn = _database.GetOpenConnection();

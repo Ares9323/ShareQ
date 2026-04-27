@@ -175,4 +175,28 @@ public class ItemStoreTests
         Assert.Null(await store.GetByIdAsync(ordinary, CancellationToken.None));
         Assert.NotNull(await store.GetByIdAsync(alive, CancellationToken.None));
     }
+
+    [Fact]
+    public async Task UpdatePayloadAsync_Existing_OverwritesContent()
+    {
+        await using var fx = await new TempDatabaseFixture().InitializeAsync();
+        var store = CreateStore(fx);
+        var id = await store.AddAsync(TextItem("original"), CancellationToken.None);
+
+        var newBytes = System.Text.Encoding.UTF8.GetBytes("rewritten");
+        Assert.True(await store.UpdatePayloadAsync(id, newBytes, newBytes.LongLength, CancellationToken.None));
+
+        var loaded = (await store.GetByIdAsync(id, CancellationToken.None))!;
+        Assert.Equal("rewritten", System.Text.Encoding.UTF8.GetString(loaded.Payload.Span));
+        Assert.Equal(newBytes.LongLength, loaded.PayloadSize);
+    }
+
+    [Fact]
+    public async Task UpdatePayloadAsync_Missing_ReturnsFalse()
+    {
+        await using var fx = await new TempDatabaseFixture().InitializeAsync();
+        var store = CreateStore(fx);
+
+        Assert.False(await store.UpdatePayloadAsync(99999, new byte[] { 0x01 }, 1, CancellationToken.None));
+    }
 }

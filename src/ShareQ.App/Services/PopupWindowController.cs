@@ -71,6 +71,7 @@ public sealed partial class PopupWindowController
         if (_window is not null) return;
         _window = _services.GetRequiredService<PopupWindow>();
         _window.PasteRequested += OnPasteRequested;
+        _window.OpenInEditorRequested += OnOpenInEditorRequested;
     }
 
     private async void OnPasteRequested(object? sender, long itemId)
@@ -82,6 +83,19 @@ public sealed partial class PopupWindowController
         catch
         {
             // Failures are logged inside collaborators.
+        }
+    }
+
+    private async void OnOpenInEditorRequested(object? sender, long itemId)
+    {
+        try
+        {
+            var launcher = _services.GetRequiredService<EditorLauncher>();
+            await launcher.OpenAsync(itemId, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Failures are logged inside EditorLauncher.
         }
     }
 

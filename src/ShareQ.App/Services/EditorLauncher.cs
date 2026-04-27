@@ -1,0 +1,48 @@
+using System.Windows.Controls;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using ShareQ.Editor.Rendering;
+using ShareQ.Editor.ViewModels;
+using ShareQ.Editor.Views;
+using ShareQ.Storage.Items;
+
+namespace ShareQ.App.Services;
+
+public sealed class EditorLauncher
+{
+    private readonly IServiceProvider _services;
+    private readonly IItemStore _items;
+    private readonly ILogger<EditorLauncher> _logger;
+
+    public EditorLauncher(IServiceProvider services, IItemStore items, ILogger<EditorLauncher> logger)
+    {
+        _services = services;
+        _items = items;
+        _logger = logger;
+    }
+
+    public async Task OpenAsync(long itemId, CancellationToken cancellationToken)
+    {
+        var record = await _items.GetByIdAsync(itemId, cancellationToken).ConfigureAwait(false);
+        if (record is null) return;
+        if (record.Kind is not ShareQ.Core.Domain.ItemKind.Image)
+        {
+            _logger.LogInformation("EditorLauncher: skipping non-image item {Id}", itemId);
+            return;
+        }
+
+        var window = _services.GetRequiredService<EditorWindow>();
+        var vm = (EditorViewModel)window.DataContext;
+        vm.SourcePngBytes = record.Payload.ToArray();
+        vm.EditingItemId = itemId;
+        window.Owner = System.Windows.Application.Current.MainWindow;
+        window.ShowDialog();
+
+        if (!window.Saved) return;
+
+        var canvasHost = (Grid)window.FindName("CanvasHost")!;
+        var bytes = CanvasPngExporter.Export(canvasHost, canvasHost.ActualWidth, canvasHost.ActualHeight);
+        await _items.UpdatePayloadAsync(itemId, bytes, bytes.LongLength, cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("EditorLauncher: saved {Bytes} bytes back to item {Id}", bytes.Length, itemId);
+    }
+}
