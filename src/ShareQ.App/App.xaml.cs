@@ -5,11 +5,16 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ShareQ.App.Native;
 using ShareQ.App.Services;
+using ShareQ.App.Services.PipelineTasks;
 using ShareQ.App.ViewModels;
 using ShareQ.App.Windows;
+using ShareQ.Capture.DependencyInjection;
 using ShareQ.Clipboard;
 using ShareQ.Clipboard.DependencyInjection;
+using ShareQ.Core.Pipeline;
 using ShareQ.Hotkeys;
+using ShareQ.Pipeline.DependencyInjection;
+using ShareQ.Pipeline.Profiles;
 using ShareQ.Storage.Database;
 using ShareQ.Storage.DependencyInjection;
 
@@ -44,6 +49,12 @@ public partial class App : Application
 
                 services.AddShareQStorage();
                 services.AddShareQClipboard();
+                services.AddShareQCapture();
+                services.AddShareQPipeline();
+
+                // App-side pipeline tasks (registered as IPipelineTask alongside Pipeline's baked tasks).
+                services.AddSingleton<IPipelineTask, CopyImageToClipboardTask>();
+                services.AddSingleton<IPipelineTask, NotifyToastTask>();
 
                 services.AddSingleton<IHotkeyRegistrar, Win32HotkeyRegistrar>();
                 services.AddSingleton<IHotkeyManager, HotkeyManager>();
@@ -55,6 +66,8 @@ public partial class App : Application
                 services.AddSingleton<TargetWindowTracker>();
                 services.AddSingleton<AutoPaster>();
                 services.AddSingleton<PopupWindowController>();
+                services.AddSingleton<CaptureCoordinator>();
+                services.AddSingleton<IToastNotifier, TrayToastNotifier>();
 
                 services.AddTransient<PopupWindowViewModel>();
                 services.AddTransient<PopupWindow>();
@@ -69,6 +82,10 @@ public partial class App : Application
 
         var db = _host.Services.GetRequiredService<IShareQDatabase>();
         await db.InitializeAsync(CancellationToken.None);
+
+        // Seed default pipeline profiles (idempotent — leaves user customizations).
+        var seeder = _host.Services.GetRequiredService<PipelineProfileSeeder>();
+        await seeder.SeedAsync(CancellationToken.None);
 
         var incognito = _host.Services.GetRequiredService<IncognitoModeService>();
         await incognito.LoadAsync(CancellationToken.None);
@@ -98,7 +115,6 @@ public partial class App : Application
             ((Window)sender!).Hide();
         };
 
-        // Bind Win32 message pump for hotkeys + clipboard listener
         var helper = new WindowInteropHelper(window);
         helper.EnsureHandle();
         var source = HwndSource.FromHwnd(helper.Handle)!;
@@ -108,10 +124,14 @@ public partial class App : Application
         var hotkeyLogger = _host.Services.GetRequiredService<ILogger<App>>();
         hotkeys.Attach(helper.Handle);
         hotkeys.Triggered += OnHotkeyTriggered;
+
         // TODO: temporary; revisit hotkey defaults during UX pass.
         var popupOk = hotkeys.Register(new HotkeyDefinition("popup", HotkeyModifiers.Control | HotkeyModifiers.Alt, 0x56)); // Ctrl+Alt+V
         var incoOk = hotkeys.Register(new HotkeyDefinition("incognito", HotkeyModifiers.Control | HotkeyModifiers.Alt, 0x49)); // Ctrl+Alt+I
-        hotkeyLogger.LogInformation("Hotkey registration — popup(Ctrl+Alt+V): {PopupOk}, incognito(Ctrl+Alt+I): {IncoOk}", popupOk, incoOk);
+        var captureOk = hotkeys.Register(new HotkeyDefinition("capture-region", HotkeyModifiers.Control | HotkeyModifiers.Alt, 0x52)); // Ctrl+Alt+R
+        hotkeyLogger.LogInformation(
+            "Hotkey registration — popup(Ctrl+Alt+V): {PopupOk}, incognito(Ctrl+Alt+I): {IncoOk}, capture-region(Ctrl+Alt+R): {CaptureOk}",
+            popupOk, incoOk, captureOk);
 
         var ingestion = _host.Services.GetRequiredService<ClipboardIngestionService>();
         ingestion.Start(helper.Handle);
@@ -128,6 +148,10 @@ public partial class App : Application
             case "incognito":
                 var incognito = Services.GetRequiredService<IncognitoModeService>();
                 _ = incognito.ToggleAsync(CancellationToken.None);
+                break;
+            case "capture-region":
+                var capture = Services.GetRequiredService<CaptureCoordinator>();
+                _ = capture.CaptureRegionAsync(CancellationToken.None);
                 break;
             default:
                 break;

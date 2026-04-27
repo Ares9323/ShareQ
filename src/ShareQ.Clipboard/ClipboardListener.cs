@@ -5,6 +5,7 @@ namespace ShareQ.Clipboard;
 public sealed class ClipboardListener : IClipboardListener
 {
     private IntPtr _hwnd;
+    private bool _suppressNext;
 
     public event EventHandler? ClipboardUpdated;
 
@@ -20,9 +21,16 @@ public sealed class ClipboardListener : IClipboardListener
     public bool OnWindowMessage(int message)
     {
         if (message != ClipboardNativeMethods.WmClipboardUpdate) return false;
+        if (_suppressNext)
+        {
+            _suppressNext = false;
+            return true;
+        }
         ClipboardUpdated?.Invoke(this, EventArgs.Empty);
         return true;
     }
+
+    public void SuppressNext() => _suppressNext = true;
 
     public void Dispose()
     {

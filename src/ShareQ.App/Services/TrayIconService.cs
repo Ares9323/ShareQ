@@ -30,6 +30,10 @@ public sealed class TrayIconService : IDisposable
         _icon.ContextMenu = menu;
 
         _icon.LeftClickCommand = new RelayCommand(OnOpen);
+
+        // ShowNotification() requires the underlying Win32 NOTIFYICONDATA to be created.
+        // The TaskbarIcon WPF wrapper sometimes defers this until first message; force it now.
+        _icon.ForceCreate();
     }
 
     public void Attach(MainWindow window) => _mainWindow = window;
@@ -54,6 +58,20 @@ public sealed class TrayIconService : IDisposable
         var item = new MenuItem { Header = header };
         item.Click += (_, _) => onClick();
         return item;
+    }
+
+    public void ShowToast(string title, string message)
+    {
+        try
+        {
+            _icon.ShowNotification(title, message, H.NotifyIcon.Core.NotificationIcon.Info);
+        }
+        catch (Exception ex)
+        {
+            // Some H.NotifyIcon builds and OS configurations don't expose ShowNotification reliably.
+            // Log and continue — the screenshot has already been saved/added to history at this point.
+            _logger.LogWarning(ex, "Tray toast failed; capture pipeline continues");
+        }
     }
 
     public void Dispose() => _icon.Dispose();

@@ -5,6 +5,11 @@
     <AssemblyName>ShareQ.Capture</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\ShareQ.Core\ShareQ.Core.csproj" />
     <ProjectReference Include="..\ShareQ.Shared\ShareQ.Shared.csproj" />
   </ItemGroup>

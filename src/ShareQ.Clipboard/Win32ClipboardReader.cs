@@ -1,9 +1,13 @@
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Text;
 using ShareQ.Clipboard.Native;
 
 namespace ShareQ.Clipboard;
 
+[SupportedOSPlatform("windows")]
 public sealed class Win32ClipboardReader : IClipboardReader
 {
     private readonly IForegroundProcessProbe _probe;
@@ -66,8 +70,11 @@ public sealed class Win32ClipboardReader : IClipboardReader
         }
         if (ClipboardNativeMethods.IsClipboardFormatAvailable(ClipboardNativeMethods.CfDib))
         {
-            var bytes = ReadGlobalBytes(ClipboardNativeMethods.CfDib);
-            return (ClipboardFormat.Image, bytes, "[image]", null);
+            var dibBytes = ReadGlobalBytes(ClipboardNativeMethods.CfDib);
+            var pngBytes = TryConvertDibToPng(dibBytes);
+            return pngBytes is not null
+                ? (ClipboardFormat.Image, pngBytes, "[image]", null)
+                : (ClipboardFormat.None, ReadOnlyMemory<byte>.Empty, null, null);
         }
         return (ClipboardFormat.None, ReadOnlyMemory<byte>.Empty, null, null);
     }
@@ -132,5 +139,54 @@ public sealed class Win32ClipboardReader : IClipboardReader
         var text = Encoding.UTF8.GetString(bytes);
         if (text.Length > 256) text = text[..256] + "…";
         return text;
+    }
+
+    /// <summary>
+    /// CF_DIB = BITMAPINFOHEADER + (optional palette) + pixel data.
+    /// To turn it into something the rest of the app can decode, we prepend the 14-byte
+    /// BITMAPFILEHEADER (turning it into a complete BMP file in memory), load via System.Drawing,
+    /// and re-encode as PNG.
+    /// </summary>
+    private static byte[]? TryConvertDibToPng(byte[] dibBytes)
+    {
+        if (dibBytes.Length < 40) return null;
+
+        try
+        {
+            var infoHeaderSize = BitConverter.ToInt32(dibBytes, 0);
+            var bitCount = BitConverter.ToInt16(dibBytes, 14);
+            var clrUsed = BitConverter.ToInt32(dibBytes, 32);
+
+            var paletteEntries = bitCount switch
+            {
+                <= 8 => clrUsed > 0 ? clrUsed : 1 << bitCount,
+                _ => 0
+            };
+            var paletteBytes = paletteEntries * 4;
+            var offBits = 14 + infoHeaderSize + paletteBytes;
+            var totalSize = 14 + dibBytes.Length;
+
+            using var bmpStream = new MemoryStream(totalSize);
+            using (var bw = new BinaryWriter(bmpStream, Encoding.ASCII, leaveOpen: true))
+            {
+                bw.Write((ushort)0x4D42);   // 'BM'
+                bw.Write(totalSize);
+                bw.Write((ushort)0);
+                bw.Write((ushort)0);
+                bw.Write(offBits);
+                bw.Write(dibBytes);
+            }
+
+            bmpStream.Position = 0;
+            using var bitmap = new Bitmap(bmpStream);
+            using var pngStream = new MemoryStream();
+            bitmap.Save(pngStream, ImageFormat.Png);
+            return pngStream.ToArray();
+        }
+        catch
+        {
+            // If decoding fails for any reason (corrupt DIB, weird bit depth, OOM), skip ingestion.
+            return null;
+        }
     }
 }
