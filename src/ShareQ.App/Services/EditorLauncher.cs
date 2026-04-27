@@ -14,17 +14,20 @@ public sealed class EditorLauncher
     private readonly IServiceProvider _services;
     private readonly IItemStore _items;
     private readonly ColorRecentsStore _recentsStore;
+    private readonly EditorDefaultsStore _defaultsStore;
     private readonly ILogger<EditorLauncher> _logger;
 
     public EditorLauncher(
         IServiceProvider services,
         IItemStore items,
         ColorRecentsStore recentsStore,
+        EditorDefaultsStore defaultsStore,
         ILogger<EditorLauncher> logger)
     {
         _services = services;
         _items = items;
         _recentsStore = recentsStore;
+        _defaultsStore = defaultsStore;
         _logger = logger;
     }
 
@@ -45,12 +48,22 @@ public sealed class EditorLauncher
             _ = _recentsStore.PushAsync(c, CancellationToken.None);
         };
 
+        var defaults = await _defaultsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+
         var window = _services.GetRequiredService<EditorWindow>();
         var vm = (EditorViewModel)window.DataContext;
         vm.SourcePngBytes = record.Payload.ToArray();
         vm.EditingItemId = itemId;
+        vm.OutlineColor = defaults.Outline;
+        vm.FillColor = defaults.Fill;
+        vm.StrokeWidth = defaults.StrokeWidth;
+        vm.CurrentTool = defaults.Tool;
         window.Owner = System.Windows.Application.Current.MainWindow;
         window.ShowDialog();
+
+        await _defaultsStore.SaveAsync(
+            new EditorDefaults(vm.OutlineColor, vm.FillColor, vm.StrokeWidth, vm.CurrentTool),
+            CancellationToken.None).ConfigureAwait(false);
 
         if (!window.Saved) return;
 

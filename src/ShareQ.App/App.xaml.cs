@@ -72,6 +72,7 @@ public partial class App : Application
                 services.AddSingleton<IToastNotifier, TrayToastNotifier>();
                 services.AddSingleton<EditorLauncher>();
                 services.AddSingleton<ShareQ.Editor.Persistence.ColorRecentsStore>();
+                services.AddSingleton<ShareQ.Editor.Persistence.EditorDefaultsStore>();
 
                 services.AddTransient<PopupWindowViewModel>();
                 services.AddTransient<PopupWindow>();

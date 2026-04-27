@@ -12,6 +12,7 @@ public sealed partial class EditorViewModel : ObservableObject
     private readonly Dictionary<EditorTool, IDrawingTool> _tools;
     private readonly EditorCommandStack _commands = new();
     private IDrawingTool _activeTool;
+    private bool _suppressSelectionSync;
 
     public EditorViewModel()
     {
@@ -82,10 +83,9 @@ public sealed partial class EditorViewModel : ObservableObject
 
     partial void OnSelectedShapeChanged(Shape? value)
     {
-        // Keep multi-selection set in sync ONLY when SelectedShape is set externally to something
-        // not already part of SelectedShapes (e.g. a single-shape hit-test set it directly).
-        // When the multi-selection set already contains `value` (e.g. SetSelection just populated
-        // [A, B, C] and then set SelectedShape = A as the primary), leave it alone.
+        // Suppress when LiveReplaceShape is about to update both SelectedShapes and SelectedShape.
+        if (_suppressSelectionSync) return;
+
         if (value is null)
         {
             if (SelectedShapes.Count > 0) SelectedShapes.Clear();
@@ -126,14 +126,24 @@ public sealed partial class EditorViewModel : ObservableObject
     }
 
     /// <summary>Replace a shape in the collection without pushing to the command stack.
-    /// Used for live preview during interactive edits (drag-to-move, property panel).</summary>
+    /// Used for live preview during interactive edits (drag-to-move, property panel).
+    /// Also updates the multi-selection set in lockstep so a multi-shape drag/edit doesn't collapse.</summary>
     public void LiveReplaceShape(Shape oldShape, Shape newShape)
     {
         if (ReferenceEquals(oldShape, newShape)) return;
         var idx = Shapes.IndexOf(oldShape);
         if (idx < 0) return;
         Shapes[idx] = newShape;
-        SelectedShape = newShape;
+
+        var selIdx = SelectedShapes.IndexOf(oldShape);
+        if (selIdx >= 0) SelectedShapes[selIdx] = newShape;
+
+        if (ReferenceEquals(SelectedShape, oldShape))
+        {
+            _suppressSelectionSync = true;
+            try { SelectedShape = newShape; }
+            finally { _suppressSelectionSync = false; }
+        }
     }
 
     /// <summary>Push a single ReplaceShapeCommand spanning a live-edit gesture (e.g. drag-to-move

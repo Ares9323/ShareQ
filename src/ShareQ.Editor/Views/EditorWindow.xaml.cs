@@ -35,9 +35,9 @@ public partial class EditorWindow : FluentWindow
     // Snapshot of selected shapes at mouse-down, used to compute translation across all selected items.
     private List<Shape>? _moveStartSnapshots;
 
-    // Live-edit tracking: when a shape is selected, _liveEditOriginal holds its initial state
-    // so a sequence of property tweaks (or a drag-to-move) commits as ONE undo step.
-    private Shape? _liveEditOriginal;
+    // Live-edit tracking: per-shape original snapshots, so a sequence of property tweaks (or drag-to-move)
+    // commits as ONE undo step per shape when the selection changes (or window closes).
+    private List<Shape> _liveEditOriginals = [];
     private bool _suppressLiveUpdates;
 
     public EditorWindow(EditorViewModel viewModel)
@@ -63,7 +63,16 @@ public partial class EditorWindow : FluentWindow
             if (e.PropertyName == nameof(EditorViewModel.SelectedShape)) OnSelectedShapeChanged();
             if (e.PropertyName == nameof(EditorViewModel.CurrentTool)) RefreshToolButtonHighlight();
         };
-        _vm.SelectedShapes.CollectionChanged += (_, _) => RedrawAll();
+        _vm.SelectedShapes.CollectionChanged += (_, e) =>
+        {
+            RedrawAll();
+            // Re-snapshot live-edit originals only on real selection changes (Add/Remove/Reset),
+            // NOT on Replace (which fires during LiveReplaceShape).
+            if (e.Action != System.Collections.Specialized.NotifyCollectionChangedAction.Replace)
+            {
+                OnSelectionSetChanged();
+            }
+        };
 
         // Realtime property panel: each change live-updates the shape via DependencyPropertyDescriptor hooks.
         var swatchColorDesc = System.ComponentModel.DependencyPropertyDescriptor.FromProperty(
@@ -182,10 +191,20 @@ public partial class EditorWindow : FluentWindow
 
         if (_vm.CurrentTool == EditorTool.Select)
         {
+            var shiftPressed = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
             var hit = ShapeHitTester.HitTest(_vm.Shapes, p.X, p.Y);
             if (hit is not null)
             {
-                // Click on a shape: if not already in selection, replace selection with [hit].
+                if (shiftPressed)
+                {
+                    // Shift+Click: toggle in selection set. No drag.
+                    CommitPendingLiveEdit();
+                    var current = _vm.SelectedShapes.ToList();
+                    if (!current.Remove(hit)) current.Add(hit);
+                    _vm.SetSelection(current);
+                    return;
+                }
+
                 if (!_vm.SelectedShapes.Contains(hit))
                 {
                     CommitPendingLiveEdit();
@@ -195,13 +214,18 @@ public partial class EditorWindow : FluentWindow
                 _moveAnchorX = p.X;
                 _moveAnchorY = p.Y;
                 _isDraggingShape = true;
+                _moveStartSnapshots = null; // built lazily on first move tick
                 DrawingCanvas.CaptureMouse();
             }
             else
             {
-                // Click on empty area: begin marquee + clear selection.
-                CommitPendingLiveEdit();
-                _vm.SetSelection([]);
+                // Click on empty area. Without Shift: clear selection then start marquee.
+                // With Shift: keep current selection; marquee will add to it on release.
+                if (!shiftPressed)
+                {
+                    CommitPendingLiveEdit();
+                    _vm.SetSelection([]);
+                }
                 _isMarqueeing = true;
                 _marqueeStartX = p.X;
                 _marqueeStartY = p.Y;
@@ -302,10 +326,21 @@ public partial class EditorWindow : FluentWindow
 
                 if (w >= 3 && h >= 3)
                 {
+                    var shiftPressed = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
                     var picked = _vm.Shapes
                         .Where(s => MarqueeIntersects(s, x, y, w, h))
                         .ToList();
-                    _vm.SetSelection(picked);
+                    if (shiftPressed)
+                    {
+                        // Add to existing selection (deduplicating).
+                        var union = _vm.SelectedShapes.ToList();
+                        foreach (var s in picked) if (!union.Contains(s)) union.Add(s);
+                        _vm.SetSelection(union);
+                    }
+                    else
+                    {
+                        _vm.SetSelection(picked);
+                    }
                 }
             }
             else if (_isDraggingShape)
@@ -344,50 +379,60 @@ public partial class EditorWindow : FluentWindow
 
     private void OnSelectedShapeChanged()
     {
-        // Commit any pending live edit BEFORE swapping the original.
+        RefreshPropertyPanel();
+    }
+
+    private void OnSelectionSetChanged()
+    {
         CommitPendingLiveEdit();
-        _liveEditOriginal = _vm.SelectedShape;
+        _liveEditOriginals = [.. _vm.SelectedShapes];
         RefreshPropertyPanel();
     }
 
     private void CommitPendingLiveEdit()
     {
-        if (_liveEditOriginal is null) return;
-        var current = _vm.SelectedShape;
-        // If the selection was edited (current differs from original) AND current is still in Shapes,
-        // push a single ReplaceShapeCommand spanning the whole gesture.
-        if (current is not null && !ReferenceEquals(_liveEditOriginal, current) && _vm.Shapes.Contains(current))
+        if (_liveEditOriginals.Count == 0) return;
+        var current = _vm.SelectedShapes.ToList();
+        for (var i = 0; i < _liveEditOriginals.Count && i < current.Count; i++)
         {
-            _vm.CommitLiveEdit(_liveEditOriginal, current);
+            var orig = _liveEditOriginals[i];
+            var cur = current[i];
+            if (!ReferenceEquals(orig, cur) && _vm.Shapes.Contains(cur))
+            {
+                _vm.CommitLiveEdit(orig, cur);
+            }
         }
-        _liveEditOriginal = null;
+        _liveEditOriginals = [];
     }
 
     private void OnSelOutlineChanged()
     {
         if (_suppressLiveUpdates) return;
-        var sel = _vm.SelectedShape;
-        if (sel is null) return;
-        var newShape = ApplyOutlineColor(sel, SelOutlineSwatch.SelectedColor);
-        _vm.LiveReplaceShape(sel, newShape);
+        var color = SelOutlineSwatch.SelectedColor;
+        foreach (var s in _vm.SelectedShapes.ToList())
+        {
+            _vm.LiveReplaceShape(s, ApplyOutlineColor(s, color));
+        }
     }
 
     private void OnSelFillChanged()
     {
         if (_suppressLiveUpdates) return;
-        var sel = _vm.SelectedShape;
-        if (sel is null) return;
-        var newShape = ApplyFillColor(sel, SelFillSwatch.SelectedColor);
-        _vm.LiveReplaceShape(sel, newShape);
+        var color = SelFillSwatch.SelectedColor;
+        foreach (var s in _vm.SelectedShapes.ToList())
+        {
+            _vm.LiveReplaceShape(s, ApplyFillColor(s, color));
+        }
     }
 
     private void OnSelStrokeChanged()
     {
         if (_suppressLiveUpdates) return;
-        var sel = _vm.SelectedShape;
-        if (sel is null) return;
-        var newShape = ApplyStrokeWidth(sel, SelStrokeSlider.Value);
-        _vm.LiveReplaceShape(sel, newShape);
+        var width = SelStrokeSlider.Value;
+        foreach (var s in _vm.SelectedShapes.ToList())
+        {
+            _vm.LiveReplaceShape(s, ApplyStrokeWidth(s, width));
+        }
     }
 
     private static Shape ApplyOutlineColor(Shape s, ShapeColor c) => s switch
@@ -638,30 +683,36 @@ public partial class EditorWindow : FluentWindow
 
     private void RefreshPropertyPanel()
     {
-        var sel = _vm.SelectedShape;
-        if (sel is null || _vm.SelectedShapes.Count > 1)
+        var sels = _vm.SelectedShapes;
+        if (sels.Count == 0)
         {
-            // No selection or multi-selection: property editing disabled in M3b.
             NoSelectionText.Visibility = Visibility.Visible;
-            NoSelectionText.Text = _vm.SelectedShapes.Count > 1
-                ? $"{_vm.SelectedShapes.Count} shapes selected. Single-shape editing only for now."
-                : "Select a shape to edit its properties (V tool, then click).";
+            NoSelectionText.Text = "Select a shape to edit its properties (V tool, then click).";
             SelectedShapeStack.Visibility = Visibility.Collapsed;
             RefreshSelectionAdorner();
             return;
         }
+
         NoSelectionText.Visibility = Visibility.Collapsed;
         SelectedShapeStack.Visibility = Visibility.Visible;
 
-        // Suppress live-update events while we populate the panel from the selected shape's values
-        // (otherwise setting the slider would fire ValueChanged → another LiveReplaceShape → infinite loop).
+        // For multi-selection, show common values where all selected shapes agree;
+        // otherwise show a sensible placeholder (the user can still pick a value to apply to all).
+        var first = sels[0];
+        var allSameOutline = sels.All(s => s.Outline == first.Outline);
+        var allSameFill = sels.All(s => s.Fill == first.Fill);
+        var allSameStroke = sels.All(s => Math.Abs(s.StrokeWidth - first.StrokeWidth) < 0.01);
+
         _suppressLiveUpdates = true;
         try
         {
-            SelectedShapeKindText.Text = sel.GetType().Name.Replace("Shape", "");
-            SelOutlineSwatch.SelectedColor = sel.Outline;
-            SelFillSwatch.SelectedColor = sel.Fill;
-            SelStrokeSlider.Value = sel.StrokeWidth;
+            SelectedShapeKindText.Text = sels.Count == 1
+                ? first.GetType().Name.Replace("Shape", "")
+                : $"{sels.Count} shapes selected";
+
+            SelOutlineSwatch.SelectedColor = allSameOutline ? first.Outline : ShapeColor.Black;
+            SelFillSwatch.SelectedColor = allSameFill ? first.Fill : ShapeColor.Transparent;
+            SelStrokeSlider.Value = allSameStroke ? first.StrokeWidth : 2;
         }
         finally
         {
