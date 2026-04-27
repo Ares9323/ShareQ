@@ -8,54 +8,150 @@
                  WindowStartupLocation="CenterScreen"
                  WindowBackdropType="Mica"
                  ExtendsContentIntoTitleBar="True">
-    <Window.DataContext>
-        <vm:MainWindowViewModel />
-    </Window.DataContext>
+    <ui:FluentWindow.InputBindings>
+        <KeyBinding Key="Delete" Command="{Binding DeleteSelectedCommand}" />
+        <KeyBinding Modifiers="Alt" Key="P" Command="{Binding TogglePinCommand}" />
+        <KeyBinding Modifiers="Ctrl+Alt" Key="E" Command="{Binding OpenInExplorerCommand}" />
+    </ui:FluentWindow.InputBindings>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="380" MinWidth="280" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Title="ShareQ" />
+        <ui:TitleBar Grid.Row="0" Grid.ColumnSpan="2" Title="ShareQ" />
 
-        <Grid Grid.Row="1" Margin="48">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="ShareQ"
-                           FontSize="48"
-                           FontWeight="Light"
-                           HorizontalAlignment="Center" />
-                <TextBlock Text="Global hotkeys"
-                           FontSize="14"
-                           Opacity="0.7"
-                           HorizontalAlignment="Center"
-                           Margin="0,24,0,12" />
-                <Grid HorizontalAlignment="Center">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Capture region" Margin="0,2,16,2" Opacity="0.85" />
-                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Ctrl + Alt + R" Margin="0,2,0,2" FontFamily="Consolas" />
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Open clipboard popup" Margin="0,2,16,2" Opacity="0.85" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="Ctrl + Alt + V" Margin="0,2,0,2" FontFamily="Consolas" />
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Toggle incognito" Margin="0,2,16,2" Opacity="0.85" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" Text="Ctrl + Alt + I" Margin="0,2,0,2" FontFamily="Consolas" />
-                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Screen color picker" Margin="0,2,16,2" Opacity="0.85" />
-                    <TextBlock Grid.Row="3" Grid.Column="1" Text="Ctrl + Shift + P" Margin="0,2,0,2" FontFamily="Consolas" />
-                </Grid>
-                <TextBlock Text="Hotkeys will become user-configurable in a future update."
-                           FontSize="11"
-                           Opacity="0.5"
-                           HorizontalAlignment="Center"
-                           Margin="0,16,0,0" />
+        <!-- Search bar + filter chips -->
+        <Border Grid.Row="1" Grid.Column="0" Padding="12,8,12,4">
+            <StackPanel>
+                <ui:TextBox x:Name="SearchBox"
+                            Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                            PlaceholderText="Search…"
+                            Margin="0,0,0,8" />
+                <StackPanel Orientation="Horizontal">
+                    <ui:Button Content="All" Command="{Binding SetFilterAllCommand}"
+                               Appearance="{Binding IsAllFilter, Converter={StaticResource BoolToAppearance}}"
+                               Margin="0,0,4,0" />
+                    <ui:Button Content="Text" Command="{Binding SetFilterTextCommand}"
+                               Appearance="{Binding IsTextFilter, Converter={StaticResource BoolToAppearance}}"
+                               Margin="0,0,4,0" />
+                    <ui:Button Content="Image" Command="{Binding SetFilterImageCommand}"
+                               Appearance="{Binding IsImageFilter, Converter={StaticResource BoolToAppearance}}" />
+                </StackPanel>
             </StackPanel>
-        </Grid>
+        </Border>
+
+        <!-- Items list -->
+        <ListBox Grid.Row="2" Grid.Column="0"
+                 x:Name="ItemsList"
+                 ItemsSource="{Binding Items}"
+                 SelectedItem="{Binding SelectedItem}"
+                 BorderThickness="0"
+                 FocusVisualStyle="{x:Null}"
+                 Margin="6,0,6,6"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border Padding="8,6" Background="Transparent">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Column="0" Grid.Row="0" Grid.RowSpan="2"
+                                       Text="{Binding KindLabel}"
+                                       FontFamily="Consolas" FontSize="10"
+                                       Padding="6,2" Margin="0,0,8,0"
+                                       Background="#33444444" Foreground="#CCC"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Grid.Row="0"
+                                       Text="{Binding Preview}"
+                                       TextTrimming="CharacterEllipsis"
+                                       FontSize="13" />
+                            <TextBlock Grid.Column="1" Grid.Row="1"
+                                       Text="{Binding SourceProcess}"
+                                       Foreground="#888" FontSize="11"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="2" Grid.Row="0"
+                                       Text="{Binding Age}"
+                                       Foreground="#888" FontSize="11" />
+                            <TextBlock Grid.Column="2" Grid.Row="1"
+                                       Text="📌" Foreground="Gold" FontSize="11"
+                                       Visibility="{Binding Pinned, Converter={StaticResource BoolToVisibility}}"
+                                       HorizontalAlignment="Right" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- Status bar -->
+        <Border Grid.Row="3" Grid.Column="0" Padding="12,4" BorderBrush="#333" BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{Binding StatusText}" Foreground="#888" FontSize="11" VerticalAlignment="Center" />
+                <ui:Button Grid.Column="1" Content="Clear all" FontSize="11"
+                           Command="{Binding ClearAllHistoryCommand}"
+                           ToolTip="Delete every non-pinned item from history" />
+            </Grid>
+        </Border>
+
+        <!-- Right pane: preview + actions -->
+        <Border Grid.Row="1" Grid.RowSpan="3" Grid.Column="1"
+                BorderBrush="#333" BorderThickness="1,0,0,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" Padding="16">
+                    <Grid>
+                        <!-- Image preview -->
+                        <Image x:Name="PreviewImage"
+                               Stretch="Uniform"
+                               Visibility="{Binding SelectedItemPayload, Converter={StaticResource NotNullToVisibility}}" />
+                        <!-- Text preview -->
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Auto"
+                                      Visibility="{Binding SelectedItemPreviewText, Converter={StaticResource NonEmptyToVisibility}}">
+                            <TextBox Text="{Binding SelectedItemPreviewText, Mode=OneWay}"
+                                     IsReadOnly="True"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     FontFamily="Consolas" FontSize="13"
+                                     TextWrapping="Wrap" AcceptsReturn="True" />
+                        </ScrollViewer>
+                        <!-- Empty placeholder -->
+                        <TextBlock Text="Select an item to preview"
+                                   Foreground="#666"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Visibility="{Binding SelectedItem, Converter={StaticResource NullToVisibility}}" />
+                    </Grid>
+                </Border>
+                <Border Grid.Row="1" Padding="16,8" BorderBrush="#333" BorderThickness="0,1,0,0">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:Button Content="Paste" Command="{Binding PasteSelectedCommand}" Margin="0,0,4,0" />
+                        <ui:Button Content="Open in editor" Command="{Binding OpenInEditorCommand}" Margin="0,0,4,0" />
+                        <ui:Button Content="Show in folder" ToolTip="Ctrl+Alt+E" Command="{Binding OpenInExplorerCommand}" Margin="0,0,4,0" />
+                        <ui:Button Content="Toggle pin" ToolTip="Alt+P" Command="{Binding TogglePinCommand}" Margin="0,0,4,0" />
+                        <ui:Button Content="Delete" ToolTip="Del" Command="{Binding DeleteSelectedCommand}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
     </Grid>
 </ui:FluentWindow>

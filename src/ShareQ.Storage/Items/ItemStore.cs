@@ -45,8 +45,11 @@ public sealed class ItemStore : IItemStore
         cmd.Parameters.AddWithValue("$search_text", (object?)item.SearchText ?? DBNull.Value);
 
         var newId = (long)(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false))!;
+        ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.Added, newId));
         return newId;
     }
+
+    public event EventHandler<ItemsChangedEventArgs>? ItemsChanged;
 
     public async Task<ItemRecord?> GetByIdAsync(long id, CancellationToken cancellationToken)
     {
@@ -100,9 +103,13 @@ public sealed class ItemStore : IItemStore
         return results;
     }
 
-    public Task<bool> SetPinnedAsync(long id, bool pinned, CancellationToken cancellationToken)
-        => UpdateScalarAsync("UPDATE items SET pinned = $val WHERE id = $id;",
-            id, pinned ? 1 : 0, cancellationToken);
+    public async Task<bool> SetPinnedAsync(long id, bool pinned, CancellationToken cancellationToken)
+    {
+        var ok = await UpdateScalarAsync("UPDATE items SET pinned = $val WHERE id = $id;",
+            id, pinned ? 1 : 0, cancellationToken).ConfigureAwait(false);
+        if (ok) ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.PinnedChanged, id));
+        return ok;
+    }
 
     public async Task<bool> SetUploadedUrlAsync(long id, string uploaderId, string url, CancellationToken cancellationToken)
     {
@@ -118,15 +125,33 @@ public sealed class ItemStore : IItemStore
         return rows == 1;
     }
 
-    public Task<bool> SoftDeleteAsync(long id, CancellationToken cancellationToken)
+    public async Task<bool> SoftDeleteAsync(long id, CancellationToken cancellationToken)
     {
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        return UpdateScalarAsync("UPDATE items SET deleted_at = $val WHERE id = $id AND deleted_at IS NULL;",
-            id, nowMs, cancellationToken);
+        var ok = await UpdateScalarAsync("UPDATE items SET deleted_at = $val WHERE id = $id AND deleted_at IS NULL;",
+            id, nowMs, cancellationToken).ConfigureAwait(false);
+        if (ok) ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.Deleted, id));
+        return ok;
     }
 
-    public Task<bool> RestoreAsync(long id, CancellationToken cancellationToken)
-        => UpdateScalarAsync("UPDATE items SET deleted_at = NULL WHERE id = $id;", id, DBNull.Value, cancellationToken);
+    public async Task<bool> RestoreAsync(long id, CancellationToken cancellationToken)
+    {
+        var ok = await UpdateScalarAsync("UPDATE items SET deleted_at = NULL WHERE id = $id;", id, DBNull.Value, cancellationToken).ConfigureAwait(false);
+        if (ok) ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.Restored, id));
+        return ok;
+    }
+
+    public async Task<int> ClearAllExceptPinnedAsync(CancellationToken cancellationToken)
+    {
+        var conn = _database.GetOpenConnection();
+        var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE items SET deleted_at = $now WHERE deleted_at IS NULL AND pinned = 0;";
+        cmd.Parameters.AddWithValue("$now", nowMs);
+        var rows = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        if (rows > 0) ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.Deleted, -1));
+        return rows;
+    }
 
     public async Task<int> HardDeleteOlderThanAsync(DateTimeOffset cutoff, CancellationToken cancellationToken)
     {
@@ -153,6 +178,7 @@ public sealed class ItemStore : IItemStore
         cmd.Parameters.AddWithValue("$size", newPayloadSize);
         cmd.Parameters.AddWithValue("$id", id);
         var rows = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        if (rows == 1) ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.Updated, id));
         return rows == 1;
     }
 

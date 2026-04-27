@@ -31,6 +31,15 @@ public sealed class AddToHistoryTask : IPipelineTask
             return;
         }
 
+        // If a previous step (SaveToFileTask) wrote the file to disk, persist that path as BlobRef
+        // so the UI's "Show in folder" command can locate the saved file.
+        if (context.Bag.TryGetValue(PipelineBagKeys.LocalPath, out var rawPath) && rawPath is string path
+            && string.IsNullOrEmpty(newItem.BlobRef))
+        {
+            newItem = newItem with { BlobRef = path };
+            context.Bag[PipelineBagKeys.NewItem] = newItem;
+        }
+
         var id = await _items.AddAsync(newItem, cancellationToken).ConfigureAwait(false);
         context.Bag[PipelineBagKeys.ItemId] = id;
         _logger.LogDebug("AddToHistoryTask: stored item {Id} ({Kind})", id, newItem.Kind);

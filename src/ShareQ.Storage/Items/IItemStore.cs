@@ -13,6 +13,24 @@ public interface IItemStore
     Task<bool> RestoreAsync(long id, CancellationToken cancellationToken);
     Task<int> HardDeleteOlderThanAsync(DateTimeOffset cutoff, CancellationToken cancellationToken);
     Task<bool> UpdatePayloadAsync(long id, ReadOnlyMemory<byte> newPayload, long newPayloadSize, CancellationToken cancellationToken);
+
+    /// <summary>Soft-delete every non-pinned item. Returns the count affected.</summary>
+    Task<int> ClearAllExceptPinnedAsync(CancellationToken cancellationToken);
+
+    /// <summary>Raised after any mutation (add / update / pin / soft-delete / restore). Subscribers
+    /// must marshal to the UI thread themselves.</summary>
+    event EventHandler<ItemsChangedEventArgs>? ItemsChanged;
+}
+
+public sealed record ItemsChangedEventArgs(ItemsChangeKind Kind, long ItemId);
+
+public enum ItemsChangeKind
+{
+    Added,
+    Updated,
+    PinnedChanged,
+    Deleted,
+    Restored
 }
 
 public sealed record NewItem(
