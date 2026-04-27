@@ -28,6 +28,9 @@ public static class GripDrag
         ImageShape i => ResizeRect(new RectShim(i.X, i.Y, i.Width, i.Height), grip, px, py, shiftHeld, aspectRatio: i.Height > 0 ? i.Width / i.Height : 1) is { } box4
             ? i with { X = box4.X, Y = box4.Y, Width = box4.W, Height = box4.H }
             : null,
+        SmartEraserShape se => ResizeRect(new RectShim(se.X, se.Y, se.Width, se.Height), grip, px, py, shiftHeld) is { } box5
+            ? se with { X = box5.X, Y = box5.Y, Width = box5.W, Height = box5.H }
+            : null,
         RectangleShape r => ResizeRect(new RectShim(r.X, r.Y, r.Width, r.Height), grip, px, py, shiftHeld) is { } box
             ? r with { X = box.X, Y = box.Y, Width = box.W, Height = box.H }
             : null,

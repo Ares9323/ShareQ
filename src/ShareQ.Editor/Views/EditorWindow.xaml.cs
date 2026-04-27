@@ -170,6 +170,7 @@ public partial class EditorWindow : FluentWindow
     private void OnPixelateToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Pixelate;
     private void OnSpotlightToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Spotlight;
     private void OnCropToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Crop;
+    private void OnSmartEraserToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.SmartEraser;
     private void OnResizeClicked(object sender, RoutedEventArgs e) => OpenResizeDialog();
     private void OnImageClicked(object sender, RoutedEventArgs e) => InsertImageFromFile();
 
@@ -188,7 +189,8 @@ public partial class EditorWindow : FluentWindow
             (Btn: BlurToolBtn, Tool: EditorTool.Blur),
             (Btn: PixelateToolBtn, Tool: EditorTool.Pixelate),
             (Btn: SpotlightToolBtn, Tool: EditorTool.Spotlight),
-            (Btn: CropToolBtn, Tool: EditorTool.Crop)
+            (Btn: CropToolBtn, Tool: EditorTool.Crop),
+            (Btn: SmartEraserToolBtn, Tool: EditorTool.SmartEraser)
         };
         foreach (var (btn, tool) in buttons)
         {
@@ -353,6 +355,7 @@ public partial class EditorWindow : FluentWindow
             case Key.X: _vm.CurrentTool = EditorTool.Pixelate; e.Handled = true; break;
             case Key.O: _vm.CurrentTool = EditorTool.Spotlight; e.Handled = true; break;
             case Key.C: _vm.CurrentTool = EditorTool.Crop; e.Handled = true; break;
+            case Key.K: _vm.CurrentTool = EditorTool.SmartEraser; e.Handled = true; break;
             case Key.I: InsertImageFromFile(); e.Handled = true; break;
             default: break;
         }
@@ -697,6 +700,7 @@ public partial class EditorWindow : FluentWindow
         PixelateShape p => p with { X = p.X + dx, Y = p.Y + dy },
         SpotlightShape sp => sp with { X = sp.X + dx, Y = sp.Y + dy },
         ImageShape i => i with { X = i.X + dx, Y = i.Y + dy },
+        SmartEraserShape se => se with { X = se.X + dx, Y = se.Y + dy },
         _ => s
     };
 
@@ -1010,8 +1014,10 @@ public partial class EditorWindow : FluentWindow
             SelFontSizeBox.Text = ((int)Math.Round(_currentTextSize)).ToString(System.Globalization.CultureInfo.InvariantCulture);
             return;
         }
-        v = Math.Max(1, v);
+        // Hard cap at 1000 — anything bigger crashes WPF text rendering on the canvas.
+        v = Math.Clamp(v, 1, 1000);
         _currentTextSize = v;
+        SelFontSizeBox.Text = ((int)Math.Round(v)).ToString(System.Globalization.CultureInfo.InvariantCulture);
         // Update slider only if value fits its bounds; otherwise let the slider sit at its max.
         _suppressLiveUpdates = true;
         try { SelFontSizeSlider.Value = Math.Clamp(v, SelFontSizeSlider.Minimum, SelFontSizeSlider.Maximum); }
@@ -1503,6 +1509,7 @@ public partial class EditorWindow : FluentWindow
         PixelateShape p => (p.X, p.Y, p.Width, p.Height),
         SpotlightShape s => (s.X, s.Y, s.Width, s.Height),
         ImageShape i => (i.X, i.Y, i.Width, i.Height),
+        SmartEraserShape se => (se.X, se.Y, se.Width, se.Height),
         _ => (0, 0, 0, 0)
     };
 
@@ -1541,6 +1548,7 @@ public partial class EditorWindow : FluentWindow
             PixelateShape p => CreatePixelate(p),
             SpotlightShape s => CreateSpotlight(s),
             ImageShape i => CreateImage(i),
+            SmartEraserShape se => CreateSmartEraser(se),
             _ => throw new NotSupportedException($"Unknown shape kind: {shape.GetType().Name}")
         };
         // Drawn shapes never intercept clicks: hit-testing happens geometrically via ShapeHitTester.
@@ -1828,6 +1836,67 @@ public partial class EditorWindow : FluentWindow
             img.RenderTransform = new RotateTransform(i.Rotation, i.Width / 2, i.Height / 2);
         }
         return img;
+    }
+
+    private UIElement CreateSmartEraser(SmartEraserShape s)
+    {
+        if (SourceImage.Source is not BitmapSource src) return EmptyRectFor(s.X, s.Y, s.Width, s.Height);
+
+        // Sample the four corners of the rect from the source bitmap.
+        var (tl, tr, bl, br) = SampleCornerColors(src, s.X, s.Y, s.Width, s.Height);
+
+        // Build a 2×2 BGRA bitmap with the four corner colors. WPF's BitmapScalingMode=Linear
+        // bilinearly interpolates this 2×2 across whatever size the Image stretches to — exactly
+        // the gradient we want, for free.
+        var corners = new System.Windows.Media.Imaging.WriteableBitmap(2, 2, 96, 96, PixelFormats.Bgra32, null);
+        var pixels = new byte[16];
+        WritePixel(pixels, 0, tl);   // (0,0) top-left
+        WritePixel(pixels, 4, tr);   // (1,0) top-right
+        WritePixel(pixels, 8, bl);   // (0,1) bottom-left
+        WritePixel(pixels, 12, br);  // (1,1) bottom-right
+        corners.WritePixels(new Int32Rect(0, 0, 2, 2), pixels, 8, 0);
+
+        var img = new System.Windows.Controls.Image
+        {
+            Source = corners,
+            Stretch = Stretch.Fill,
+            Width = s.Width,
+            Height = s.Height
+        };
+        System.Windows.Media.RenderOptions.SetBitmapScalingMode(img, System.Windows.Media.BitmapScalingMode.Linear);
+        Canvas.SetLeft(img, s.X);
+        Canvas.SetTop(img, s.Y);
+        return img;
+    }
+
+    private static (byte[] TL, byte[] TR, byte[] BL, byte[] BR) SampleCornerColors(BitmapSource src, double x, double y, double w, double h)
+    {
+        // Convert to a uniform Bgra32 view once so CopyPixels gives us 4-byte BGRA per pixel.
+        var conv = src.Format == PixelFormats.Bgra32 ? src : new System.Windows.Media.Imaging.FormatConvertedBitmap(src, PixelFormats.Bgra32, null, 0);
+
+        byte[] SamplePixel(int px, int py)
+        {
+            var ix = Math.Clamp(px, 0, conv.PixelWidth - 1);
+            var iy = Math.Clamp(py, 0, conv.PixelHeight - 1);
+            var buf = new byte[4];
+            conv.CopyPixels(new Int32Rect(ix, iy, 1, 1), buf, 4, 0);
+            return buf;
+        }
+
+        // Inset by 1 px so a tiny rect doesn't sample all four corners from the same pixel.
+        var x0 = (int)Math.Floor(x);
+        var y0 = (int)Math.Floor(y);
+        var x1 = (int)Math.Floor(x + Math.Max(1, w - 1));
+        var y1 = (int)Math.Floor(y + Math.Max(1, h - 1));
+        return (SamplePixel(x0, y0), SamplePixel(x1, y0), SamplePixel(x0, y1), SamplePixel(x1, y1));
+    }
+
+    private static void WritePixel(byte[] dest, int offset, byte[] bgra)
+    {
+        dest[offset] = bgra[0];
+        dest[offset + 1] = bgra[1];
+        dest[offset + 2] = bgra[2];
+        dest[offset + 3] = bgra[3];
     }
 
     private static UIElement EmptyRectFor(double x, double y, double w, double h)

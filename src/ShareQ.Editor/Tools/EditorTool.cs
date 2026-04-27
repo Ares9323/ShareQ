@@ -13,5 +13,6 @@ public enum EditorTool
     Blur,
     Pixelate,
     Spotlight,
-    Crop
+    Crop,
+    SmartEraser
 }

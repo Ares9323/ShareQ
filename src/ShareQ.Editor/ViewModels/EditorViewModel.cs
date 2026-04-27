@@ -29,7 +29,8 @@ public sealed partial class EditorViewModel : ObservableObject
             [EditorTool.Blur] = new BlurTool(),
             [EditorTool.Pixelate] = new PixelateTool(),
             [EditorTool.Spotlight] = new SpotlightTool(),
-            [EditorTool.Crop] = new CropTool()
+            [EditorTool.Crop] = new CropTool(),
+            [EditorTool.SmartEraser] = new SmartEraserTool()
         };
         _activeTool = _tools[EditorTool.Rectangle];
         Shapes = [];

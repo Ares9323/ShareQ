@@ -26,6 +26,7 @@ public static class ShapeGripLayout
         PixelateShape p => RectGrips(p.X, p.Y, p.Width, p.Height, 0),
         SpotlightShape s => RectGrips(s.X, s.Y, s.Width, s.Height, 0),
         ImageShape i => RectGrips(i.X, i.Y, i.Width, i.Height, rotateGripOffset),
+        SmartEraserShape se => RectGrips(se.X, se.Y, se.Width, se.Height, 0),
         _ => []
     };
 
@@ -56,6 +57,7 @@ public static class ShapeGripLayout
         PixelateShape p => (p.X + p.Width / 2, p.Y + p.Height / 2),
         SpotlightShape s => (s.X + s.Width / 2, s.Y + s.Height / 2),
         ImageShape i => (i.X + i.Width / 2, i.Y + i.Height / 2),
+        SmartEraserShape se => (se.X + se.Width / 2, se.Y + se.Height / 2),
         _ => (0, 0)
     };
 

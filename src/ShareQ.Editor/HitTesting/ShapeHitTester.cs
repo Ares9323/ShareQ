@@ -30,6 +30,9 @@ public static class ShapeHitTester
         SpotlightShape s => HitRectRegion(s.X, s.Y, s.Width, s.Height, px, py),
         // Image: rotate-aware solid rect (whole interior is hittable, unlike effect shapes).
         ImageShape i => HitImageRotated(i, px, py),
+        // Smart eraser: solid rect (whole interior is hittable, not just border) since the gradient
+        // fill replaces the underlying pixels visually.
+        SmartEraserShape se => px >= se.X && px <= se.X + se.Width && py >= se.Y && py <= se.Y + se.Height,
         _ => false
     };
 

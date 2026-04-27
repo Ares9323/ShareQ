@@ -94,6 +94,7 @@
                     <ui:Button x:Name="BlurToolBtn" Content="B Blur" Style="{StaticResource ToolBtn}" Click="OnBlurToolClicked" />
                     <ui:Button x:Name="PixelateToolBtn" Content="X Pixel" Style="{StaticResource ToolBtn}" Click="OnPixelateToolClicked" />
                     <ui:Button x:Name="SpotlightToolBtn" Content="O Spot" Style="{StaticResource ToolBtn}" Click="OnSpotlightToolClicked" />
+                    <ui:Button x:Name="SmartEraserToolBtn" Content="K Erase" Style="{StaticResource ToolBtn}" Click="OnSmartEraserToolClicked" ToolTip="Smart eraser — fills the rect with a bilinear gradient of the 4 corner colors" />
 
                     <TextBlock Text="CANVAS" Style="{StaticResource GroupHeader}" />
                     <ui:Button x:Name="CropToolBtn" Content="C Crop" Style="{StaticResource ToolBtn}" Click="OnCropToolClicked" />
@@ -219,7 +220,7 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <Slider Grid.Column="0" x:Name="SelFontSizeSlider" Minimum="8" Maximum="96" VerticalAlignment="Center" />
+                            <Slider Grid.Column="0" x:Name="SelFontSizeSlider" Minimum="8" Maximum="256" VerticalAlignment="Center" />
                             <TextBox Grid.Column="1" x:Name="SelFontSizeBox"
                                      Width="44" Margin="6,0,0,0" Padding="2"
                                      VerticalAlignment="Center" TextAlignment="Right" />
