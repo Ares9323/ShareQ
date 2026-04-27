@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using ShareQ.App.Native;
 
@@ -5,11 +6,26 @@ namespace ShareQ.App.Services;
 
 public sealed class TargetWindowTracker
 {
+    private static readonly int OwnProcessId = Environment.ProcessId;
     private IntPtr _captured;
 
     public void CaptureCurrentForeground()
     {
-        _captured = AppNativeMethods.GetForegroundWindow();
+        var hwnd = AppNativeMethods.GetForegroundWindow();
+        // If the foreground when popup opens belongs to ShareQ itself, there's no useful target
+        // to paste into — store zero so AutoPaster skips the restore + Ctrl+V dance and just sets
+        // the clipboard.
+        if (hwnd != IntPtr.Zero)
+        {
+            AppNativeMethods.GetWindowThreadProcessId(hwnd, out var pid);
+            if ((int)pid == OwnProcessId)
+            {
+                Debug.WriteLine($"[TargetWindowTracker] Foreground is own process (pid={pid}); skipping capture.");
+                _captured = IntPtr.Zero;
+                return;
+            }
+        }
+        _captured = hwnd;
     }
 
     public bool TryRestoreCaptured()

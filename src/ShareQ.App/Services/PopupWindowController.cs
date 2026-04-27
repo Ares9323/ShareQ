@@ -84,6 +84,16 @@ public sealed partial class PopupWindowController
         {
             // Failures are logged inside collaborators.
         }
+        finally
+        {
+            // The popup normally hides itself via Deactivated when AutoPaster brings the target
+            // window forward; this fallback covers the case where TryRestoreCaptured fails (no valid
+            // target, anti-focus-stealing trip, etc.) so the popup doesn't linger.
+            if (_window is { IsVisible: true })
+            {
+                _window.Dispatcher.Invoke(_window.Hide);
+            }
+        }
     }
 
     private async void OnOpenInEditorRequested(object? sender, long itemId)

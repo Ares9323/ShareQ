@@ -55,7 +55,10 @@ public partial class PopupWindow : Window
             case Key.Enter:
                 if (ViewModel.SelectedRow is { } row)
                 {
-                    Hide();
+                    // Don't Hide() here — the popup must remain the foreground window so AutoPaster
+                    // can call SetForegroundWindow on the target without tripping Win32's
+                    // anti-focus-stealing rules. The popup hides itself via Deactivated when the
+                    // target window gets focus.
                     PasteRequested?.Invoke(this, row.Id);
                 }
                 e.Handled = true;
@@ -69,7 +72,7 @@ public partial class PopupWindow : Window
                     e.Handled = true;
                     break;
                 }
-                // Ctrl+1..9: quick-paste row N (1-indexed). Avoids collision with typing in SearchBox.
+                // Ctrl+1..9: quick-paste row N (1-indexed). Same Hide-after-restore reasoning as Enter.
                 if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control
                     && e.Key >= Key.D1 && e.Key <= Key.D9)
                 {
@@ -77,7 +80,6 @@ public partial class PopupWindow : Window
                     if (idx >= 0 && idx < ViewModel.Rows.Count)
                     {
                         var quick = ViewModel.Rows[idx];
-                        Hide();
                         PasteRequested?.Invoke(this, quick.Id);
                     }
                     e.Handled = true;
