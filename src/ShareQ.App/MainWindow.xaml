@@ -25,11 +25,36 @@
                            FontSize="48"
                            FontWeight="Light"
                            HorizontalAlignment="Center" />
-                <TextBlock Text="M0 scaffold"
-                           FontSize="16"
-                           Opacity="0.6"
+                <TextBlock Text="Global hotkeys"
+                           FontSize="14"
+                           Opacity="0.7"
                            HorizontalAlignment="Center"
-                           Margin="0,8,0,0" />
+                           Margin="0,24,0,12" />
+                <Grid HorizontalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Capture region" Margin="0,2,16,2" Opacity="0.85" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Ctrl + Alt + R" Margin="0,2,0,2" FontFamily="Consolas" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Open clipboard popup" Margin="0,2,16,2" Opacity="0.85" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="Ctrl + Alt + V" Margin="0,2,0,2" FontFamily="Consolas" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Toggle incognito" Margin="0,2,16,2" Opacity="0.85" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="Ctrl + Alt + I" Margin="0,2,0,2" FontFamily="Consolas" />
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Screen color picker" Margin="0,2,16,2" Opacity="0.85" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="Ctrl + Shift + P" Margin="0,2,0,2" FontFamily="Consolas" />
+                </Grid>
+                <TextBlock Text="Hotkeys will become user-configurable in a future update."
+                           FontSize="11"
+                           Opacity="0.5"
+                           HorizontalAlignment="Center"
+                           Margin="0,16,0,0" />
             </StackPanel>
         </Grid>
     </Grid>

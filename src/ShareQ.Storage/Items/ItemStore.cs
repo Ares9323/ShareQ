@@ -64,7 +64,11 @@ public sealed class ItemStore : IItemStore
         ArgumentNullException.ThrowIfNull(query);
         var conn = _database.GetOpenConnection();
 
-        var sql = new System.Text.StringBuilder("SELECT items.* FROM items");
+        // When the caller doesn't need the payload (e.g. popup list), skip its column entirely so we
+        // don't pay the per-row DPAPI decryption cost — for 200 image rows that's the difference
+        // between instant and several seconds.
+        var payloadColumn = query.IncludePayload ? "payload" : "NULL AS payload";
+        var sql = new System.Text.StringBuilder($"SELECT items.id, items.kind, items.source, items.created_at, items.payload_size, items.pinned, items.deleted_at, items.source_process, items.source_window, items.blob_ref, items.uploaded_url, items.uploader_id, items.search_text, {payloadColumn} FROM items");
         var hasFts = !string.IsNullOrWhiteSpace(query.Search);
         if (hasFts)
         {
@@ -165,8 +169,13 @@ public sealed class ItemStore : IItemStore
 
     private ItemRecord Map(SqliteDataReader reader)
     {
-        var encryptedPayload = (byte[])reader["payload"];
-        var plaintext = _serializer.Decode(encryptedPayload);
+        var payloadOrd = reader.GetOrdinal("payload");
+        ReadOnlyMemory<byte> plaintext = ReadOnlyMemory<byte>.Empty;
+        if (!reader.IsDBNull(payloadOrd))
+        {
+            var encryptedPayload = (byte[])reader["payload"];
+            plaintext = _serializer.Decode(encryptedPayload);
+        }
         return new ItemRecord(
             Id: reader.GetInt64(reader.GetOrdinal("id")),
             Kind: Enum.Parse<ItemKind>(reader.GetString(reader.GetOrdinal("kind"))),

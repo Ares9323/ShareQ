@@ -8,4 +8,5 @@ public sealed record ItemQuery(
     ItemKind? Kind = null,
     bool? Pinned = null,
     bool IncludeDeleted = false,
-    string? Search = null);
+    string? Search = null,
+    bool IncludePayload = true);

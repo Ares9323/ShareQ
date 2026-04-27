@@ -20,8 +20,9 @@ public partial class EditorWindow : FluentWindow
     private double _gestureStartX, _gestureStartY;
 
     private double _zoom = 1.0;
-    private const double MinZoom = 0.1;
+    private double _minZoom = 0.1;
     private const double MaxZoom = 8.0;
+    private bool _initialFitDone;
 
     // Marquee state (Select tool, drag on empty area).
     private bool _isMarqueeing;
@@ -104,18 +105,7 @@ public partial class EditorWindow : FluentWindow
         SelRotationBox.LostFocus += (_, _) => OnSelRotationBoxCommitted();
         SelRotationBox.KeyDown += (_, ev) => { if (ev.Key == Key.Enter) OnSelRotationBoxCommitted(); };
 
-        // Populate font combo with all system fonts (sorted alphabetically) and wrap in a CollectionView
-        // so we can apply a substring (not just prefix) filter when the user types into the editable combo.
-        var systemFonts = Fonts.SystemFontFamilies
-            .Select(f => f.Source)
-            .Where(s => !string.IsNullOrWhiteSpace(s))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        SelFontFamilyCombo.ItemsSource = systemFonts;
-        WireFontFilter(SelFontFamilyCombo, systemFonts);
-
-        SelFontFamilyCombo.SelectionChanged += (_, _) => OnSelTextStyleChanged();
+        WireFontPicker();
         SelFontSizeSlider.ValueChanged += (_, _) => OnSelFontSizeSliderChanged();
         SelFontSizeBox.LostFocus += (_, _) => OnSelFontSizeBoxCommitted();
         SelFontSizeBox.KeyDown += (_, ev) => { if (ev.Key == Key.Enter) OnSelFontSizeBoxCommitted(); };
@@ -133,6 +123,8 @@ public partial class EditorWindow : FluentWindow
             LoadSourceImage();
             RefreshPropertyPanel();
             RefreshToolButtonHighlight();
+            // Defer fit to after layout pass so ViewportWidth/Height is populated.
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () => FitZoomToViewport());
             ColorSwatchButton.EyedropperHandler = continuation =>
             {
                 EnterCanvasEyedropperMode(continuation);
@@ -295,13 +287,35 @@ public partial class EditorWindow : FluentWindow
 
     private void SetZoom(double newZoom)
     {
-        var clamped = Math.Clamp(newZoom, MinZoom, MaxZoom);
+        var clamped = Math.Clamp(newZoom, _minZoom, MaxZoom);
         if (Math.Abs(clamped - _zoom) < 0.001) return;
         _zoom = clamped;
         CanvasHost.LayoutTransform = new ScaleTransform(_zoom, _zoom);
         ZoomLabel.Text = $"{_zoom * 100:F0}%";
         // Grips are sized in screen pixels via inverse zoom; refresh so the new factor applies.
         RefreshSelectionAdorner();
+    }
+
+    /// <summary>On first open, zoom out so the entire screenshot fits in the viewport. Capped at 100%
+    /// (we never zoom IN if the image already fits). The fit factor becomes the new zoom-out floor —
+    /// the user can keep zooming in but not past the initial fit.</summary>
+    private void FitZoomToViewport()
+    {
+        if (_initialFitDone) return;
+        if (SourceImage.Source is not BitmapSource src) return;
+        var vw = CanvasScrollViewer.ViewportWidth;
+        var vh = CanvasScrollViewer.ViewportHeight;
+        if (vw <= 0 || vh <= 0) return;
+
+        const double margin = 16;
+        var fit = Math.Min((vw - margin) / src.PixelWidth, (vh - margin) / src.PixelHeight);
+        // Only fit when the image is bigger than the viewport — never zoom IN automatically.
+        if (fit < 1.0)
+        {
+            _minZoom = fit;
+            SetZoom(fit);
+        }
+        _initialFitDone = true;
     }
 
     private void OnWindowKeyDown(object sender, KeyEventArgs e)
@@ -864,6 +878,10 @@ public partial class EditorWindow : FluentWindow
     {
         CommitInlineTextEdit();
 
+        // For a brand-new text, clear any previous selection so the previously selected text
+        // doesn't stay highlighted while the user types into the new one.
+        if (existing is null && _vm.SelectedShapes.Count > 0) _vm.SetSelection([]);
+
         var style = existing?.Style ?? _vm.CurrentTextStyle;
         var initialText = existing?.Text ?? "";
 
@@ -911,7 +929,15 @@ public partial class EditorWindow : FluentWindow
 
     private void OnInlineTextBoxKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape) { CancelInlineTextEdit(); e.Handled = true; return; }
+        if (e.Key == Key.Escape)
+        {
+            // Esc commits a new text (so the user keeps the typed content selected) but cancels
+            // an in-progress edit of an existing text (Esc = "back out, leave the original alone").
+            if (_editingTextShape is null) CommitInlineTextEdit();
+            else CancelInlineTextEdit();
+            e.Handled = true;
+            return;
+        }
         if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Shift) != ModifierKeys.Shift)
         {
             CommitInlineTextEdit();
@@ -1019,7 +1045,7 @@ public partial class EditorWindow : FluentWindow
     private void ApplyTextStyle(TextAlign? alignOverride)
     {
         if (_suppressLiveUpdates) return;
-        var family = SelFontFamilyCombo.SelectedItem as string ?? "Segoe UI";
+        var family = string.IsNullOrWhiteSpace(SelFontInput.Text) ? "Segoe UI" : SelFontInput.Text;
         var size = _currentTextSize;
         var bold = SelBoldCheck.IsChecked == true;
         var italic = SelItalicCheck.IsChecked == true;
@@ -1035,10 +1061,129 @@ public partial class EditorWindow : FluentWindow
         }
     }
 
-    /// <summary>Hook a substring (case-insensitive) filter to the editable font ComboBox.
-    /// WPF's built-in <c>IsTextSearchEnabled</c> only does prefix matching, which misses entries like
-    /// "MS Gothic" when the user types "gothic". This wires the internal TextBox's TextChanged event
-    /// to a <see cref="ICollectionView.Filter"/> on the ComboBox's items.</summary>
+    /// <summary>Cached system font family names. Lazy-initialized once per process — enumerating
+    /// Fonts.SystemFontFamilies isn't free.</summary>
+    private static readonly Lazy<List<string>> SystemFonts = new(() =>
+        Fonts.SystemFontFamilies
+            .Select(f => f.Source)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+            .ToList());
+
+    private bool _suppressFontInput;
+
+    /// <summary>Custom font picker: TextBox + Popup with ListBox. The TextBox shows the current font
+    /// and acts as a search field; the Popup lists matching fonts; clicking one applies it. This
+    /// replaces the editable ComboBox approach which had constant flash from CollectionView refresh
+    /// fighting with WPF's text/caret bookkeeping.</summary>
+    private void WireFontPicker()
+    {
+        // No popup on GotFocus — that caused a flash from binding ~500 items into the ListBox.
+        // Popup opens only when the user actually starts typing or hits Down arrow.
+        SelFontInput.TextChanged += (_, _) =>
+        {
+            if (_suppressFontInput) return;
+            var text = SelFontInput.Text ?? "";
+            if (text.Length == 0) { SelFontPopup.IsOpen = false; return; }
+            RebuildFontList(text);
+        };
+        SelFontInput.PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape) { SelFontPopup.IsOpen = false; e.Handled = true; }
+            else if (e.Key == Key.Down)
+            {
+                if (!SelFontPopup.IsOpen)
+                {
+                    RebuildFontList(SelFontInput.Text ?? "");
+                    SelFontList.SelectedIndex = 0;
+                    (SelFontList.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem)?.BringIntoView();
+                }
+                else if (SelFontList.Items.Count > 0)
+                {
+                    SelFontList.SelectedIndex = Math.Min(SelFontList.SelectedIndex + 1, SelFontList.Items.Count - 1);
+                    if (SelFontList.SelectedIndex < 0) SelFontList.SelectedIndex = 0;
+                    (SelFontList.ItemContainerGenerator.ContainerFromIndex(SelFontList.SelectedIndex) as ListBoxItem)?.BringIntoView();
+                }
+                PreviewSelectedFont();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Up)
+            {
+                if (SelFontList.SelectedIndex > 0)
+                {
+                    SelFontList.SelectedIndex--;
+                    (SelFontList.ItemContainerGenerator.ContainerFromIndex(SelFontList.SelectedIndex) as ListBoxItem)?.BringIntoView();
+                }
+                PreviewSelectedFont();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Enter)
+            {
+                if (SelFontList.SelectedItem is string s) CommitFontPick(s);
+                else if (SelFontList.Items.Count > 0 && SelFontList.Items[0] is string first) CommitFontPick(first);
+                e.Handled = true;
+            }
+        };
+        SelFontList.PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            if (e.OriginalSource is DependencyObject d)
+            {
+                var item = FindParent<ListBoxItem>(d);
+                if (item?.Content is string s) CommitFontPick(s);
+            }
+        };
+    }
+
+    private void RebuildFontList(string filter)
+    {
+        var all = SystemFonts.Value;
+        IEnumerable<string> source = string.IsNullOrEmpty(filter)
+            ? all
+            : all.Where(f => f.Contains(filter, StringComparison.OrdinalIgnoreCase));
+        SelFontList.ItemsSource = source.Take(200).ToList();
+        if (!SelFontPopup.IsOpen) SelFontPopup.IsOpen = true;
+    }
+
+    private void CommitFontPick(string family)
+    {
+        _suppressFontInput = true;
+        try
+        {
+            SelFontInput.Text = family;
+            SelFontInput.CaretIndex = family.Length;
+        }
+        finally { _suppressFontInput = false; }
+        SelFontPopup.IsOpen = false;
+        OnSelTextStyleChanged();
+    }
+
+    /// <summary>Live-preview the font of the currently highlighted ListBox item without closing the popup.
+    /// Updates SelFontInput silently and applies the new style via the normal text-style path.</summary>
+    private void PreviewSelectedFont()
+    {
+        if (SelFontList.SelectedItem is not string family) return;
+        _suppressFontInput = true;
+        try
+        {
+            SelFontInput.Text = family;
+            SelFontInput.CaretIndex = family.Length;
+        }
+        finally { _suppressFontInput = false; }
+        OnSelTextStyleChanged();
+    }
+
+    private static T? FindParent<T>(DependencyObject d) where T : DependencyObject
+    {
+        while (d is not null)
+        {
+            if (d is T t) return t;
+            d = System.Windows.Media.VisualTreeHelper.GetParent(d);
+        }
+        return null;
+    }
+
+    /// <summary>(Legacy method — kept for reference; not wired anymore.)</summary>
     private static void WireFontFilter(ComboBox combo, List<string> allFonts)
     {
         var view = System.Windows.Data.CollectionViewSource.GetDefaultView(allFonts);
@@ -1050,13 +1195,48 @@ public partial class EditorWindow : FluentWindow
         };
         combo.ItemsSource = view;
 
+        const int MinChars = 2;
+        var pendingText = "";
+        var debounce = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(350)
+        };
+        debounce.Tick += (_, _) =>
+        {
+            debounce.Stop();
+            // Don't filter on tiny inputs — too many matches, churn high, more chance of caret loss.
+            var effective = pendingText.Length >= MinChars ? pendingText : "";
+            if (string.Equals(currentFilter, effective, StringComparison.Ordinal)) return;
+            currentFilter = effective;
+
+            // Refresh resets the editable ComboBox's caret/text. Snapshot then restore.
+            var inner = combo.Template?.FindName("PART_EditableTextBox", combo) as System.Windows.Controls.TextBox;
+            var savedText = inner?.Text ?? combo.Text;
+            var savedCaret = inner?.CaretIndex ?? savedText.Length;
+
+            view.Refresh();
+            // Move the keyboard "current item" to the first match so arrow-down navigates within the
+            // filtered list rather than the full one. CurrentItem is the cursor for INavigateBy/key
+            // events on a CollectionView.
+            view.MoveCurrentToFirst();
+
+            combo.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, () =>
+            {
+                if (inner is null) return;
+                if (inner.Text != savedText) inner.Text = savedText;
+                inner.CaretIndex = Math.Min(savedCaret, inner.Text.Length);
+                if (!string.IsNullOrEmpty(currentFilter) && !combo.IsDropDownOpen) combo.IsDropDownOpen = true;
+            });
+        };
+
         combo.AddHandler(System.Windows.Controls.Primitives.TextBoxBase.TextChangedEvent,
             new System.Windows.Controls.TextChangedEventHandler((_, _) =>
             {
                 var text = combo.Text ?? "";
-                // Don't re-filter when the user has just committed a selection (text matches selected item exactly).
+                // Don't filter when the user has just committed a selection (text matches selected item).
                 if (combo.SelectedItem is string sel && string.Equals(sel, text, StringComparison.Ordinal))
                 {
+                    debounce.Stop();
                     if (currentFilter.Length > 0)
                     {
                         currentFilter = "";
@@ -1064,9 +1244,9 @@ public partial class EditorWindow : FluentWindow
                     }
                     return;
                 }
-                currentFilter = text;
-                view.Refresh();
-                if (!string.IsNullOrEmpty(currentFilter)) combo.IsDropDownOpen = true;
+                pendingText = text;
+                debounce.Stop();
+                debounce.Start();
             }));
     }
 
@@ -1083,7 +1263,8 @@ public partial class EditorWindow : FluentWindow
         try
         {
             var s = _vm.CurrentTextStyle;
-            if (SelFontFamilyCombo.Items.Contains(s.FontFamily)) SelFontFamilyCombo.SelectedItem = s.FontFamily;
+            _suppressFontInput = true;
+            try { SelFontInput.Text = s.FontFamily; } finally { _suppressFontInput = false; }
             _currentTextSize = s.FontSize;
             SelFontSizeSlider.Value = Math.Clamp(_currentTextSize, SelFontSizeSlider.Minimum, SelFontSizeSlider.Maximum);
             SelFontSizeBox.Text = ((int)Math.Round(_currentTextSize)).ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -1813,7 +1994,9 @@ public partial class EditorWindow : FluentWindow
                 var allSameColor = textShapes.All(t => t.Style.Color == firstText.Style.Color);
                 var allSameAlign = textShapes.All(t => t.Style.Align == firstText.Style.Align);
 
-                if (allSameFamily) SelFontFamilyCombo.SelectedItem = firstText.Style.FontFamily;
+                _suppressFontInput = true;
+                try { if (allSameFamily) SelFontInput.Text = firstText.Style.FontFamily; }
+                finally { _suppressFontInput = false; }
                 _currentTextSize = allSameSize ? firstText.Style.FontSize : TextStyle.Default.FontSize;
                 SelFontSizeSlider.Value = Math.Clamp(_currentTextSize, SelFontSizeSlider.Minimum, SelFontSizeSlider.Maximum);
                 SelFontSizeBox.Text = ((int)Math.Round(_currentTextSize)).ToString(System.Globalization.CultureInfo.InvariantCulture);

@@ -18,30 +18,32 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Grid.ColumnSpan="2" Title="ShareQ — Editor" />
+        <Grid.Resources>
+            <!-- BasedOn the implicit Fluent button style so we keep its visuals (rounded bg, hover, etc.). -->
+            <Style x:Key="ToolBtn" TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                <Setter Property="Width" Value="76" />
+                <Setter Property="Height" Value="32" />
+                <Setter Property="Margin" Value="0,2,0,0" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+            </Style>
+            <Style x:Key="GroupHeader" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="#888" />
+                <Setter Property="FontSize" Value="10" />
+                <Setter Property="Margin" Value="2,10,0,2" />
+                <Setter Property="TextAlignment" Value="Left" />
+            </Style>
+        </Grid.Resources>
 
-        <!-- Toolbar -->
-        <Border Grid.Row="1" Grid.ColumnSpan="2" Padding="12,8" Background="#252525">
-            <StackPanel Orientation="Horizontal">
-                <ui:Button x:Name="SelectToolBtn" Content="V Select" Margin="0,0,4,0" Click="OnSelectToolClicked" />
-                <ui:Button x:Name="RectangleToolBtn" Content="R Rect" Margin="0,0,4,0" Click="OnRectangleToolClicked" />
-                <ui:Button x:Name="ArrowToolBtn" Content="A Arrow" Margin="0,0,4,0" Click="OnArrowToolClicked" />
-                <ui:Button x:Name="LineToolBtn" Content="L Line" Margin="0,0,4,0" Click="OnLineToolClicked" />
-                <ui:Button x:Name="EllipseToolBtn" Content="E Ellipse" Margin="0,0,4,0" Click="OnEllipseToolClicked" />
-                <ui:Button x:Name="FreehandToolBtn" Content="P Freehand" Margin="0,0,4,0" Click="OnFreehandToolClicked" />
-                <ui:Button x:Name="TextToolBtn" Content="T Text" Margin="0,0,4,0" Click="OnTextToolClicked" />
-                <ui:Button x:Name="StepToolBtn" Content="N Step" Margin="0,0,4,0" Click="OnStepToolClicked" />
-                <ui:Button x:Name="BlurToolBtn" Content="B Blur" Margin="0,0,4,0" Click="OnBlurToolClicked" />
-                <ui:Button x:Name="PixelateToolBtn" Content="X Pixelate" Margin="0,0,4,0" Click="OnPixelateToolClicked" />
-                <ui:Button x:Name="SpotlightToolBtn" Content="O Spotlight" Margin="0,0,4,0" Click="OnSpotlightToolClicked" />
-                <ui:Button x:Name="CropToolBtn" Content="C Crop" Margin="0,0,4,0" Click="OnCropToolClicked" />
-                <ui:Button x:Name="ResizeBtn" Content="Resize…" Margin="0,0,4,0" Click="OnResizeClicked" />
-                <ui:Button x:Name="ImageBtn" Content="I Image" Margin="0,0,16,0" Click="OnImageClicked" />
+        <ui:TitleBar Grid.Row="0" Grid.ColumnSpan="3" Title="ShareQ — Editor" />
 
+        <!-- Top toolbar: shape style defaults + history + zoom + save -->
+        <Border Grid.Row="1" Grid.ColumnSpan="3" Padding="12,8" Background="#252525">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <TextBlock Text="Outline:" Foreground="White" VerticalAlignment="Center" Margin="0,0,4,0" />
                 <views:ColorSwatchButton x:Name="OutlineSwatch" Margin="0,0,16,0" />
 
@@ -67,8 +69,41 @@
             </StackPanel>
         </Border>
 
+        <!-- Left tool palette, grouped by category -->
+        <Border Grid.Row="2" Grid.Column="0"
+                Width="92" Padding="6,4"
+                Background="#1F1F1F"
+                BorderBrush="#333" BorderThickness="0,0,1,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <ui:Button x:Name="SelectToolBtn" Content="V Select" Style="{StaticResource ToolBtn}" Click="OnSelectToolClicked" />
+
+                    <TextBlock Text="SHAPES" Style="{StaticResource GroupHeader}" />
+                    <ui:Button x:Name="RectangleToolBtn" Content="R Rect" Style="{StaticResource ToolBtn}" Click="OnRectangleToolClicked" />
+                    <ui:Button x:Name="EllipseToolBtn" Content="E Ellipse" Style="{StaticResource ToolBtn}" Click="OnEllipseToolClicked" />
+                    <ui:Button x:Name="LineToolBtn" Content="L Line" Style="{StaticResource ToolBtn}" Click="OnLineToolClicked" />
+                    <ui:Button x:Name="ArrowToolBtn" Content="A Arrow" Style="{StaticResource ToolBtn}" Click="OnArrowToolClicked" />
+                    <ui:Button x:Name="FreehandToolBtn" Content="P Free" Style="{StaticResource ToolBtn}" Click="OnFreehandToolClicked" />
+
+                    <TextBlock Text="OBJECTS" Style="{StaticResource GroupHeader}" />
+                    <ui:Button x:Name="TextToolBtn" Content="T Text" Style="{StaticResource ToolBtn}" Click="OnTextToolClicked" />
+                    <ui:Button x:Name="StepToolBtn" Content="N Step" Style="{StaticResource ToolBtn}" Click="OnStepToolClicked" />
+                    <ui:Button x:Name="ImageBtn" Content="I Image" Style="{StaticResource ToolBtn}" Click="OnImageClicked" />
+
+                    <TextBlock Text="EFFECTS" Style="{StaticResource GroupHeader}" />
+                    <ui:Button x:Name="BlurToolBtn" Content="B Blur" Style="{StaticResource ToolBtn}" Click="OnBlurToolClicked" />
+                    <ui:Button x:Name="PixelateToolBtn" Content="X Pixel" Style="{StaticResource ToolBtn}" Click="OnPixelateToolClicked" />
+                    <ui:Button x:Name="SpotlightToolBtn" Content="O Spot" Style="{StaticResource ToolBtn}" Click="OnSpotlightToolClicked" />
+
+                    <TextBlock Text="CANVAS" Style="{StaticResource GroupHeader}" />
+                    <ui:Button x:Name="CropToolBtn" Content="C Crop" Style="{StaticResource ToolBtn}" Click="OnCropToolClicked" />
+                    <ui:Button x:Name="ResizeBtn" Content="Resize…" Style="{StaticResource ToolBtn}" Click="OnResizeClicked" />
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
         <!-- Canvas -->
-        <ScrollViewer Grid.Row="2" Grid.Column="0"
+        <ScrollViewer Grid.Row="2" Grid.Column="1"
                       x:Name="CanvasScrollViewer"
                       HorizontalScrollBarVisibility="Auto"
                       VerticalScrollBarVisibility="Auto"
@@ -84,7 +119,7 @@
         </ScrollViewer>
 
         <!-- Property panel (right) -->
-        <Border Grid.Row="2" Grid.Column="1"
+        <Border Grid.Row="2" Grid.Column="2"
                 Width="240" Padding="12" Background="#1F1F1F"
                 BorderBrush="#333" BorderThickness="1,0,0,0">
             <StackPanel x:Name="PropertyPanel">
@@ -161,11 +196,22 @@
                         <views:ColorSwatchButton x:Name="SelTextColorSwatch" HorizontalAlignment="Left" Margin="0,0,0,8" />
 
                         <TextBlock Text="Font" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
-                        <ComboBox x:Name="SelFontFamilyCombo"
-                                  Margin="0,0,0,8"
-                                  IsEditable="True"
-                                  IsTextSearchEnabled="False"
-                                  StaysOpenOnEdit="True" />
+                        <Grid Margin="0,0,0,8">
+                            <TextBox x:Name="SelFontInput" Padding="4,3" />
+                            <Popup x:Name="SelFontPopup"
+                                   PlacementTarget="{Binding ElementName=SelFontInput}"
+                                   Placement="Bottom"
+                                   StaysOpen="False"
+                                   AllowsTransparency="True">
+                                <Border Background="#252525" BorderBrush="#555" BorderThickness="1" CornerRadius="3">
+                                    <ListBox x:Name="SelFontList"
+                                             MaxHeight="260"
+                                             MinWidth="200"
+                                             BorderThickness="0"
+                                             Background="Transparent" />
+                                </Border>
+                            </Popup>
+                        </Grid>
 
                         <TextBlock Text="Size" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
                         <Grid Margin="0,0,0,8">

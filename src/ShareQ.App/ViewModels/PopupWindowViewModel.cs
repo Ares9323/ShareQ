@@ -25,7 +25,10 @@ public sealed partial class PopupWindowViewModel : ObservableObject
 
     public async Task RefreshAsync(CancellationToken cancellationToken)
     {
-        var query = new ItemQuery(Limit: 200, Search: NormalizeSearch(SearchText));
+        // Skip payload decryption for the list view — only metadata + SearchText is needed for the
+        // row preview. Payload (decrypted via DPAPI) is fetched on-demand via GetByIdAsync when the
+        // user actually pastes / opens an item.
+        var query = new ItemQuery(Limit: 200, Search: NormalizeSearch(SearchText), IncludePayload: false);
         var loaded = await _items.ListAsync(query, cancellationToken).ConfigureAwait(false);
         Rows.Clear();
         foreach (var record in loaded)
