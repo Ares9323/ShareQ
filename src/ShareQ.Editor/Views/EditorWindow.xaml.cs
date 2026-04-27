@@ -51,6 +51,9 @@ public partial class EditorWindow : FluentWindow
     private Shape? _gripStartShape;
     private double _gripAnchorX, _gripAnchorY;
 
+    // Eyedropper state. While non-null, the next canvas click samples a pixel and feeds it back.
+    private Action<ShapeColor?>? _eyedropperContinuation;
+
     public EditorWindow(EditorViewModel viewModel)
     {
         InitializeComponent();
@@ -119,8 +122,24 @@ public partial class EditorWindow : FluentWindow
             ColorSwatchButton.SelectedColorProperty, typeof(ColorSwatchButton));
         swatchColorDescAlt?.AddValueChanged(SelTextColorSwatch, (_, _) => OnSelTextStyleChanged());
 
-        Loaded += (_, _) => { LoadSourceImage(); RefreshPropertyPanel(); RefreshToolButtonHighlight(); };
-        Closing += (_, _) => { CommitInlineTextEdit(); CommitPendingLiveEdit(); };
+        Loaded += (_, _) =>
+        {
+            LoadSourceImage();
+            RefreshPropertyPanel();
+            RefreshToolButtonHighlight();
+            ColorSwatchButton.EyedropperHandler = continuation =>
+            {
+                EnterCanvasEyedropperMode(continuation);
+                return null;
+            };
+        };
+        Closing += (_, _) =>
+        {
+            CommitInlineTextEdit();
+            CommitPendingLiveEdit();
+            ColorSwatchButton.EyedropperHandler = null;
+            CancelEyedropper();
+        };
     }
 
     public bool Saved { get; private set; }
@@ -200,6 +219,7 @@ public partial class EditorWindow : FluentWindow
 
     private void OnWindowKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Escape && _eyedropperContinuation is not null) { CancelEyedropper(); e.Handled = true; return; }
         if (e.OriginalSource is System.Windows.Controls.TextBox) return;
 
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
@@ -238,6 +258,14 @@ public partial class EditorWindow : FluentWindow
         // Filter out clicks on scrollbar parts and on the inline TextBox editor.
         if (IsScrollBarOrInputControl(e.OriginalSource as DependencyObject)) return;
         var p = e.GetPosition(DrawingCanvas);
+
+        if (_eyedropperContinuation is not null)
+        {
+            var sampled = SamplePixelAt(p.X, p.Y);
+            FinishEyedropper(sampled);
+            e.Handled = true;
+            return;
+        }
 
         if (_vm.CurrentTool == EditorTool.Text)
         {
@@ -371,6 +399,40 @@ public partial class EditorWindow : FluentWindow
         var pos = e.GetPosition(DrawingCanvas);
         var (cx, cy) = ApplyShiftConstraint(pos.X, pos.Y);
         _vm.UpdateGesture(cx, cy);
+    }
+
+    private void EnterCanvasEyedropperMode(Action<ShapeColor?> continuation)
+    {
+        _eyedropperContinuation = continuation;
+        DrawingCanvas.Cursor = Cursors.Cross;
+        // Window stays focused so Esc cancels.
+        Focus();
+    }
+
+    private void FinishEyedropper(ShapeColor? sampled)
+    {
+        var cont = _eyedropperContinuation;
+        _eyedropperContinuation = null;
+        DrawingCanvas.Cursor = null;
+        cont?.Invoke(sampled);
+    }
+
+    private void CancelEyedropper() => FinishEyedropper(null);
+
+    /// <summary>Sample the pixel at (x, y) of the source bitmap. Returns null when out of bounds
+    /// or the source isn't loaded yet.</summary>
+    private ShapeColor? SamplePixelAt(double x, double y)
+    {
+        if (SourceImage.Source is not BitmapSource src) return null;
+        var ix = (int)Math.Floor(x);
+        var iy = (int)Math.Floor(y);
+        if (ix < 0 || iy < 0 || ix >= src.PixelWidth || iy >= src.PixelHeight) return null;
+
+        // Force conversion to a uniform 32-bit BGRA so we can read 4 bytes regardless of source format.
+        var conv = new System.Windows.Media.Imaging.FormatConvertedBitmap(src, PixelFormats.Bgra32, null, 0);
+        var px = new byte[4];
+        conv.CopyPixels(new Int32Rect(ix, iy, 1, 1), px, 4, 0);
+        return new ShapeColor(px[3], px[2], px[1], px[0]);
     }
 
     /// <summary>True when the originating element is a scrollbar part or a text input — don't treat

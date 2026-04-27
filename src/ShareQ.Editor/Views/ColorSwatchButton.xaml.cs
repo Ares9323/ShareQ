@@ -112,6 +112,16 @@ public partial class ColorSwatchButton : UserControl
         hexRow.Children.Add(hexBox);
         rootStack.Children.Add(hexRow);
 
+        var customBtn = new Button
+        {
+            Content = "Custom…",
+            Margin = new Thickness(0, 8, 0, 0),
+            Padding = new Thickness(8, 4, 8, 4),
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        customBtn.Click += (_, _) => OpenCustomPicker();
+        rootStack.Children.Add(customBtn);
+
         _popup.Child = new Border
         {
             Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2A)),
@@ -151,6 +161,41 @@ public partial class ColorSwatchButton : UserControl
             if (_popup.IsOpen) _popup.IsOpen = false;
         };
         return preview;
+    }
+
+    /// <summary>Hook the host can wire to provide a "pick from canvas / pick from screen" callback.
+    /// When invoked, the host should hide the picker, run its eyedropper flow, then call the supplied
+    /// continuation with the sampled color (or null on cancel). Returning null means: host doesn't
+    /// support eyedropper for this swatch, hide the eyedropper button.</summary>
+    public static Func<Action<ShapeColor?>, IDisposable?>? EyedropperHandler { get; set; }
+
+    private void OpenCustomPicker()
+    {
+        _popup.IsOpen = false;
+        var dlg = new ColorPickerWindow(SelectedColor)
+        {
+            Owner = Window.GetWindow(this)
+        };
+        dlg.EyedropperRequested += (_, _) =>
+        {
+            var handler = EyedropperHandler;
+            if (handler is null) return;
+            dlg.Hide();
+            handler(c =>
+            {
+                if (c is not null) dlg.ApplySampledColor(c);
+                dlg.Show();
+            });
+        };
+        dlg.Closed += (_, _) =>
+        {
+            if (dlg.DialogResult == true)
+            {
+                SelectedColor = dlg.PickedColor;
+                OnColorPicked?.Invoke(dlg.PickedColor);
+            }
+        };
+        dlg.Show();
     }
 
     private static bool TryParseHex(string? input, out ShapeColor color)

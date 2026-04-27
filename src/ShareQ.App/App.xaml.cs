@@ -69,8 +69,9 @@ public partial class App : Application
                 services.AddSingleton<AutoPaster>();
                 services.AddSingleton<PopupWindowController>();
                 services.AddSingleton<CaptureCoordinator>();
-                services.AddSingleton<IToastNotifier, TrayToastNotifier>();
+                services.AddSingleton<IToastNotifier, WpfToastNotifier>();
                 services.AddSingleton<EditorLauncher>();
+                services.AddSingleton<ScreenColorPickerService>();
                 services.AddSingleton<ShareQ.Editor.Persistence.ColorRecentsStore>();
                 services.AddSingleton<ShareQ.Editor.Persistence.EditorDefaultsStore>();
 
@@ -94,6 +95,9 @@ public partial class App : Application
 
         var incognito = _host.Services.GetRequiredService<IncognitoModeService>();
         await incognito.LoadAsync(CancellationToken.None);
+        var notifier = _host.Services.GetRequiredService<IToastNotifier>();
+        incognito.StateChanged += (_, _) =>
+            notifier.Show("Incognito mode", incognito.IsActive ? "ON — clipboard items won't be captured" : "OFF — capture resumed");
 
         var banner = _host.Services.GetRequiredService<NativeClipboardHistoryBanner>();
         _ = banner.EvaluateAsync(CancellationToken.None);
@@ -134,9 +138,10 @@ public partial class App : Application
         var popupOk = hotkeys.Register(new HotkeyDefinition("popup", HotkeyModifiers.Control | HotkeyModifiers.Alt, 0x56)); // Ctrl+Alt+V
         var incoOk = hotkeys.Register(new HotkeyDefinition("incognito", HotkeyModifiers.Control | HotkeyModifiers.Alt, 0x49)); // Ctrl+Alt+I
         var captureOk = hotkeys.Register(new HotkeyDefinition("capture-region", HotkeyModifiers.Control | HotkeyModifiers.Alt, 0x52)); // Ctrl+Alt+R
+        var pickerOk = hotkeys.Register(new HotkeyDefinition("screen-color-picker", HotkeyModifiers.Control | HotkeyModifiers.Shift, 0x50)); // Ctrl+Shift+P
         hotkeyLogger.LogInformation(
-            "Hotkey registration — popup(Ctrl+Alt+V): {PopupOk}, incognito(Ctrl+Alt+I): {IncoOk}, capture-region(Ctrl+Alt+R): {CaptureOk}",
-            popupOk, incoOk, captureOk);
+            "Hotkey registration — popup(Ctrl+Alt+V): {PopupOk}, incognito(Ctrl+Alt+I): {IncoOk}, capture-region(Ctrl+Alt+R): {CaptureOk}, screen-color-picker(Ctrl+Shift+P): {PickerOk}",
+            popupOk, incoOk, captureOk, pickerOk);
 
         var ingestion = _host.Services.GetRequiredService<ClipboardIngestionService>();
         ingestion.Start(helper.Handle);
@@ -157,6 +162,10 @@ public partial class App : Application
             case "capture-region":
                 var capture = Services.GetRequiredService<CaptureCoordinator>();
                 _ = capture.CaptureRegionAsync(CancellationToken.None);
+                break;
+            case "screen-color-picker":
+                var picker = Services.GetRequiredService<ScreenColorPickerService>();
+                picker.PickAtCursor();
                 break;
             default:
                 break;
