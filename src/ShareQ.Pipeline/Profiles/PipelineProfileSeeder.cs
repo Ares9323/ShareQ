@@ -15,19 +15,36 @@ public sealed class PipelineProfileSeeder
 
     public async Task SeedAsync(CancellationToken cancellationToken)
     {
-        // Now that the user can reorder / toggle pipeline steps from Settings, the profile in DB
-        // is the source of truth. We only seed defaults when the profile is genuinely missing —
-        // user customisations survive across restarts.
+        // The profile in DB is the source of truth (user-edited steps must survive restarts), so
+        // we only insert defaults when the profile is missing entirely. Older installs may have
+        // a profile row predating the Hotkey / IsBuiltIn fields — for those we run a non-
+        // destructive upgrade that fills only the missing metadata without touching steps.
         foreach (var profile in DefaultPipelineProfiles.All)
         {
             var existing = await _store.GetAsync(profile.Id, cancellationToken).ConfigureAwait(false);
-            if (existing is not null)
+            if (existing is null)
             {
-                _logger.LogDebug("Pipeline profile {Id} already present; preserving user changes.", profile.Id);
+                await _store.UpsertAsync(profile, cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("Pipeline profile {Id} seeded with defaults.", profile.Id);
                 continue;
             }
-            await _store.UpsertAsync(profile, cancellationToken).ConfigureAwait(false);
-            _logger.LogInformation("Pipeline profile {Id} seeded with defaults.", profile.Id);
+
+            // Don't auto-fill Hotkey: a missing binding can mean "user explicitly cleared it" and
+            // we must respect that across restarts. IsBuiltIn is metadata the user can't change,
+            // so it's safe to upgrade in-place.
+            var upgraded = existing;
+            if (!upgraded.IsBuiltIn && profile.IsBuiltIn)
+                upgraded = upgraded with { IsBuiltIn = true };
+
+            if (!ReferenceEquals(upgraded, existing))
+            {
+                await _store.UpsertAsync(upgraded, cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("Pipeline profile {Id} upgraded with default hotkey / built-in flag.", profile.Id);
+            }
+            else
+            {
+                _logger.LogDebug("Pipeline profile {Id} already present; preserving user changes.", profile.Id);
+            }
         }
     }
 

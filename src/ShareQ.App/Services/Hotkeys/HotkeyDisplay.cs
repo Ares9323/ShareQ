@@ -9,6 +9,7 @@ public static class HotkeyDisplay
 {
     public static string Format(HotkeyModifiers modifiers, uint virtualKey)
     {
+        if (modifiers == HotkeyModifiers.None && virtualKey == 0) return "Not assigned";
         var sb = new StringBuilder();
         if ((modifiers & HotkeyModifiers.Control) != 0) Append(sb, "Ctrl");
         if ((modifiers & HotkeyModifiers.Alt) != 0) Append(sb, "Alt");
@@ -45,8 +46,11 @@ public static class HotkeyDisplay
             0x26 => "Up",
             0x27 => "Right",
             0x28 => "Down",
+            0x2C => "PrintScreen",
             0x2D => "Insert",
             0x2E => "Delete",
+            0x13 => "Pause",
+            0x91 => "ScrollLock",
             0xBA => ";",
             0xBB => "=",
             0xBC => ",",

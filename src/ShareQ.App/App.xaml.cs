@@ -95,6 +95,12 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, CopyTextToClipboardTask>();
                 services.AddSingleton<IPipelineTask, NotifyToastTask>();
                 services.AddSingleton<IPipelineTask, OpenEditorBeforeUploadTask>();
+                services.AddSingleton<IPipelineTask, OpenPopupTask>();
+                services.AddSingleton<IPipelineTask, ToggleIncognitoTask>();
+                services.AddSingleton<IPipelineTask, ColorPickerTask>();
+                services.AddSingleton<IPipelineTask, CaptureRegionTask>();
+                services.AddSingleton<IPipelineTask, RecordScreenTask>();
+                services.AddSingleton<IPipelineTask, OpenScreenshotFolderTask>();
 
                 services.AddSingleton<NativeClipboardHistoryProbe>();
                 services.AddSingleton<NativeClipboardHistoryBanner>();
@@ -119,9 +125,12 @@ public partial class App : Application
                 services.AddTransient<PopupWindow>();
 
                 services.AddSingleton<ShareQ.App.Services.Hotkeys.HotkeyConfigService>();
+                services.AddSingleton<WorkflowRunner>();
                 services.AddSingleton<UploadersViewModel>();
                 services.AddSingleton<HotkeysViewModel>();
-                services.AddSingleton<AfterCaptureViewModel>();
+                services.AddSingleton<WorkflowActionProvider>();
+                services.AddSingleton<WorkflowEditorViewModel>();
+                services.AddSingleton<WorkflowsViewModel>();
                 services.AddSingleton<CaptureDefaultsViewModel>();
                 services.AddSingleton<SettingsViewModel>();
                 services.AddSingleton<MainWindow>();
@@ -184,38 +193,40 @@ public partial class App : Application
         // stay focus-local via the WPF Window's KeyDown handlers — those don't pass through here.
         _keyboardHook = new KeyboardHook();
 
-        async Task RegisterCatalogAsync(string id, Action callback)
+        // Every hotkey now invokes a workflow (pipeline profile) by id. The 1:1 mapping between
+        // hotkey id and workflow id is intentional: HotkeyConfigService's Catalog is built from
+        // profiles, so the ids are workflow ids. WorkflowRunner loads the profile and runs its steps.
+        var workflowRunner = _host.Services.GetRequiredService<WorkflowRunner>();
+        Action MakeCallback(string workflowId)
+            => () => Dispatcher.InvokeAsync(() => _ = workflowRunner.RunAsync(workflowId, CancellationToken.None));
+
+        async Task RegisterCatalogAsync(string id)
         {
             var def = await hotkeyConfig.GetEffectiveAsync(id, CancellationToken.None);
-            _keyboardHook.Register(id, def.Modifiers, def.VirtualKey, callback, suppress: true);
+            if (def.VirtualKey == 0)
+            {
+                hotkeyLogger.LogInformation("Hotkey {Id} unbound — skipping registration", id);
+                return;
+            }
+            _keyboardHook.Register(id, def.Modifiers, def.VirtualKey, MakeCallback(id), suppress: true);
             hotkeyLogger.LogInformation("Hotkey {Id} bound to {Combo}",
                 id, ShareQ.App.Services.Hotkeys.HotkeyDisplay.Format(def.Modifiers, def.VirtualKey));
         }
 
-        await RegisterCatalogAsync("popup",               () => Dispatcher.InvokeAsync(() => _ = _host.Services.GetRequiredService<PopupWindowController>().ShowAsync()));
-        await RegisterCatalogAsync("incognito",           () => Dispatcher.InvokeAsync(() => _ = _host.Services.GetRequiredService<IncognitoModeService>().ToggleAsync(CancellationToken.None)));
-        await RegisterCatalogAsync("capture-region",      () => Dispatcher.InvokeAsync(() => _ = _host.Services.GetRequiredService<CaptureCoordinator>().CaptureRegionAsync(CancellationToken.None)));
-        await RegisterCatalogAsync("screen-color-picker", () => Dispatcher.InvokeAsync(() => _host.Services.GetRequiredService<ScreenColorPickerService>().PickAtCursor()));
-        await RegisterCatalogAsync("record-screen",       () => Dispatcher.InvokeAsync(() => _ = _host.Services.GetRequiredService<Services.Recording.RecordingCoordinator>().ToggleAsync(ShareQ.Capture.Recording.RecordingFormat.Mp4, CancellationToken.None)));
-        await RegisterCatalogAsync("record-screen-gif",   () => Dispatcher.InvokeAsync(() => _ = _host.Services.GetRequiredService<Services.Recording.RecordingCoordinator>().ToggleAsync(ShareQ.Capture.Recording.RecordingFormat.Gif, CancellationToken.None)));
+        foreach (var entry in ShareQ.App.Services.Hotkeys.HotkeyConfigService.Catalog)
+            await RegisterCatalogAsync(entry.Id);
 
-        // Settings UI raises Changed when the user rebinds → unregister + register live.
+        // Settings UI raises Changed when the user rebinds, clears, or resets → keep the hook in
+        // sync. VK 0 means the user cleared the binding, so unregister and don't re-register.
         hotkeyConfig.Changed += (_, def) =>
         {
             _keyboardHook.Unregister(def.Id);
-            // Re-resolve the callback by id (we don't store callbacks in the config service).
-            Action? callback = def.Id switch
+            if (def.VirtualKey == 0)
             {
-                "popup"               => () => Dispatcher.InvokeAsync(() => _ = _host!.Services.GetRequiredService<PopupWindowController>().ShowAsync()),
-                "incognito"           => () => Dispatcher.InvokeAsync(() => _ = _host!.Services.GetRequiredService<IncognitoModeService>().ToggleAsync(CancellationToken.None)),
-                "capture-region"      => () => Dispatcher.InvokeAsync(() => _ = _host!.Services.GetRequiredService<CaptureCoordinator>().CaptureRegionAsync(CancellationToken.None)),
-                "screen-color-picker" => () => Dispatcher.InvokeAsync(() => _host!.Services.GetRequiredService<ScreenColorPickerService>().PickAtCursor()),
-                "record-screen"       => () => Dispatcher.InvokeAsync(() => _ = _host!.Services.GetRequiredService<Services.Recording.RecordingCoordinator>().ToggleAsync(ShareQ.Capture.Recording.RecordingFormat.Mp4, CancellationToken.None)),
-                "record-screen-gif"   => () => Dispatcher.InvokeAsync(() => _ = _host!.Services.GetRequiredService<Services.Recording.RecordingCoordinator>().ToggleAsync(ShareQ.Capture.Recording.RecordingFormat.Gif, CancellationToken.None)),
-                _ => null,
-            };
-            if (callback is null) return;
-            _keyboardHook.Register(def.Id, def.Modifiers, def.VirtualKey, callback, suppress: true);
+                hotkeyLogger.LogInformation("Hotkey {Id} cleared", def.Id);
+                return;
+            }
+            _keyboardHook.Register(def.Id, def.Modifiers, def.VirtualKey, MakeCallback(def.Id), suppress: true);
             hotkeyLogger.LogInformation("Hotkey {Id} re-bound to {Combo}",
                 def.Id, ShareQ.App.Services.Hotkeys.HotkeyDisplay.Format(def.Modifiers, def.VirtualKey));
         };

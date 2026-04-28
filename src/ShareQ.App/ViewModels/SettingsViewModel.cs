@@ -9,12 +9,18 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly PluginRegistry _registry;
 
-    public SettingsViewModel(PluginRegistry registry, UploadersViewModel uploaders, HotkeysViewModel hotkeys, CaptureDefaultsViewModel capture)
+    public SettingsViewModel(
+        PluginRegistry registry,
+        UploadersViewModel uploaders,
+        HotkeysViewModel hotkeys,
+        CaptureDefaultsViewModel capture,
+        WorkflowsViewModel workflows)
     {
         _registry = registry;
         Uploaders = uploaders;
         Hotkeys = hotkeys;
         Capture = capture;
+        Workflows = workflows;
         Plugins = [];
         AppVersion = typeof(SettingsViewModel).Assembly.GetName().Version?.ToString() ?? "dev";
         _ = LoadPluginsAsync();
@@ -24,6 +30,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public UploadersViewModel Uploaders { get; }
     public HotkeysViewModel Hotkeys { get; }
     public CaptureDefaultsViewModel Capture { get; }
+    public WorkflowsViewModel Workflows { get; }
 
     [ObservableProperty]
     private SettingsTab _selectedTab = SettingsTab.Home;
@@ -33,6 +40,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool IsUploadersSelected => SelectedTab == SettingsTab.Uploaders;
     public bool IsHotkeysSelected   => SelectedTab == SettingsTab.Hotkeys;
     public bool IsCaptureSelected   => SelectedTab == SettingsTab.Capture;
+    public bool IsWorkflowsSelected => SelectedTab == SettingsTab.Workflows;
     public bool IsAboutSelected     => SelectedTab == SettingsTab.About;
 
     public string AppVersion { get; }
@@ -44,12 +52,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsUploadersSelected));
         OnPropertyChanged(nameof(IsHotkeysSelected));
         OnPropertyChanged(nameof(IsCaptureSelected));
+        OnPropertyChanged(nameof(IsWorkflowsSelected));
         OnPropertyChanged(nameof(IsAboutSelected));
-        // Refresh the uploaders view so plugin enable/disable changes from the Plugins tab are
-        // reflected (greyed-out checkboxes for disabled plugins).
         if (value == SettingsTab.Uploaders) _ = Uploaders.ReloadAsync();
         if (value == SettingsTab.Hotkeys) _ = Hotkeys.ReloadAsync();
-        if (value == SettingsTab.Capture) _ = Capture.AfterCapture.ReloadAsync();
+        if (value == SettingsTab.Workflows) _ = Workflows.ReloadAsync();
     }
 
     [RelayCommand] private void ShowHome()      => SelectedTab = SettingsTab.Home;
@@ -57,6 +64,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand] private void ShowUploaders() => SelectedTab = SettingsTab.Uploaders;
     [RelayCommand] private void ShowHotkeys()   => SelectedTab = SettingsTab.Hotkeys;
     [RelayCommand] private void ShowCapture()   => SelectedTab = SettingsTab.Capture;
+    [RelayCommand] private void ShowWorkflows() => SelectedTab = SettingsTab.Workflows;
     [RelayCommand] private void ShowAbout()     => SelectedTab = SettingsTab.About;
 
     private async Task LoadPluginsAsync()
@@ -70,4 +78,4 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 }
 
-public enum SettingsTab { Home, Plugins, Uploaders, Hotkeys, Capture, About }
+public enum SettingsTab { Home, Plugins, Uploaders, Hotkeys, Capture, Workflows, About }

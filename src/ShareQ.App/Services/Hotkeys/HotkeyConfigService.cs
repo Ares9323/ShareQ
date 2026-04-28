@@ -1,78 +1,90 @@
-using System.Globalization;
+using ShareQ.Core.Pipeline;
 using ShareQ.Hotkeys;
-using ShareQ.Storage.Settings;
+using ShareQ.Pipeline.Profiles;
 
 namespace ShareQ.App.Services.Hotkeys;
 
 /// <summary>
-/// Catalog of user-rebindable hotkeys. Holds the canonical id → display name + default binding,
-/// reads/writes user overrides via <see cref="ISettingsStore"/>, and raises <see cref="Changed"/>
-/// when a binding changes so the App can unregister/re-register live.
+/// Catalog of user-rebindable hotkeys. After the workflow refactor, the source of truth is the
+/// <see cref="PipelineProfile.Hotkey"/> field on each profile; this service is a thin adapter that
+/// lets the existing Settings → Hotkeys UI keep working until that tab is folded into the
+/// Workflows view in the next sprint.
+///
+/// "Unbound" is represented as <see cref="HotkeyModifiers.None"/> + <c>VirtualKey == 0</c> so
+/// callers don't have to deal with a nullable binding type. Use <see cref="ClearAsync"/> to remove
+/// a binding the user no longer wants.
 /// </summary>
 public sealed class HotkeyConfigService
 {
     public sealed record HotkeyEntry(string Id, string DisplayName, HotkeyModifiers DefaultModifiers, uint DefaultVirtualKey);
 
-    /// <summary>Canonical list of hotkeys exposed in the Settings UI. All bindings go through the
-    /// low-level keyboard hook with suppress=true, so any combo (including OS-reserved ones like
-    /// Win+V or Win+Shift+S) can be rebound here.</summary>
-    public static readonly IReadOnlyList<HotkeyEntry> Catalog =
-    [
-        new("popup",                "Show clipboard",          HotkeyModifiers.Win,                              0x56), // Win+V
-        new("incognito",            "Toggle incognito",        HotkeyModifiers.Control | HotkeyModifiers.Alt,    0x49), // Ctrl+Alt+I
-        new("capture-region",       "Region capture",          HotkeyModifiers.Control | HotkeyModifiers.Alt,    0x52), // Ctrl+Alt+R
-        new("screen-color-picker",  "Screen color picker",     HotkeyModifiers.Control | HotkeyModifiers.Shift,  0x50), // Ctrl+Shift+P
-        new("record-screen",        "Screen recording (mp4)",  HotkeyModifiers.Control | HotkeyModifiers.Alt,    0x53), // Ctrl+Alt+S
-        new("record-screen-gif",    "Screen recording (gif)",  HotkeyModifiers.Control | HotkeyModifiers.Alt,    0x47), // Ctrl+Alt+G
-    ];
+    private readonly IPipelineProfileStore _profiles;
 
-    private readonly ISettingsStore _settings;
-
-    public HotkeyConfigService(ISettingsStore settings)
+    public HotkeyConfigService(IPipelineProfileStore profiles)
     {
-        _settings = settings;
+        _profiles = profiles;
     }
 
     public event EventHandler<HotkeyDefinition>? Changed;
 
+    /// <summary>Workflow ids that the user can bind to a hotkey. Built from every default profile
+    /// whose <see cref="PipelineProfile.Trigger"/> starts with <c>"hotkey:"</c> — that includes
+    /// profiles shipped without a default binding (e.g. <c>open-screenshot-folder</c>).</summary>
+    public static readonly IReadOnlyList<HotkeyEntry> Catalog = BuildCatalog();
+
+    private static IReadOnlyList<HotkeyEntry> BuildCatalog()
+    {
+        var list = new List<HotkeyEntry>();
+        foreach (var profile in DefaultPipelineProfiles.All)
+        {
+            if (!profile.Trigger.StartsWith("hotkey:", StringComparison.Ordinal)) continue;
+            var mods = profile.Hotkey is { } hk ? (HotkeyModifiers)hk.Modifiers : HotkeyModifiers.None;
+            var vk = profile.Hotkey?.VirtualKey ?? 0u;
+            list.Add(new HotkeyEntry(profile.Id, profile.DisplayName, mods, vk));
+        }
+        return list;
+    }
+
+    /// <summary>Returns the user's current binding for a workflow, or the unbound sentinel
+    /// (<see cref="HotkeyModifiers.None"/>, VK 0) when the user has cleared it. The seeder ensures
+    /// the profile exists by start-up; the fallback covers race conditions where the seed runs
+    /// after a settings tab has already opened.</summary>
     public async Task<HotkeyDefinition> GetEffectiveAsync(string id, CancellationToken cancellationToken)
     {
+        ArgumentException.ThrowIfNullOrEmpty(id);
+        var profile = await _profiles.GetAsync(id, cancellationToken).ConfigureAwait(false);
+        if (profile is not null)
+        {
+            if (profile.Hotkey is { } binding)
+                return new HotkeyDefinition(id, (HotkeyModifiers)binding.Modifiers, binding.VirtualKey);
+            return new HotkeyDefinition(id, HotkeyModifiers.None, 0);
+        }
         var entry = Catalog.FirstOrDefault(e => e.Id == id)
-            ?? throw new ArgumentException($"unknown hotkey id '{id}'", nameof(id));
-        var raw = await _settings.GetAsync(KeyFor(id), cancellationToken).ConfigureAwait(false);
-        if (TryParse(raw, out var modifiers, out var vk))
-            return new HotkeyDefinition(id, modifiers, vk);
+            ?? throw new ArgumentException($"unknown workflow id '{id}'", nameof(id));
         return new HotkeyDefinition(id, entry.DefaultModifiers, entry.DefaultVirtualKey);
     }
 
     public async Task UpdateAsync(string id, HotkeyModifiers modifiers, uint virtualKey, CancellationToken cancellationToken)
     {
-        var serialized = string.Format(CultureInfo.InvariantCulture, "{0},{1}", (int)modifiers, virtualKey);
-        await _settings.SetAsync(KeyFor(id), serialized, sensitive: false, cancellationToken).ConfigureAwait(false);
+        ArgumentException.ThrowIfNullOrEmpty(id);
+        var profile = await _profiles.GetAsync(id, cancellationToken).ConfigureAwait(false);
+        if (profile is null) throw new ArgumentException($"workflow '{id}' not found", nameof(id));
+        var newBinding = virtualKey == 0 ? null : new HotkeyBinding((int)modifiers, virtualKey);
+        var updated = profile with { Hotkey = newBinding };
+        await _profiles.UpsertAsync(updated, cancellationToken).ConfigureAwait(false);
         Changed?.Invoke(this, new HotkeyDefinition(id, modifiers, virtualKey));
     }
 
+    /// <summary>Removes the workflow's hotkey binding. The runtime hook unregisters; the workflow
+    /// remains and can still be invoked from the tray / popup / future menu entries.</summary>
+    public Task ClearAsync(string id, CancellationToken cancellationToken)
+        => UpdateAsync(id, HotkeyModifiers.None, 0, cancellationToken);
+
     public async Task ResetAsync(string id, CancellationToken cancellationToken)
     {
+        ArgumentException.ThrowIfNullOrEmpty(id);
         var entry = Catalog.FirstOrDefault(e => e.Id == id)
-            ?? throw new ArgumentException($"unknown hotkey id '{id}'", nameof(id));
-        await _settings.RemoveAsync(KeyFor(id), cancellationToken).ConfigureAwait(false);
-        Changed?.Invoke(this, new HotkeyDefinition(id, entry.DefaultModifiers, entry.DefaultVirtualKey));
-    }
-
-    private static string KeyFor(string id) => $"hotkey.{id}";
-
-    private static bool TryParse(string? raw, out HotkeyModifiers modifiers, out uint virtualKey)
-    {
-        modifiers = HotkeyModifiers.None;
-        virtualKey = 0;
-        if (string.IsNullOrEmpty(raw)) return false;
-        var parts = raw.Split(',');
-        if (parts.Length != 2) return false;
-        if (!int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var modInt)) return false;
-        if (!uint.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var vk)) return false;
-        modifiers = (HotkeyModifiers)modInt;
-        virtualKey = vk;
-        return true;
+            ?? throw new ArgumentException($"unknown workflow id '{id}'", nameof(id));
+        await UpdateAsync(id, entry.DefaultModifiers, entry.DefaultVirtualKey, cancellationToken).ConfigureAwait(false);
     }
 }

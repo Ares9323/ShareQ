@@ -49,4 +49,12 @@ public sealed partial class HotkeyItemViewModel : ObservableObject
         UpdateBindingDisplay(new HotkeyDefinition(Id, entry.DefaultModifiers, entry.DefaultVirtualKey));
         _refreshList();
     }
+
+    [RelayCommand]
+    private async Task Clear()
+    {
+        await _config.ClearAsync(Id, CancellationToken.None).ConfigureAwait(true);
+        UpdateBindingDisplay(new HotkeyDefinition(Id, HotkeyModifiers.None, 0));
+        _refreshList();
+    }
 }

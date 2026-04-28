@@ -55,7 +55,7 @@ public sealed class SqlitePipelineProfileStore : IPipelineProfileStore
         cmd.Parameters.AddWithValue("$id", profile.Id);
         cmd.Parameters.AddWithValue("$display", profile.DisplayName);
         cmd.Parameters.AddWithValue("$trigger", profile.Trigger);
-        cmd.Parameters.AddWithValue("$tasks", PipelineProfileSerializer.SerializeSteps(profile.Steps));
+        cmd.Parameters.AddWithValue("$tasks", PipelineProfileSerializer.SerializeBody(profile));
         await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -76,7 +76,7 @@ public sealed class SqlitePipelineProfileStore : IPipelineProfileStore
         var displayName = reader.GetString(1);
         var trigger = reader.GetString(2);
         var tasksJson = reader.GetString(3);
-        var steps = PipelineProfileSerializer.DeserializeSteps(tasksJson);
-        return new PipelineProfile(id, displayName, trigger, steps);
+        var (steps, hotkey, isBuiltIn) = PipelineProfileSerializer.DeserializeBody(tasksJson);
+        return new PipelineProfile(id, displayName, trigger, steps, hotkey, isBuiltIn);
     }
 }
