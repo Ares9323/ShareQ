@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ShareQ.Core.Domain;
 using ShareQ.Storage.Items;
 
 namespace ShareQ.App.ViewModels;
@@ -8,6 +10,7 @@ namespace ShareQ.App.ViewModels;
 public sealed partial class PopupWindowViewModel : ObservableObject
 {
     private readonly IItemStore _items;
+    private long _previewLoadToken;
 
     public PopupWindowViewModel(IItemStore items)
     {
@@ -22,6 +25,84 @@ public sealed partial class PopupWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private ItemRowViewModel? _selectedRow;
+
+    // Preview state for the side panel. Code-behind on PopupWindow watches Rtf/Html bytes since
+    // those formats can't be data-bound directly into RichTextBox / WebBrowser.
+    [ObservableProperty] private PreviewKind _previewKind = PreviewKind.None;
+    [ObservableProperty] private string? _previewText;
+    [ObservableProperty] private byte[]? _previewImageBytes;
+    [ObservableProperty] private byte[]? _previewRtfBytes;
+    [ObservableProperty] private string? _previewHtml;
+    [ObservableProperty] private string? _previewMeta;
+
+    public bool IsTextPreview => PreviewKind == PreviewKind.Text;
+    public bool IsHtmlPreview => PreviewKind == PreviewKind.Html;
+    public bool IsRtfPreview => PreviewKind == PreviewKind.Rtf;
+    public bool IsImagePreview => PreviewKind == PreviewKind.Image;
+    public bool HasPreview => PreviewKind != PreviewKind.None;
+
+    partial void OnPreviewKindChanged(PreviewKind value)
+    {
+        OnPropertyChanged(nameof(IsTextPreview));
+        OnPropertyChanged(nameof(IsHtmlPreview));
+        OnPropertyChanged(nameof(IsRtfPreview));
+        OnPropertyChanged(nameof(IsImagePreview));
+        OnPropertyChanged(nameof(HasPreview));
+    }
+
+    partial void OnSelectedRowChanged(ItemRowViewModel? value)
+    {
+        // Cancel any in-flight load and start fresh.
+        var token = System.Threading.Interlocked.Increment(ref _previewLoadToken);
+        _ = LoadPreviewAsync(value, token);
+    }
+
+    private async Task LoadPreviewAsync(ItemRowViewModel? row, long token)
+    {
+        if (row is null)
+        {
+            ApplyPreview(PreviewKind.None, null, null, null, null, null);
+            return;
+        }
+
+        var record = await _items.GetByIdAsync(row.Id, CancellationToken.None).ConfigureAwait(true);
+        if (token != System.Threading.Interlocked.Read(ref _previewLoadToken)) return;
+        if (record is null) { ApplyPreview(PreviewKind.None, null, null, null, null, null); return; }
+
+        var payload = record.Payload;
+        var meta = $"{record.Kind} · {row.SourceProcess} · {row.Age}";
+        switch (record.Kind)
+        {
+            case ItemKind.Text:
+                ApplyPreview(PreviewKind.Text, Encoding.UTF8.GetString(payload.Span), null, null, null, meta);
+                break;
+            case ItemKind.Html:
+                ApplyPreview(PreviewKind.Html, null, null, null, Encoding.UTF8.GetString(payload.Span), meta);
+                break;
+            case ItemKind.Rtf:
+                ApplyPreview(PreviewKind.Rtf, null, null, payload.ToArray(), null, meta);
+                break;
+            case ItemKind.Image:
+                ApplyPreview(PreviewKind.Image, null, payload.ToArray(), null, null, meta);
+                break;
+            case ItemKind.Files:
+                ApplyPreview(PreviewKind.Text, Encoding.UTF8.GetString(payload.Span), null, null, null, meta);
+                break;
+            default:
+                ApplyPreview(PreviewKind.None, null, null, null, null, meta);
+                break;
+        }
+    }
+
+    private void ApplyPreview(PreviewKind kind, string? text, byte[]? image, byte[]? rtf, string? html, string? meta)
+    {
+        PreviewKind = kind;
+        PreviewText = text;
+        PreviewImageBytes = image;
+        PreviewRtfBytes = rtf;
+        PreviewHtml = html;
+        PreviewMeta = meta;
+    }
 
     public async Task RefreshAsync(CancellationToken cancellationToken)
     {
@@ -70,3 +151,5 @@ public sealed partial class PopupWindowViewModel : ObservableObject
         return string.IsNullOrEmpty(text) ? null : text;
     }
 }
+
+public enum PreviewKind { None, Text, Html, Rtf, Image }

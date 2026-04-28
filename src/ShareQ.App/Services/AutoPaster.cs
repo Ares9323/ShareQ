@@ -34,10 +34,25 @@ public sealed class AutoPaster
             switch (record.Kind)
             {
                 case ItemKind.Text:
+                    var plainText = Encoding.UTF8.GetString(record.Payload.Span);
+                    System.Windows.Clipboard.SetText(plainText);
+                    break;
+
                 case ItemKind.Html:
+                    // SearchText (CF_UNICODETEXT or HTML-stripped fallback) is the clean plaintext we
+                    // captured at copy time. Pasting raw HTML payload as text would dump <p>/<span>
+                    // markup into the target.
+                    var htmlPlain = !string.IsNullOrEmpty(record.SearchText)
+                        ? record.SearchText
+                        : ClipboardCleaning.HtmlToPlain(Encoding.UTF8.GetString(record.Payload.Span));
+                    System.Windows.Clipboard.SetText(htmlPlain);
+                    break;
+
                 case ItemKind.Rtf:
-                    var text = Encoding.UTF8.GetString(record.Payload.Span);
-                    System.Windows.Clipboard.SetText(text);
+                    var rtfPlain = !string.IsNullOrEmpty(record.SearchText)
+                        ? record.SearchText
+                        : ClipboardCleaning.RtfToPlain(Encoding.UTF8.GetString(record.Payload.Span));
+                    System.Windows.Clipboard.SetText(rtfPlain);
                     break;
 
                 case ItemKind.Image:

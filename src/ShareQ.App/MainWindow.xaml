@@ -112,6 +112,7 @@
 
         <!-- Right pane: preview + actions -->
         <Border Grid.Row="1" Grid.RowSpan="3" Grid.Column="1"
+                Background="#1A1A1A"
                 BorderBrush="#333" BorderThickness="1,0,0,0">
             <Grid>
                 <Grid.RowDefinitions>
@@ -131,10 +132,24 @@
                             <TextBox Text="{Binding SelectedItemPreviewText, Mode=OneWay}"
                                      IsReadOnly="True"
                                      Background="Transparent"
+                                     Foreground="#DDDDDD"
                                      BorderThickness="0"
                                      FontFamily="Consolas" FontSize="13"
                                      TextWrapping="Wrap" AcceptsReturn="True" />
                         </ScrollViewer>
+                        <!-- RTF preview -->
+                        <RichTextBox x:Name="RtfPreviewBox"
+                                     IsReadOnly="True"
+                                     IsTabStop="False"
+                                     Background="#1E1E1E"
+                                     Foreground="#DDDDDD"
+                                     BorderThickness="0"
+                                     VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Disabled"
+                                     Visibility="{Binding SelectedItemRtfBytes, Converter={StaticResource NotNullToVisibility}}" />
+                        <!-- HTML preview -->
+                        <WebBrowser x:Name="HtmlPreviewBox"
+                                    Visibility="{Binding SelectedItemHtml, Converter={StaticResource NonEmptyToVisibility}}" />
                         <!-- Empty placeholder -->
                         <TextBlock Text="Select an item to preview"
                                    Foreground="#666"

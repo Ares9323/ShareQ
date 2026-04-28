@@ -38,13 +38,38 @@ public sealed class ItemRowViewModel
 
     private static string BuildPreview(ItemRecord record)
     {
-        if (!string.IsNullOrWhiteSpace(record.SearchText)) return Truncate(record.SearchText!, 200);
+        if (!string.IsNullOrWhiteSpace(record.SearchText))
+        {
+            // Older rows (pre-fix) stored raw CF_HTML / RTF text into SearchText. Sanitize at display
+            // time so the popup/list don't show "Version:0.9 StartHTML:..." gibberish.
+            return Truncate(SanitizeSearchText(record.SearchText!, record.Kind), 200);
+        }
         if (record.Kind is ItemKind.Image) return "[image]";
         if (record.Kind is ItemKind.Video) return "[video]";
         if (record.Kind is ItemKind.Files) return "[files]";
         if (record.Payload.Length == 0) return string.Empty;
         try { return Truncate(Encoding.UTF8.GetString(record.Payload.Span), 200); }
         catch { return "[binary]"; }
+    }
+
+    private static string SanitizeSearchText(string text, ItemKind kind)
+    {
+        if (kind == ItemKind.Html && text.Contains("StartHTML:", StringComparison.OrdinalIgnoreCase))
+        {
+            var firstTag = text.IndexOf('<');
+            if (firstTag > 0) text = text[firstTag..];
+            text = System.Text.RegularExpressions.Regex.Replace(text, "<[^>]+>", " ");
+            text = System.Net.WebUtility.HtmlDecode(text);
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+        }
+        else if (kind == ItemKind.Rtf && text.StartsWith(@"{\rtf", StringComparison.OrdinalIgnoreCase))
+        {
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"\\'[0-9a-fA-F]{2}", " ");
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"\\[a-zA-Z]+-?\d* ?", " ");
+            text = text.Replace("{", " ").Replace("}", " ");
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+        }
+        return text;
     }
 
     private static string Truncate(string s, int max)

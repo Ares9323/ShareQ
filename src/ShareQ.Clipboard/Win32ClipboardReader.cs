@@ -3,6 +3,7 @@ using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
+using System.Text.RegularExpressions;
 using ShareQ.Clipboard.Native;
 
 namespace ShareQ.Clipboard;
@@ -55,12 +56,21 @@ public sealed class Win32ClipboardReader : IClipboardReader
         if (ClipboardNativeMethods.IsClipboardFormatAvailable(_cfHtml))
         {
             var bytes = ReadGlobalBytes(_cfHtml);
-            return (ClipboardFormat.Html, bytes, ExtractPreview(bytes), null);
+            // Prefer CF_UNICODETEXT (UTF-16, always clean) for the preview when available — some
+            // sources put double-encoded UTF-8 in CF_HTML and our extractor would inherit the
+            // mojibake. Fall back to extracting plaintext from the HTML body otherwise.
+            var preview = ClipboardNativeMethods.IsClipboardFormatAvailable(ClipboardNativeMethods.CfUnicodeText)
+                ? TruncatePreview(ReadUnicodeText())
+                : ExtractHtmlPreview(bytes);
+            return (ClipboardFormat.Html, bytes, preview, null);
         }
         if (ClipboardNativeMethods.IsClipboardFormatAvailable(_cfRtf))
         {
             var bytes = ReadGlobalBytes(_cfRtf);
-            return (ClipboardFormat.Rtf, bytes, ExtractPreview(bytes), null);
+            var preview = ClipboardNativeMethods.IsClipboardFormatAvailable(ClipboardNativeMethods.CfUnicodeText)
+                ? TruncatePreview(ReadUnicodeText())
+                : ExtractRtfPreview(bytes);
+            return (ClipboardFormat.Rtf, bytes, preview, null);
         }
         if (ClipboardNativeMethods.IsClipboardFormatAvailable(ClipboardNativeMethods.CfUnicodeText))
         {
@@ -137,6 +147,62 @@ public sealed class Win32ClipboardReader : IClipboardReader
     {
         if (bytes.Length == 0) return string.Empty;
         var text = Encoding.UTF8.GetString(bytes);
+        if (text.Length > 256) text = text[..256] + "…";
+        return text;
+    }
+
+    private static string TruncatePreview(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return string.Empty;
+        return text.Length > 256 ? text[..256] + "…" : text;
+    }
+
+    /// <summary>Strips CF_HTML preamble + tags so the row preview / FTS index sees readable text
+    /// instead of "Version:0.9 StartHTML:..." gibberish.</summary>
+    private static string ExtractHtmlPreview(byte[] bytes)
+    {
+        if (bytes.Length == 0) return string.Empty;
+        var text = Encoding.UTF8.GetString(bytes);
+
+        var fragStart = text.IndexOf("<!--StartFragment-->", StringComparison.OrdinalIgnoreCase);
+        if (fragStart >= 0) text = text[(fragStart + "<!--StartFragment-->".Length)..];
+        var fragEnd = text.IndexOf("<!--EndFragment-->", StringComparison.OrdinalIgnoreCase);
+        if (fragEnd >= 0) text = text[..fragEnd];
+
+        // No marker — drop the key:value preamble lines (Version:, StartHTML:, etc.) by skipping to
+        // the first '<' if a known preamble key is present before it.
+        if (fragStart < 0)
+        {
+            var firstTag = text.IndexOf('<');
+            if (firstTag > 0)
+            {
+                var head = text[..firstTag];
+                if (head.Contains("Version:", StringComparison.OrdinalIgnoreCase)
+                    || head.Contains("StartHTML:", StringComparison.OrdinalIgnoreCase)
+                    || head.Contains("StartFragment:", StringComparison.OrdinalIgnoreCase))
+                {
+                    text = text[firstTag..];
+                }
+            }
+        }
+
+        text = Regex.Replace(text, "<[^>]+>", " ");
+        text = System.Net.WebUtility.HtmlDecode(text);
+        text = Regex.Replace(text, @"\s+", " ").Trim();
+        if (text.Length > 256) text = text[..256] + "…";
+        return text;
+    }
+
+    /// <summary>Strips RTF control words so the row preview / FTS sees readable text.</summary>
+    private static string ExtractRtfPreview(byte[] bytes)
+    {
+        if (bytes.Length == 0) return string.Empty;
+        var text = Encoding.UTF8.GetString(bytes);
+        // \word, \word123, \'hh hex escapes, then strip braces and collapse whitespace.
+        text = Regex.Replace(text, @"\\'[0-9a-fA-F]{2}", " ");
+        text = Regex.Replace(text, @"\\[a-zA-Z]+-?\d* ?", " ");
+        text = text.Replace("{", " ").Replace("}", " ");
+        text = Regex.Replace(text, @"\s+", " ").Trim();
         if (text.Length > 256) text = text[..256] + "…";
         return text;
     }

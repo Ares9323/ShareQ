@@ -111,7 +111,7 @@ public sealed class ItemStore : IItemStore
         cmd.CommandText = sql.ToString();
         if (query.Kind is not null) cmd.Parameters.AddWithValue("$kind", query.Kind.Value.ToString());
         if (query.Pinned is not null) cmd.Parameters.AddWithValue("$pinned", query.Pinned.Value ? 1 : 0);
-        if (hasFts) cmd.Parameters.AddWithValue("$search", query.Search!);
+        if (hasFts) cmd.Parameters.AddWithValue("$search", BuildFtsQuery(query.Search!));
         cmd.Parameters.AddWithValue("$limit", query.Limit);
         cmd.Parameters.AddWithValue("$offset", query.Offset);
 
@@ -201,6 +201,21 @@ public sealed class ItemStore : IItemStore
         var rows = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         if (rows == 1) ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.Updated, id));
         return rows == 1;
+    }
+
+    /// <summary>Turn user-typed search text into an FTS5 query: split on whitespace, drop reserved
+    /// characters, append '*' so terms become prefix matches (so "col" finds "colored").</summary>
+    private static string BuildFtsQuery(string raw)
+    {
+        var terms = raw.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var safe = new List<string>(terms.Length);
+        foreach (var term in terms)
+        {
+            var cleaned = new string(term.Where(c => char.IsLetterOrDigit(c) || c == '_').ToArray());
+            if (cleaned.Length == 0) continue;
+            safe.Add(cleaned + "*");
+        }
+        return safe.Count == 0 ? raw : string.Join(' ', safe);
     }
 
     private async Task<long?> TryDedupAsync(SqliteConnection conn, NewItem item, CancellationToken cancellationToken)

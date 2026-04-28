@@ -3,10 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:ShareQ.App.ViewModels"
         Title="ShareQ — Clipboard"
-        Width="640" Height="520"
+        Width="920" Height="520"
         WindowStartupLocation="Manual"
         WindowStyle="None"
-        AllowsTransparency="True"
+        AllowsTransparency="False"
         Background="#1E1E1E"
         Foreground="White"
         Topmost="True"
@@ -18,9 +18,15 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" MinWidth="380" />
+            <ColumnDefinition Width="320" />
+        </Grid.ColumnDefinitions>
 
         <TextBox x:Name="SearchBox"
                  Grid.Row="0"
+                 Grid.Column="0"
+                 Grid.ColumnSpan="2"
                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                  FontSize="16"
                  Padding="8"
@@ -32,7 +38,8 @@
 
         <ListBox x:Name="ResultsList"
                  Grid.Row="1"
-                 Margin="0,8,0,8"
+                 Grid.Column="0"
+                 Margin="0,8,8,8"
                  Background="Transparent"
                  BorderThickness="0"
                  ItemsSource="{Binding Rows}"
@@ -100,7 +107,67 @@
             </ListBox.ItemTemplate>
         </ListBox>
 
+        <!-- Side panel: rich preview of the selected row. Code-behind on PopupWindow watches the
+             VM's PreviewRtfBytes / PreviewHtml since RichTextBox.Document and WebBrowser content
+             can't be data-bound directly. -->
+        <Border Grid.Row="1" Grid.Column="1"
+                Margin="0,8,0,8"
+                Background="#1A1A1A"
+                BorderBrush="#333" BorderThickness="1"
+                CornerRadius="4">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0"
+                           Margin="8,6"
+                           Foreground="#888"
+                           FontSize="11"
+                           TextTrimming="CharacterEllipsis"
+                           Text="{Binding PreviewMeta}" />
+                <Grid Grid.Row="1" Margin="0,0,0,4">
+                    <!-- Image preview -->
+                    <Image Source="{Binding PreviewImageBytes, Converter={StaticResource BytesToImage}}"
+                           Stretch="Uniform"
+                           Margin="8"
+                           Visibility="{Binding IsImagePreview, Converter={StaticResource BoolToVisibility}}" />
+                    <!-- Plain text preview -->
+                    <TextBox Text="{Binding PreviewText, Mode=OneWay}"
+                             IsReadOnly="True"
+                             IsTabStop="False"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Disabled"
+                             Background="Transparent"
+                             Foreground="White"
+                             BorderThickness="0"
+                             FontSize="12"
+                             Margin="6,0,6,6"
+                             Visibility="{Binding IsTextPreview, Converter={StaticResource BoolToVisibility}}" />
+                    <!-- RTF preview -->
+                    <RichTextBox x:Name="RtfPreviewBox"
+                                 IsReadOnly="True"
+                                 IsTabStop="False"
+                                 Background="Transparent"
+                                 Foreground="White"
+                                 BorderThickness="0"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Disabled"
+                                 Margin="6,0,6,6"
+                                 Visibility="{Binding IsRtfPreview, Converter={StaticResource BoolToVisibility}}" />
+                    <!-- HTML preview -->
+                    <WebBrowser x:Name="HtmlPreviewBox"
+                                Margin="6,0,6,6"
+                                Visibility="{Binding IsHtmlPreview, Converter={StaticResource BoolToVisibility}}" />
+                </Grid>
+            </Grid>
+        </Border>
+
         <TextBlock Grid.Row="2"
+                   Grid.Column="0"
+                   Grid.ColumnSpan="2"
                    Foreground="#666"
                    FontSize="11"
                    Text="↑↓ navigate · Enter paste · Ctrl+1-9 quick paste · Ctrl+P pin · Esc close" />

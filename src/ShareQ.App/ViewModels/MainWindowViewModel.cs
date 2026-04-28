@@ -54,6 +54,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private string _selectedItemPreviewText = string.Empty;
 
     [ObservableProperty]
+    private byte[]? _selectedItemRtfBytes;
+
+    [ObservableProperty]
+    private string? _selectedItemHtml;
+
+    [ObservableProperty]
     private string _statusText = string.Empty;
 
     /// <summary>BlobRef of the currently-selected item (file path on disk for capture-saved items).</summary>
@@ -82,6 +88,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         SelectedItemPayload = null;
         SelectedItemPreviewText = string.Empty;
+        SelectedItemRtfBytes = null;
+        SelectedItemHtml = null;
         SelectedItemBlobRef = null;
         if (value is null) return;
         _ = LoadSelectedItemAsync(value.Id);
@@ -195,14 +203,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var record = await _items.GetByIdAsync(id, CancellationToken.None).ConfigureAwait(true);
         if (record is null || record.Id != (SelectedItem?.Id ?? -1)) return;
         SelectedItemBlobRef = record.BlobRef;
-        if (record.Kind == ItemKind.Image)
+        switch (record.Kind)
         {
-            SelectedItemPayload = record.Payload.ToArray();
-        }
-        else if (record.Kind == ItemKind.Text)
-        {
-            try { SelectedItemPreviewText = System.Text.Encoding.UTF8.GetString(record.Payload.Span); }
-            catch { SelectedItemPreviewText = "[binary]"; }
+            case ItemKind.Image:
+                SelectedItemPayload = record.Payload.ToArray();
+                break;
+            case ItemKind.Rtf:
+                SelectedItemRtfBytes = record.Payload.ToArray();
+                break;
+            case ItemKind.Html:
+                SelectedItemHtml = System.Text.Encoding.UTF8.GetString(record.Payload.Span);
+                break;
+            case ItemKind.Text:
+            case ItemKind.Files:
+                try { SelectedItemPreviewText = System.Text.Encoding.UTF8.GetString(record.Payload.Span); }
+                catch { SelectedItemPreviewText = "[binary]"; }
+                break;
         }
         TogglePinCommand.NotifyCanExecuteChanged();
         OpenInEditorCommand.NotifyCanExecuteChanged();
