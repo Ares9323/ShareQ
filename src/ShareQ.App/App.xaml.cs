@@ -94,6 +94,7 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, CopyImageToClipboardTask>();
                 services.AddSingleton<IPipelineTask, CopyTextToClipboardTask>();
                 services.AddSingleton<IPipelineTask, NotifyToastTask>();
+                services.AddSingleton<IPipelineTask, OpenEditorBeforeUploadTask>();
 
                 services.AddSingleton<NativeClipboardHistoryProbe>();
                 services.AddSingleton<NativeClipboardHistoryBanner>();
@@ -120,6 +121,7 @@ public partial class App : Application
                 services.AddSingleton<ShareQ.App.Services.Hotkeys.HotkeyConfigService>();
                 services.AddSingleton<UploadersViewModel>();
                 services.AddSingleton<HotkeysViewModel>();
+                services.AddSingleton<AfterCaptureViewModel>();
                 services.AddSingleton<CaptureDefaultsViewModel>();
                 services.AddSingleton<SettingsViewModel>();
                 services.AddSingleton<MainWindow>();

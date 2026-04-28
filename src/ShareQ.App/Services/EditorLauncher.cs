@@ -86,4 +86,60 @@ public sealed class EditorLauncher
         await _items.UpdatePayloadAsync(itemId, bytes, bytes.LongLength, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("EditorLauncher: saved {Bytes} bytes back to item {Id}", bytes.Length, itemId);
     }
+
+    /// <summary>
+    /// Open the editor on raw PNG bytes (no <c>ItemStore</c> round-trip). Used by the pipeline's
+    /// "Open editor before upload" step so the user can annotate the capture before subsequent
+    /// steps (upload, copy-image, save) see it. Returns the edited PNG bytes on save, or null
+    /// when the user cancelled — in that case the caller keeps the original bytes.
+    /// </summary>
+    public async Task<byte[]?> EditAsync(byte[] sourcePngBytes, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sourcePngBytes);
+        if (sourcePngBytes.Length == 0) return null;
+
+        var recents = await _recentsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        ColorSwatchButton.CurrentRecents = recents;
+        ColorSwatchButton.OnColorPicked = c => _ = _recentsStore.PushAsync(c, CancellationToken.None);
+
+        var defaults = await _defaultsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+
+        // Editor is WPF — must be created and shown on the UI thread. The pipeline runs on a
+        // background thread, so dispatch.
+        var dispatcher = System.Windows.Application.Current.Dispatcher;
+        var resultTcs = new TaskCompletionSource<byte[]?>();
+
+        await dispatcher.InvokeAsync(() =>
+        {
+            var window = _services.GetRequiredService<EditorWindow>();
+            var vm = (EditorViewModel)window.DataContext;
+            vm.SourcePngBytes = sourcePngBytes;
+            vm.EditingItemId = 0; // synthetic — there's no DB item to write back to
+            vm.OutlineColor = defaults.Outline;
+            vm.FillColor = defaults.Fill;
+            vm.StrokeWidth = defaults.StrokeWidth;
+            vm.CurrentTool = defaults.Tool;
+            vm.CurrentTextStyle = defaults.TextStyle;
+            vm.ResetStepCounter();
+            window.Owner = System.Windows.Application.Current.MainWindow;
+            window.ShowDialog();
+
+            _ = _defaultsStore.SaveAsync(
+                new EditorDefaults(vm.OutlineColor, vm.FillColor, vm.StrokeWidth, vm.CurrentTool, vm.CurrentTextStyle),
+                CancellationToken.None);
+
+            if (!window.Saved)
+            {
+                resultTcs.SetResult(null);
+                return;
+            }
+
+            var canvasHost = (Grid)window.FindName("CanvasHost")!;
+            var edited = CanvasPngExporter.Export(canvasHost, canvasHost.ActualWidth, canvasHost.ActualHeight);
+            _logger.LogInformation("EditorLauncher.EditAsync: returning {Bytes} edited bytes", edited.Length);
+            resultTcs.SetResult(edited);
+        }).Task.ConfigureAwait(false);
+
+        return await resultTcs.Task.ConfigureAwait(false);
+    }
 }

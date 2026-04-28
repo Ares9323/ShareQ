@@ -49,6 +49,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         // reflected (greyed-out checkboxes for disabled plugins).
         if (value == SettingsTab.Uploaders) _ = Uploaders.ReloadAsync();
         if (value == SettingsTab.Hotkeys) _ = Hotkeys.ReloadAsync();
+        if (value == SettingsTab.Capture) _ = Capture.AfterCapture.ReloadAsync();
     }
 
     [RelayCommand] private void ShowHome()      => SelectedTab = SettingsTab.Home;

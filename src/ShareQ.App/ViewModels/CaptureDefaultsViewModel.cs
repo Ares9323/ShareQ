@@ -14,11 +14,14 @@ public sealed partial class CaptureDefaultsViewModel : ObservableObject
 
     private readonly ISettingsStore _settings;
 
-    public CaptureDefaultsViewModel(ISettingsStore settings)
+    public CaptureDefaultsViewModel(ISettingsStore settings, AfterCaptureViewModel afterCapture)
     {
         _settings = settings;
+        AfterCapture = afterCapture;
         _ = LoadAsync();
     }
+
+    public AfterCaptureViewModel AfterCapture { get; }
 
     [ObservableProperty]
     private string _folder = DefaultFolder;

@@ -20,6 +20,7 @@ public static class PipelineProfileSerializer
                 ["enabled"] = step.Enabled,
                 ["abort_on_error"] = step.AbortOnError
             };
+            if (!string.IsNullOrEmpty(step.Id)) obj["id"] = step.Id;
             if (step.Config is not null) obj["config"] = step.Config.DeepClone();
             array.Add(obj);
         }
@@ -43,8 +44,9 @@ public static class PipelineProfileSerializer
                 ?? throw new InvalidDataException("Task entry missing 'task_id'.");
             var enabled = (bool?)obj["enabled"] ?? true;
             var abortOnError = (bool?)obj["abort_on_error"] ?? false;
+            var id = (string?)obj["id"];
             var config = obj["config"]?.DeepClone();
-            result.Add(new PipelineStep(taskId, config, enabled, abortOnError));
+            result.Add(new PipelineStep(taskId, config, enabled, abortOnError, id));
         }
         return result;
     }

@@ -13,6 +13,7 @@ public static class DefaultPipelineProfiles
     public const string CopyImageToClipboardTaskId = "shareq.copy-image-to-clipboard";
     public const string CopyTextToClipboardTaskId = "shareq.copy-text-to-clipboard";
     public const string NotifyToastTaskId = "shareq.notify-toast";
+    public const string OpenEditorBeforeUploadTaskId = "shareq.open-editor-before-upload";
 
     // Task IDs from ShareQ.Plugins.
     public const string UploadTaskId = "shareq.upload";
@@ -36,19 +37,17 @@ public static class DefaultPipelineProfiles
             Trigger: "hotkey:region",
             Steps:
             [
-                // Folder comes from Settings → Capture (capture.folder), with default fallback in SaveToFileTask.
-                new PipelineStep(SaveToFileTask.TaskId),
-                new PipelineStep(AddToHistoryTask.TaskId),
-                // Image goes on the clipboard immediately as a fallback so the user has something to
-                // paste even if the upload is slow/fails.
-                new PipelineStep(CopyImageToClipboardTaskId),
-                // Resolves to the user's selected uploaders for the "image" category from Settings.
-                new PipelineStep(UploadTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"category\":\"image\"}")),
+                // Each toggleable step carries an Id so Settings → Capture → After capture tasks
+                // can override its enabled flag per profile/step. Steps with null id are mandatory
+                // (e.g. UpdateItemUrl is internal plumbing).
+                new PipelineStep(OpenEditorBeforeUploadTaskId, Enabled: false, Id: "open-editor"),
+                new PipelineStep(SaveToFileTask.TaskId, Id: "save"),
+                new PipelineStep(AddToHistoryTask.TaskId, Id: "add-to-history"),
+                new PipelineStep(CopyImageToClipboardTaskId, Id: "copy-image"),
+                new PipelineStep(UploadTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"category\":\"image\"}"), Id: "upload"),
                 new PipelineStep(UpdateItemUrlTask.TaskId),
-                // On successful upload, replace the image on the clipboard with the URL(s). When
-                // multiple uploaders are selected, upload_urls contains all of them newline-joined.
-                new PipelineStep(CopyTextToClipboardTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"template\":\"{bag.upload_urls}\"}")),
-                new PipelineStep(NotifyToastTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"title\":\"ShareQ\",\"message\":\"Saved {bag.local_path}\"}"))
+                new PipelineStep(CopyTextToClipboardTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"template\":\"{bag.upload_urls}\"}"), Id: "copy-url"),
+                new PipelineStep(NotifyToastTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"title\":\"ShareQ\",\"message\":\"Saved {bag.local_path}\"}"), Id: "toast")
             ]),
 
         new PipelineProfile(

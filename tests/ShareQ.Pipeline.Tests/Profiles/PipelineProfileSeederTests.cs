@@ -45,20 +45,38 @@ public class PipelineProfileSeederTests
     }
 
     [Fact]
-    public async Task SeedAsync_OverwritesExistingDefaultsOnEachRun()
+    public async Task SeedAsync_PreservesUserCustomizations()
     {
-        // Default profiles evolve as the app adds pipeline steps (e.g. upload). Until a profile
-        // editor exists, the seeder always re-upserts so installs upgrade transparently.
+        // Now that the user can reorder pipeline steps from Settings, the profile in DB is the
+        // source of truth. Seeder must not clobber existing entries on each run.
         await using var fx = await new TempPipelineDatabaseFixture().InitializeAsync();
         var (seeder, store) = Build(fx);
-        var stale = new PipelineProfile(
+        var customised = new PipelineProfile(
             DefaultPipelineProfiles.OnClipboardId,
-            "Old name",
+            "User-renamed",
             "event:clipboard",
-            new[] { new PipelineStep("legacy.task") });
-        await store.UpsertAsync(stale, CancellationToken.None);
+            new[] { new PipelineStep("user.custom.task") });
+        await store.UpsertAsync(customised, CancellationToken.None);
 
         await seeder.SeedAsync(CancellationToken.None);
+
+        var loaded = await store.GetAsync(DefaultPipelineProfiles.OnClipboardId, CancellationToken.None);
+        Assert.Equal("User-renamed", loaded!.DisplayName);
+        Assert.Single(loaded.Steps);
+        Assert.Equal("user.custom.task", loaded.Steps[0].TaskId);
+    }
+
+    [Fact]
+    public async Task ResetToDefaultsAsync_ReplacesExistingProfile()
+    {
+        await using var fx = await new TempPipelineDatabaseFixture().InitializeAsync();
+        var (seeder, store) = Build(fx);
+        var customised = new PipelineProfile(
+            DefaultPipelineProfiles.OnClipboardId, "Old", "event:clipboard",
+            new[] { new PipelineStep("legacy") });
+        await store.UpsertAsync(customised, CancellationToken.None);
+
+        await seeder.ResetToDefaultsAsync(DefaultPipelineProfiles.OnClipboardId, CancellationToken.None);
 
         var loaded = await store.GetAsync(DefaultPipelineProfiles.OnClipboardId, CancellationToken.None);
         var expected = DefaultPipelineProfiles.All.Single(p => p.Id == DefaultPipelineProfiles.OnClipboardId);
