@@ -45,11 +45,16 @@ public sealed partial class UploadersViewModel : ObservableObject
         {
             if ((uploader.Capabilities & category) == 0) continue;
             var isSelected = selected.Contains(uploader.Id);
+            var isPluginEnabled = await _registry.IsEnabledAsync(uploader.Id, CancellationToken.None).ConfigureAwait(true);
             target.Add(new UploaderSelectionItemViewModel(
-                uploader.Id, uploader.DisplayName, isSelected,
+                uploader.Id, uploader.DisplayName, isSelected, isPluginEnabled,
                 (item, value) => _ = OnItemToggledAsync(category, target, item, value)));
         }
     }
+
+    /// <summary>Re-read plugin enabled states + selections from the store. Called when the user
+    /// switches to the Uploaders tab so changes made in Plugins (toggle on/off) are reflected.</summary>
+    public Task ReloadAsync() => LoadAsync();
 
     private async Task OnItemToggledAsync(
         UploaderCapabilities category,

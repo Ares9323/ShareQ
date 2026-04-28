@@ -37,6 +37,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsPluginsSelected));
         OnPropertyChanged(nameof(IsUploadersSelected));
         OnPropertyChanged(nameof(IsAboutSelected));
+        // Refresh the uploaders view so plugin enable/disable changes from the Plugins tab are
+        // reflected (greyed-out checkboxes for disabled plugins).
+        if (value == SettingsTab.Uploaders) _ = Uploaders.ReloadAsync();
     }
 
     [RelayCommand] private void ShowHome()      => SelectedTab = SettingsTab.Home;

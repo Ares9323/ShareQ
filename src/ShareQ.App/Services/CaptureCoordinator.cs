@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using Microsoft.Extensions.Logging;
 using ShareQ.App.Windows;
@@ -7,14 +8,18 @@ using ShareQ.Core.Pipeline;
 using ShareQ.Pipeline;
 using ShareQ.Pipeline.Profiles;
 using ShareQ.Storage.Items;
+using ShareQ.Storage.Settings;
 
 namespace ShareQ.App.Services;
 
 public sealed class CaptureCoordinator
 {
+    private const string LastRegionKey = "capture.last_region";
+
     private readonly ICaptureSource _captureSource;
     private readonly PipelineExecutor _executor;
     private readonly IPipelineProfileStore _profiles;
+    private readonly ISettingsStore _settings;
     private readonly IServiceProvider _services;
     private readonly ILogger<CaptureCoordinator> _logger;
 
@@ -22,12 +27,14 @@ public sealed class CaptureCoordinator
         ICaptureSource captureSource,
         PipelineExecutor executor,
         IPipelineProfileStore profiles,
+        ISettingsStore settings,
         IServiceProvider services,
         ILogger<CaptureCoordinator> logger)
     {
         _captureSource = captureSource;
         _executor = executor;
         _profiles = profiles;
+        _settings = settings;
         _services = services;
         _logger = logger;
     }
@@ -46,6 +53,39 @@ public sealed class CaptureCoordinator
             return;
         }
 
+        await PersistLastRegionAsync(region, cancellationToken).ConfigureAwait(false);
+        await RunPipelineAsync(region, ItemSource.CaptureRegion, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task CaptureFullscreenAsync(CancellationToken cancellationToken)
+    {
+        var (left, top, w, h) = VirtualScreen.GetBounds();
+        if (w <= 0 || h <= 0) { _logger.LogWarning("Fullscreen: virtual screen has no size"); return; }
+        var region = new CaptureRegion(left, top, w, h, "Fullscreen");
+        await RunPipelineAsync(region, ItemSource.CaptureFullscreen, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task CaptureMonitorAsync(MonitorInfo monitor, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(monitor);
+        var region = new CaptureRegion(monitor.X, monitor.Y, monitor.Width, monitor.Height, $"Monitor {monitor.Name}");
+        await RunPipelineAsync(region, ItemSource.CaptureMonitor, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task CaptureLastRegionAsync(CancellationToken cancellationToken)
+    {
+        var stored = await _settings.GetAsync(LastRegionKey, cancellationToken).ConfigureAwait(false);
+        if (TryParseRegion(stored, out var region))
+        {
+            await RunPipelineAsync(region!, ItemSource.CaptureRegion, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+        _logger.LogInformation("LastRegion: nothing stored yet — falling back to region picker");
+        await CaptureRegionAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task RunPipelineAsync(CaptureRegion region, ItemSource source, CancellationToken cancellationToken)
+    {
         var captured = await _captureSource.CaptureAsync(region, cancellationToken).ConfigureAwait(false);
 
         var profile = await _profiles.GetAsync(DefaultPipelineProfiles.RegionCaptureId, cancellationToken).ConfigureAwait(false);
@@ -62,15 +102,39 @@ public sealed class CaptureCoordinator
         {
             ctx.Bag[PipelineBagKeys.WindowTitle] = region.WindowTitle;
         }
-        var searchTextPrefix = string.IsNullOrEmpty(region.WindowTitle) ? "Region" : region.WindowTitle;
+        var searchTextPrefix = string.IsNullOrEmpty(region.WindowTitle) ? source.ToString() : region.WindowTitle;
         ctx.Bag[PipelineBagKeys.NewItem] = new NewItem(
             Kind: ItemKind.Image,
-            Source: ItemSource.CaptureRegion,
+            Source: source,
             CreatedAt: DateTimeOffset.UtcNow,
             Payload: captured.PngBytes,
             PayloadSize: captured.PngBytes.LongLength,
             SearchText: $"{searchTextPrefix} {captured.Width}×{captured.Height}");
 
         await _executor.RunAsync(profile, ctx, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task PersistLastRegionAsync(CaptureRegion region, CancellationToken cancellationToken)
+    {
+        // Stored as "X,Y,W,H" — small enough to keep in the settings table without serialization.
+        var serialized = string.Format(CultureInfo.InvariantCulture, "{0},{1},{2},{3}",
+            region.X, region.Y, region.Width, region.Height);
+        try { await _settings.SetAsync(LastRegionKey, serialized, sensitive: false, cancellationToken).ConfigureAwait(false); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist last-region bounds"); }
+    }
+
+    private static bool TryParseRegion(string? raw, out CaptureRegion? region)
+    {
+        region = null;
+        if (string.IsNullOrEmpty(raw)) return false;
+        var parts = raw.Split(',');
+        if (parts.Length != 4) return false;
+        if (!int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var x)) return false;
+        if (!int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var y)) return false;
+        if (!int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var w)) return false;
+        if (!int.TryParse(parts[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out var h)) return false;
+        if (w <= 0 || h <= 0) return false;
+        region = new CaptureRegion(x, y, w, h, "Last region");
+        return true;
     }
 }

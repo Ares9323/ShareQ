@@ -106,6 +106,7 @@ public partial class App : Application
                 services.AddSingleton<AutoPaster>();
                 services.AddSingleton<PopupWindowController>();
                 services.AddSingleton<CaptureCoordinator>();
+                services.AddSingleton<ManualUploadService>();
                 services.AddSingleton<IToastNotifier, WpfToastNotifier>();
                 services.AddSingleton<EditorLauncher>();
                 services.AddSingleton<ScreenColorPickerService>();

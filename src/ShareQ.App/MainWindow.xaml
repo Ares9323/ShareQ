@@ -136,7 +136,11 @@
                     <ItemsControl ItemsSource="{Binding Uploaders.ImageUploaders}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:UploaderSelectionItemViewModel}">
-                                <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="0,2" />
+                                <CheckBox Content="{Binding DisplayName}"
+                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                          IsEnabled="{Binding IsPluginEnabled}"
+                                          ToolTip="{Binding DisabledTooltip}"
+                                          Margin="0,2" />
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -145,7 +149,11 @@
                     <ItemsControl ItemsSource="{Binding Uploaders.FileUploaders}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:UploaderSelectionItemViewModel}">
-                                <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="0,2" />
+                                <CheckBox Content="{Binding DisplayName}"
+                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                          IsEnabled="{Binding IsPluginEnabled}"
+                                          ToolTip="{Binding DisabledTooltip}"
+                                          Margin="0,2" />
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -154,7 +162,11 @@
                     <ItemsControl ItemsSource="{Binding Uploaders.TextUploaders}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:UploaderSelectionItemViewModel}">
-                                <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="0,2" />
+                                <CheckBox Content="{Binding DisplayName}"
+                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                          IsEnabled="{Binding IsPluginEnabled}"
+                                          ToolTip="{Binding DisabledTooltip}"
+                                          Margin="0,2" />
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -163,7 +175,11 @@
                     <ItemsControl ItemsSource="{Binding Uploaders.VideoUploaders}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:UploaderSelectionItemViewModel}">
-                                <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="0,2" />
+                                <CheckBox Content="{Binding DisplayName}"
+                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                          IsEnabled="{Binding IsPluginEnabled}"
+                                          ToolTip="{Binding DisabledTooltip}"
+                                          Margin="0,2" />
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

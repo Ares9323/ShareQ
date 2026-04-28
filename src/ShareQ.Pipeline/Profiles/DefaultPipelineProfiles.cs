@@ -7,6 +7,7 @@ public static class DefaultPipelineProfiles
 {
     public const string OnClipboardId = "on-clipboard";
     public const string RegionCaptureId = "region-capture";
+    public const string ManualUploadId = "manual-upload";
 
     // Task IDs whose implementations live in ShareQ.App (resolved at runtime by the registry).
     public const string CopyImageToClipboardTaskId = "shareq.copy-image-to-clipboard";
@@ -47,6 +48,21 @@ public static class DefaultPipelineProfiles
                 // multiple uploaders are selected, upload_urls contains all of them newline-joined.
                 new PipelineStep(CopyTextToClipboardTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"template\":\"{bag.upload_urls}\"}")),
                 new PipelineStep(NotifyToastTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"title\":\"ShareQ\",\"message\":\"Saved {bag.local_path}\"}"))
+            ]),
+
+        new PipelineProfile(
+            Id: ManualUploadId,
+            DisplayName: "Manual upload",
+            Trigger: "menu:upload",
+            Steps:
+            [
+                // No save-to-file (the source is already on disk or clipboard) and no
+                // copy-image-to-clipboard (would clobber whatever was already there).
+                new PipelineStep(AddToHistoryTask.TaskId),
+                new PipelineStep(UploadTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"category\":\"file\"}")),
+                new PipelineStep(UpdateItemUrlTask.TaskId),
+                new PipelineStep(CopyTextToClipboardTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"template\":\"{bag.upload_urls}\"}")),
+                new PipelineStep(NotifyToastTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"title\":\"ShareQ\",\"message\":\"Uploaded\"}"))
             ])
     ];
 }

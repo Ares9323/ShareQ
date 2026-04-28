@@ -89,6 +89,22 @@ public sealed class PluginRegistry : IUploaderResolver
 
     public async Task<IReadOnlyList<IUploader>> ResolveCategoryAsync(UploaderCapabilities category, CancellationToken cancellationToken)
     {
+        var primary = await ResolveStrictCategoryAsync(category, cancellationToken).ConfigureAwait(false);
+        if (primary.Count > 0) return primary;
+
+        // Fallback: if the user hasn't configured a category-specific list, fall back to the more
+        // generic "file" selection. Generic uploaders (Catbox/OneDrive/S3/...) cover images, video,
+        // and text just fine; specific image hosts (Imgur etc) only show up here when the user has
+        // explicitly opted into them, so this fallback never silently changes their preference.
+        if (category != UploaderCapabilities.File)
+        {
+            return await ResolveStrictCategoryAsync(UploaderCapabilities.File, cancellationToken).ConfigureAwait(false);
+        }
+        return [];
+    }
+
+    private async Task<IReadOnlyList<IUploader>> ResolveStrictCategoryAsync(UploaderCapabilities category, CancellationToken cancellationToken)
+    {
         var selected = await GetSelectedIdsAsync(category, cancellationToken).ConfigureAwait(false);
         var result = new List<IUploader>(selected.Count);
         foreach (var id in selected)
