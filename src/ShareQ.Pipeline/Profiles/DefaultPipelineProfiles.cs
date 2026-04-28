@@ -40,11 +40,12 @@ public static class DefaultPipelineProfiles
                 // Image goes on the clipboard immediately as a fallback so the user has something to
                 // paste even if the upload is slow/fails.
                 new PipelineStep(CopyImageToClipboardTaskId),
-                new PipelineStep(UploadTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"uploader\":\"onedrive\"}")),
+                // Resolves to the user's selected uploaders for the "image" category from Settings.
+                new PipelineStep(UploadTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"category\":\"image\"}")),
                 new PipelineStep(UpdateItemUrlTask.TaskId),
-                // On successful upload, replace the image on the clipboard with the URL. On failure
-                // bag.upload_url is missing and the template expands to empty → the task no-ops.
-                new PipelineStep(CopyTextToClipboardTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"template\":\"{bag.upload_url}\"}")),
+                // On successful upload, replace the image on the clipboard with the URL(s). When
+                // multiple uploaders are selected, upload_urls contains all of them newline-joined.
+                new PipelineStep(CopyTextToClipboardTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"template\":\"{bag.upload_urls}\"}")),
                 new PipelineStep(NotifyToastTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"title\":\"ShareQ\",\"message\":\"Saved {bag.local_path}\"}"))
             ])
     ];

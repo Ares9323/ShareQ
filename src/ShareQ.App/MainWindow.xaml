@@ -36,6 +36,11 @@
                            Command="{Binding ShowPluginsCommand}"
                            Appearance="{Binding IsPluginsSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                           Margin="0,0,0,4"
+                           Content="Uploaders"
+                           Command="{Binding ShowUploadersCommand}"
+                           Appearance="{Binding IsUploadersSelected, Converter={StaticResource BoolToAppearance}}" />
+                <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Content="About"
                            Command="{Binding ShowAboutCommand}"
                            Appearance="{Binding IsAboutSelected, Converter={StaticResource BoolToAppearance}}" />
@@ -117,6 +122,53 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
             </Grid>
+
+            <!-- Uploaders -->
+            <ScrollViewer Visibility="{Binding IsUploadersSelected, Converter={StaticResource BoolToVisibility}}"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="24,16,24,16">
+                    <TextBlock Text="Uploaders" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                               Text="Pick which uploaders to use per content type. Multiple selections upload the same file to all of them; the resulting URLs end up on the clipboard, one per line." />
+
+                    <TextBlock Text="Image uploaders" FontWeight="SemiBold" Margin="0,4,0,4" />
+                    <ItemsControl ItemsSource="{Binding Uploaders.ImageUploaders}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:UploaderSelectionItemViewModel}">
+                                <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="0,2" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Text="File uploaders" FontWeight="SemiBold" Margin="0,16,0,4" />
+                    <ItemsControl ItemsSource="{Binding Uploaders.FileUploaders}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:UploaderSelectionItemViewModel}">
+                                <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="0,2" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Text="Text uploaders" FontWeight="SemiBold" Margin="0,16,0,4" />
+                    <ItemsControl ItemsSource="{Binding Uploaders.TextUploaders}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:UploaderSelectionItemViewModel}">
+                                <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="0,2" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Text="Video uploaders" FontWeight="SemiBold" Margin="0,16,0,4" />
+                    <ItemsControl ItemsSource="{Binding Uploaders.VideoUploaders}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:UploaderSelectionItemViewModel}">
+                                <CheckBox Content="{Binding DisplayName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="0,2" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
 
             <!-- About -->
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"

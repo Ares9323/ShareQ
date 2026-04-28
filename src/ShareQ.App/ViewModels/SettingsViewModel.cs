@@ -9,22 +9,25 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly PluginRegistry _registry;
 
-    public SettingsViewModel(PluginRegistry registry)
+    public SettingsViewModel(PluginRegistry registry, UploadersViewModel uploaders)
     {
         _registry = registry;
+        Uploaders = uploaders;
         Plugins = [];
         AppVersion = typeof(SettingsViewModel).Assembly.GetName().Version?.ToString() ?? "dev";
         _ = LoadPluginsAsync();
     }
 
     public ObservableCollection<PluginItemViewModel> Plugins { get; }
+    public UploadersViewModel Uploaders { get; }
 
     [ObservableProperty]
     private SettingsTab _selectedTab = SettingsTab.Home;
 
-    public bool IsHomeSelected => SelectedTab == SettingsTab.Home;
-    public bool IsPluginsSelected => SelectedTab == SettingsTab.Plugins;
-    public bool IsAboutSelected => SelectedTab == SettingsTab.About;
+    public bool IsHomeSelected      => SelectedTab == SettingsTab.Home;
+    public bool IsPluginsSelected   => SelectedTab == SettingsTab.Plugins;
+    public bool IsUploadersSelected => SelectedTab == SettingsTab.Uploaders;
+    public bool IsAboutSelected     => SelectedTab == SettingsTab.About;
 
     public string AppVersion { get; }
 
@@ -32,12 +35,14 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsHomeSelected));
         OnPropertyChanged(nameof(IsPluginsSelected));
+        OnPropertyChanged(nameof(IsUploadersSelected));
         OnPropertyChanged(nameof(IsAboutSelected));
     }
 
-    [RelayCommand] private void ShowHome()    => SelectedTab = SettingsTab.Home;
-    [RelayCommand] private void ShowPlugins() => SelectedTab = SettingsTab.Plugins;
-    [RelayCommand] private void ShowAbout()   => SelectedTab = SettingsTab.About;
+    [RelayCommand] private void ShowHome()      => SelectedTab = SettingsTab.Home;
+    [RelayCommand] private void ShowPlugins()   => SelectedTab = SettingsTab.Plugins;
+    [RelayCommand] private void ShowUploaders() => SelectedTab = SettingsTab.Uploaders;
+    [RelayCommand] private void ShowAbout()     => SelectedTab = SettingsTab.About;
 
     private async Task LoadPluginsAsync()
     {
@@ -50,4 +55,4 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 }
 
-public enum SettingsTab { Home, Plugins, About }
+public enum SettingsTab { Home, Plugins, Uploaders, About }

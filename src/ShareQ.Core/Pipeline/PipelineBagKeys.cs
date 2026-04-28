@@ -18,10 +18,15 @@ public static class PipelineBagKeys
     /// <summary>Absolute path written by save-to-file. Type: <c>string</c>.</summary>
     public const string LocalPath = "local_path";
 
-    /// <summary>URL produced by an upload task. Type: <c>string</c>.</summary>
+    /// <summary>First URL produced by an upload task (or the only one when a single uploader was
+    /// selected). Type: <c>string</c>.</summary>
     public const string UploadUrl = "upload_url";
 
-    /// <summary>Id of the uploader that produced <see cref="UploadUrl"/>. Type: <c>string</c>.</summary>
+    /// <summary>All URLs produced by the upload task, joined by newline. Useful when multiple
+    /// uploaders are selected for a category. Type: <c>string</c>.</summary>
+    public const string UploadUrls = "upload_urls";
+
+    /// <summary>Id of the (first) uploader that produced <see cref="UploadUrl"/>. Type: <c>string</c>.</summary>
     public const string UploaderId = "uploader_id";
 
     /// <summary>Title of the window that was snap-captured (when applicable). Type: <c>string</c>.</summary>

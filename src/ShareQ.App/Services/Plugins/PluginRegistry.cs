@@ -76,4 +76,30 @@ public sealed class PluginRegistry : IUploaderResolver
         => _settings.SetAsync(KeyFor(pluginId), enabled ? "true" : "false", sensitive: false, cancellationToken);
 
     private static string KeyFor(string pluginId) => $"{EnabledKeyPrefix}{pluginId}{EnabledKeySuffix}";
+
+    public async Task<IReadOnlyList<string>> GetSelectedIdsAsync(UploaderCapabilities category, CancellationToken cancellationToken)
+    {
+        var raw = await _settings.GetAsync(SelectionKey(category), cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(raw)) return [];
+        return raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    public Task SetSelectedIdsAsync(UploaderCapabilities category, IReadOnlyList<string> ids, CancellationToken cancellationToken)
+        => _settings.SetAsync(SelectionKey(category), string.Join(',', ids), sensitive: false, cancellationToken);
+
+    public async Task<IReadOnlyList<IUploader>> ResolveCategoryAsync(UploaderCapabilities category, CancellationToken cancellationToken)
+    {
+        var selected = await GetSelectedIdsAsync(category, cancellationToken).ConfigureAwait(false);
+        var result = new List<IUploader>(selected.Count);
+        foreach (var id in selected)
+        {
+            if (!_uploaders.TryGetValue(id, out var uploader)) continue;
+            if ((uploader.Capabilities & category) == 0) continue; // capability mismatch
+            if (!await IsEnabledAsync(id, cancellationToken).ConfigureAwait(false)) continue;
+            result.Add(uploader);
+        }
+        return result;
+    }
+
+    private static string SelectionKey(UploaderCapabilities category) => $"uploaders.{category.ToString().ToLowerInvariant()}";
 }
