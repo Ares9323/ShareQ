@@ -3,13 +3,23 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using ShareQ.Core.Pipeline;
 using ShareQ.Pipeline.Tasks;
+using ShareQ.Storage.Settings;
 using Xunit;
 
 namespace ShareQ.Pipeline.Tests.Tasks;
 
 public class SaveToFileTaskTests
 {
-    private static SaveToFileTask Create() => new(NullLogger<SaveToFileTask>.Instance);
+    private static SaveToFileTask Create() => new(new NullSettingsStore(), NullLogger<SaveToFileTask>.Instance);
+
+    /// <summary>Empty settings store used when the test exercises the explicit folder config path
+    /// rather than the settings fallback.</summary>
+    private sealed class NullSettingsStore : ISettingsStore
+    {
+        public Task<string?> GetAsync(string key, CancellationToken cancellationToken) => Task.FromResult<string?>(null);
+        public Task SetAsync(string key, string value, bool sensitive, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<bool> RemoveAsync(string key, CancellationToken cancellationToken) => Task.FromResult(false);
+    }
 
     private static PipelineContext NewContext() => new(new ServiceCollection().BuildServiceProvider());
 

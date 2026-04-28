@@ -36,7 +36,8 @@ public static class DefaultPipelineProfiles
             Trigger: "hotkey:region",
             Steps:
             [
-                new PipelineStep(SaveToFileTask.TaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"folder\":\"%USERPROFILE%\\\\Pictures\\\\ShareQ\"}")),
+                // Folder comes from Settings → Capture (capture.folder), with default fallback in SaveToFileTask.
+                new PipelineStep(SaveToFileTask.TaskId),
                 new PipelineStep(AddToHistoryTask.TaskId),
                 // Image goes on the clipboard immediately as a fallback so the user has something to
                 // paste even if the upload is slow/fails.

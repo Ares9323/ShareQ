@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using ShareQ.Core.Pipeline;
+using ShareQ.Storage.Settings;
 
 namespace ShareQ.Pipeline.Tasks;
 
@@ -9,11 +10,14 @@ public sealed class SaveToFileTask : IPipelineTask
 {
     public const string TaskId = "shareq.save-to-file";
     private const string DefaultFolder = "%USERPROFILE%\\Pictures\\ShareQ";
+    private const string FolderSettingKey = "capture.folder";
 
+    private readonly ISettingsStore _settings;
     private readonly ILogger<SaveToFileTask> _logger;
 
-    public SaveToFileTask(ILogger<SaveToFileTask> logger)
+    public SaveToFileTask(ISettingsStore settings, ILogger<SaveToFileTask> logger)
     {
+        _settings = settings;
         _logger = logger;
     }
 
@@ -35,7 +39,10 @@ public sealed class SaveToFileTask : IPipelineTask
             ? ext
             : "bin";
 
-        var folderTemplate = (string?)config?["folder"] ?? DefaultFolder;
+        // Order of precedence: explicit step config → user setting (capture.folder) → default.
+        var folderTemplate = (string?)config?["folder"]
+            ?? await _settings.GetAsync(FolderSettingKey, cancellationToken).ConfigureAwait(false)
+            ?? DefaultFolder;
         var folder = Environment.ExpandEnvironmentVariables(folderTemplate);
         Directory.CreateDirectory(folder);
 

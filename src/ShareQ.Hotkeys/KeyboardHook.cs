@@ -7,7 +7,10 @@ namespace ShareQ.Hotkeys;
 /// history and which RegisterHotKey cannot bind. Same pattern as PowerToys KeyboardManager.</summary>
 public sealed class KeyboardHook : IDisposable
 {
-    private readonly List<HookBinding> _bindings = [];
+    // Bindings keyed by id so the host can replace/remove individual hotkeys when the user
+    // rebinds them in Settings. Iterating a list of (id, binding) keeps lookup O(n) but n is tiny
+    // (handful of catalog hotkeys), and we win clarity over a dictionary that hides the order.
+    private readonly Dictionary<string, HookBinding> _bindings = new(StringComparer.Ordinal);
     private readonly object _bindingsLock = new();
     private readonly LowLevelKeyboardProc _hookProc;
     private IntPtr _hookHandle = IntPtr.Zero;
@@ -17,16 +20,25 @@ public sealed class KeyboardHook : IDisposable
         _hookProc = HookProc; // keep delegate rooted so the GC doesn't move/collect it
     }
 
-    /// <summary>Register a key combination to intercept. <paramref name="callback"/> runs on the hook
-    /// thread (which is the message-pump thread of whoever installed the hook) — keep it fast and
-    /// dispatch heavy work elsewhere.</summary>
-    public void Register(HotkeyModifiers modifiers, uint vkCode, Action callback, bool suppress = true)
+    /// <summary>Register or replace a key combination by id. <paramref name="callback"/> runs on the
+    /// hook thread (the message-pump thread of whoever installed the hook) — keep it fast and
+    /// dispatch heavy work elsewhere. Suppress=true makes us "win" against the foreground app and
+    /// any OS reservation (Win+V etc).</summary>
+    public void Register(string id, HotkeyModifiers modifiers, uint vkCode, Action callback, bool suppress = true)
     {
+        ArgumentException.ThrowIfNullOrEmpty(id);
         ArgumentNullException.ThrowIfNull(callback);
         lock (_bindingsLock)
         {
-            _bindings.Add(new HookBinding(modifiers, vkCode, callback, suppress));
+            _bindings[id] = new HookBinding(modifiers, vkCode, callback, suppress);
         }
+    }
+
+    /// <summary>Remove a binding by id. Returns true if it existed.</summary>
+    public bool Unregister(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return false;
+        lock (_bindingsLock) { return _bindings.Remove(id); }
     }
 
     public void Install()
@@ -67,7 +79,7 @@ public sealed class KeyboardHook : IDisposable
         HookBinding? matched = null;
         lock (_bindingsLock)
         {
-            foreach (var b in _bindings)
+            foreach (var b in _bindings.Values)
             {
                 if (b.VkCode == data.vkCode && b.Modifiers == modifiers)
                 {
@@ -87,7 +99,26 @@ public sealed class KeyboardHook : IDisposable
             catch { /* swallow — host should log inside the callback */ }
         });
 
-        return matched.Suppress ? (IntPtr)1 : CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+        if (!matched.Suppress) return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+
+        // Some shortcuts (Win+Shift+S, Win+L, Win+G, …) are tracked by the Windows shell at a layer
+        // that's NOT bypassed by simply returning 1 from this hook. Same fix PowerToys
+        // KeyboardManager uses: inject a "dummy key" event (VK 0xFF — unmapped to any physical key)
+        // which breaks the shell's tracking of the modifier+key combo. Without this, suppressing
+        // Win+Shift+S still triggers the native Snipping Tool overlay.
+        if ((matched.Modifiers & HotkeyModifiers.Win) != 0)
+        {
+            InjectDummyKey();
+        }
+        return (IntPtr)1;
+    }
+
+    private static void InjectDummyKey()
+    {
+        var inputs = new INPUT[2];
+        inputs[0] = new INPUT { type = INPUT_KEYBOARD, U = new InputUnion { ki = new KEYBDINPUT { wVk = DUMMY_KEY } } };
+        inputs[1] = new INPUT { type = INPUT_KEYBOARD, U = new InputUnion { ki = new KEYBDINPUT { wVk = DUMMY_KEY, dwFlags = KEYEVENTF_KEYUP } } };
+        _ = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
     }
 
     private static HotkeyModifiers ReadModifiers()
@@ -125,6 +156,46 @@ public sealed class KeyboardHook : IDisposable
     private const int VK_MENU = 0x12; // Alt
     private const int VK_LWIN = 0x5B;
     private const int VK_RWIN = 0x5C;
+
+    /// <summary>0xFF — virtual key code that doesn't map to any physical key. Used as a "combo
+    /// breaker" inject so the Windows shell stops tracking Win+key sequences (PowerToys trick).</summary>
+    private const ushort DUMMY_KEY = 0xFF;
+    private const uint INPUT_KEYBOARD = 1;
+    private const uint KEYEVENTF_KEYUP = 0x0002;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct INPUT { public uint type; public InputUnion U; }
+
+    [StructLayout(LayoutKind.Explicit)]
+    private struct InputUnion
+    {
+        [FieldOffset(0)] public KEYBDINPUT ki;
+        [FieldOffset(0)] public MOUSEINPUT mi;
+        [FieldOffset(0)] public HARDWAREINPUT hi;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KEYBDINPUT
+    {
+        public ushort wVk;
+        public ushort wScan;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MOUSEINPUT
+    {
+        public int dx; public int dy;
+        public uint mouseData; public uint dwFlags; public uint time; public IntPtr dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct HARDWAREINPUT { public uint uMsg; public ushort wParamL; public ushort wParamH; }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
     private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 

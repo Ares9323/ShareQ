@@ -15,6 +15,7 @@ namespace ShareQ.App.Services;
 public sealed class CaptureCoordinator
 {
     private const string LastRegionKey = "capture.last_region";
+    private const string DelayKey = "capture.delay_seconds";
 
     private readonly ICaptureSource _captureSource;
     private readonly PipelineExecutor _executor;
@@ -59,6 +60,7 @@ public sealed class CaptureCoordinator
 
     public async Task CaptureFullscreenAsync(CancellationToken cancellationToken)
     {
+        await ApplyDelayAsync(cancellationToken).ConfigureAwait(false);
         var (left, top, w, h) = VirtualScreen.GetBounds();
         if (w <= 0 || h <= 0) { _logger.LogWarning("Fullscreen: virtual screen has no size"); return; }
         var region = new CaptureRegion(left, top, w, h, "Fullscreen");
@@ -68,8 +70,19 @@ public sealed class CaptureCoordinator
     public async Task CaptureMonitorAsync(MonitorInfo monitor, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(monitor);
+        await ApplyDelayAsync(cancellationToken).ConfigureAwait(false);
         var region = new CaptureRegion(monitor.X, monitor.Y, monitor.Width, monitor.Height, $"Monitor {monitor.Name}");
         await RunPipelineAsync(region, ItemSource.CaptureMonitor, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task ApplyDelayAsync(CancellationToken cancellationToken)
+    {
+        var raw = await _settings.GetAsync(DelayKey, cancellationToken).ConfigureAwait(false);
+        if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
+        {
+            _logger.LogDebug("Capture: waiting {Seconds}s before capture", seconds);
+            await Task.Delay(TimeSpan.FromSeconds(Math.Min(seconds, 30)), cancellationToken).ConfigureAwait(false);
+        }
     }
 
     public async Task CaptureLastRegionAsync(CancellationToken cancellationToken)

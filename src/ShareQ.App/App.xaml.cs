@@ -95,9 +95,6 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, CopyTextToClipboardTask>();
                 services.AddSingleton<IPipelineTask, NotifyToastTask>();
 
-                services.AddSingleton<IHotkeyRegistrar, Win32HotkeyRegistrar>();
-                services.AddSingleton<IHotkeyManager, HotkeyManager>();
-
                 services.AddSingleton<NativeClipboardHistoryProbe>();
                 services.AddSingleton<NativeClipboardHistoryBanner>();
                 services.AddSingleton<IncognitoModeService>();
@@ -120,7 +117,10 @@ public partial class App : Application
                 services.AddTransient<PopupWindowViewModel>();
                 services.AddTransient<PopupWindow>();
 
+                services.AddSingleton<ShareQ.App.Services.Hotkeys.HotkeyConfigService>();
                 services.AddSingleton<UploadersViewModel>();
+                services.AddSingleton<HotkeysViewModel>();
+                services.AddSingleton<CaptureDefaultsViewModel>();
                 services.AddSingleton<SettingsViewModel>();
                 services.AddSingleton<MainWindow>();
                 services.AddSingleton<TrayIconService>();
@@ -172,79 +172,64 @@ public partial class App : Application
         var source = HwndSource.FromHwnd(helper.Handle)!;
         source.AddHook(WndProc);
 
-        var hotkeys = _host.Services.GetRequiredService<IHotkeyManager>();
+        var hotkeyConfig = _host.Services.GetRequiredService<ShareQ.App.Services.Hotkeys.HotkeyConfigService>();
         var hotkeyLogger = _host.Services.GetRequiredService<ILogger<App>>();
-        hotkeys.Attach(helper.Handle);
-        hotkeys.Triggered += OnHotkeyTriggered;
 
-        // TODO: temporary; revisit hotkey defaults during UX pass.
-        var popupOk = hotkeys.Register(new HotkeyDefinition("popup", HotkeyModifiers.Control | HotkeyModifiers.Alt, 0x56)); // Ctrl+Alt+V
-        var incoOk = hotkeys.Register(new HotkeyDefinition("incognito", HotkeyModifiers.Control | HotkeyModifiers.Alt, 0x49)); // Ctrl+Alt+I
-        var captureOk = hotkeys.Register(new HotkeyDefinition("capture-region", HotkeyModifiers.Control | HotkeyModifiers.Alt, 0x52)); // Ctrl+Alt+R
-        var pickerOk = hotkeys.Register(new HotkeyDefinition("screen-color-picker", HotkeyModifiers.Control | HotkeyModifiers.Shift, 0x50)); // Ctrl+Shift+P
-        var recordOk = hotkeys.Register(new HotkeyDefinition("record-screen", HotkeyModifiers.Control | HotkeyModifiers.Alt, 0x53)); // Ctrl+Alt+S
-        var recordGifOk = hotkeys.Register(new HotkeyDefinition("record-screen-gif", HotkeyModifiers.Control | HotkeyModifiers.Alt, 0x47)); // Ctrl+Alt+G
-        hotkeyLogger.LogInformation(
-            "Hotkey registration — popup(Ctrl+Alt+V): {PopupOk}, incognito(Ctrl+Alt+I): {IncoOk}, capture-region(Ctrl+Alt+R): {CaptureOk}, screen-color-picker(Ctrl+Shift+P): {PickerOk}, record(Ctrl+Alt+S): {RecOk}, record-gif(Ctrl+Alt+G): {RecGifOk}",
-            popupOk, incoOk, captureOk, pickerOk, recordOk, recordGifOk);
-
-        // Win+V is reserved by Windows for the native clipboard history; RegisterHotKey can't bind
-        // it, so we use a low-level keyboard hook (same trick PowerToys KeyboardManager uses) and
-        // suppress the keystroke before Windows sees it.
+        // Single low-level keyboard hook for ALL global hotkeys (popup, region capture, color picker,
+        // recording, ...). Hook-based registration wins against any foreground app's keyboard
+        // shortcut and even against OS-reserved combos like Win+Shift+S — same approach PowerToys
+        // KeyboardManager uses. In-app shortcuts (popup Ctrl+P / Enter / Ctrl+1-9, editor bindings)
+        // stay focus-local via the WPF Window's KeyDown handlers — those don't pass through here.
         _keyboardHook = new KeyboardHook();
-        _keyboardHook.Register(HotkeyModifiers.Win, 0x56, () => // Win+V
+
+        async Task RegisterCatalogAsync(string id, Action callback)
         {
-            var controller = _host.Services.GetRequiredService<PopupWindowController>();
-            Dispatcher.InvokeAsync(() => _ = controller.ShowAsync());
-        });
-        try { _keyboardHook.Install(); hotkeyLogger.LogInformation("Win+V intercepted via low-level keyboard hook."); }
-        catch (Exception ex) { hotkeyLogger.LogWarning(ex, "Failed to install keyboard hook for Win+V"); }
+            var def = await hotkeyConfig.GetEffectiveAsync(id, CancellationToken.None);
+            _keyboardHook.Register(id, def.Modifiers, def.VirtualKey, callback, suppress: true);
+            hotkeyLogger.LogInformation("Hotkey {Id} bound to {Combo}",
+                id, ShareQ.App.Services.Hotkeys.HotkeyDisplay.Format(def.Modifiers, def.VirtualKey));
+        }
+
+        await RegisterCatalogAsync("popup",               () => Dispatcher.InvokeAsync(() => _ = _host.Services.GetRequiredService<PopupWindowController>().ShowAsync()));
+        await RegisterCatalogAsync("incognito",           () => Dispatcher.InvokeAsync(() => _ = _host.Services.GetRequiredService<IncognitoModeService>().ToggleAsync(CancellationToken.None)));
+        await RegisterCatalogAsync("capture-region",      () => Dispatcher.InvokeAsync(() => _ = _host.Services.GetRequiredService<CaptureCoordinator>().CaptureRegionAsync(CancellationToken.None)));
+        await RegisterCatalogAsync("screen-color-picker", () => Dispatcher.InvokeAsync(() => _host.Services.GetRequiredService<ScreenColorPickerService>().PickAtCursor()));
+        await RegisterCatalogAsync("record-screen",       () => Dispatcher.InvokeAsync(() => _ = _host.Services.GetRequiredService<Services.Recording.RecordingCoordinator>().ToggleAsync(ShareQ.Capture.Recording.RecordingFormat.Mp4, CancellationToken.None)));
+        await RegisterCatalogAsync("record-screen-gif",   () => Dispatcher.InvokeAsync(() => _ = _host.Services.GetRequiredService<Services.Recording.RecordingCoordinator>().ToggleAsync(ShareQ.Capture.Recording.RecordingFormat.Gif, CancellationToken.None)));
+
+        // Settings UI raises Changed when the user rebinds → unregister + register live.
+        hotkeyConfig.Changed += (_, def) =>
+        {
+            _keyboardHook.Unregister(def.Id);
+            // Re-resolve the callback by id (we don't store callbacks in the config service).
+            Action? callback = def.Id switch
+            {
+                "popup"               => () => Dispatcher.InvokeAsync(() => _ = _host!.Services.GetRequiredService<PopupWindowController>().ShowAsync()),
+                "incognito"           => () => Dispatcher.InvokeAsync(() => _ = _host!.Services.GetRequiredService<IncognitoModeService>().ToggleAsync(CancellationToken.None)),
+                "capture-region"      => () => Dispatcher.InvokeAsync(() => _ = _host!.Services.GetRequiredService<CaptureCoordinator>().CaptureRegionAsync(CancellationToken.None)),
+                "screen-color-picker" => () => Dispatcher.InvokeAsync(() => _host!.Services.GetRequiredService<ScreenColorPickerService>().PickAtCursor()),
+                "record-screen"       => () => Dispatcher.InvokeAsync(() => _ = _host!.Services.GetRequiredService<Services.Recording.RecordingCoordinator>().ToggleAsync(ShareQ.Capture.Recording.RecordingFormat.Mp4, CancellationToken.None)),
+                "record-screen-gif"   => () => Dispatcher.InvokeAsync(() => _ = _host!.Services.GetRequiredService<Services.Recording.RecordingCoordinator>().ToggleAsync(ShareQ.Capture.Recording.RecordingFormat.Gif, CancellationToken.None)),
+                _ => null,
+            };
+            if (callback is null) return;
+            _keyboardHook.Register(def.Id, def.Modifiers, def.VirtualKey, callback, suppress: true);
+            hotkeyLogger.LogInformation("Hotkey {Id} re-bound to {Combo}",
+                def.Id, ShareQ.App.Services.Hotkeys.HotkeyDisplay.Format(def.Modifiers, def.VirtualKey));
+        };
+
+        try { _keyboardHook.Install(); hotkeyLogger.LogInformation("Low-level keyboard hook installed for global hotkeys."); }
+        catch (Exception ex) { hotkeyLogger.LogWarning(ex, "Failed to install keyboard hook"); }
 
         var ingestion = _host.Services.GetRequiredService<ClipboardIngestionService>();
         ingestion.Start(helper.Handle);
     }
 
-    private void OnHotkeyTriggered(object? sender, HotkeyTriggeredEventArgs e)
-    {
-        switch (e.Definition.Id)
-        {
-            case "popup":
-                var controller = Services.GetRequiredService<PopupWindowController>();
-                _ = controller.ShowAsync();
-                break;
-            case "incognito":
-                var incognito = Services.GetRequiredService<IncognitoModeService>();
-                _ = incognito.ToggleAsync(CancellationToken.None);
-                break;
-            case "capture-region":
-                var capture = Services.GetRequiredService<CaptureCoordinator>();
-                _ = capture.CaptureRegionAsync(CancellationToken.None);
-                break;
-            case "screen-color-picker":
-                var picker = Services.GetRequiredService<ScreenColorPickerService>();
-                picker.PickAtCursor();
-                break;
-            case "record-screen":
-                var rec = Services.GetRequiredService<Services.Recording.RecordingCoordinator>();
-                _ = rec.ToggleAsync(ShareQ.Capture.Recording.RecordingFormat.Mp4, CancellationToken.None);
-                break;
-            case "record-screen-gif":
-                var recGif = Services.GetRequiredService<Services.Recording.RecordingCoordinator>();
-                _ = recGif.ToggleAsync(ShareQ.Capture.Recording.RecordingFormat.Gif, CancellationToken.None);
-                break;
-            default:
-                break;
-        }
-    }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == AppNativeMethods.WmHotkey)
-        {
-            var hotkeys = Services.GetService<IHotkeyManager>();
-            handled = hotkeys?.Dispatch(wParam.ToInt32()) ?? false;
-            return IntPtr.Zero;
-        }
+        // WM_HOTKEY no longer needed (all hotkeys go through the low-level keyboard hook). Only the
+        // clipboard-update message is still routed through here for the Win32ClipboardListener.
         if (msg == AppNativeMethods.WmClipboardUpdate)
         {
             var listener = Services.GetService<IClipboardListener>();
@@ -260,7 +245,6 @@ public partial class App : Application
         if (_host is not null)
         {
             _host.Services.GetService<ClipboardIngestionService>()?.Dispose();
-            _host.Services.GetService<IHotkeyManager>()?.Dispose();
             _host.Services.GetService<IClipboardListener>()?.Dispose();
             _host.Services.GetService<TrayIconService>()?.Dispose();
             _host.Services.GetService<SingleInstanceGuard>()?.Dispose();

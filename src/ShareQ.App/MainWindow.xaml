@@ -41,6 +41,16 @@
                            Command="{Binding ShowUploadersCommand}"
                            Appearance="{Binding IsUploadersSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                           Margin="0,0,0,4"
+                           Content="Hotkeys"
+                           Command="{Binding ShowHotkeysCommand}"
+                           Appearance="{Binding IsHotkeysSelected, Converter={StaticResource BoolToAppearance}}" />
+                <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                           Margin="0,0,0,4"
+                           Content="Capture"
+                           Command="{Binding ShowCaptureCommand}"
+                           Appearance="{Binding IsCaptureSelected, Converter={StaticResource BoolToAppearance}}" />
+                <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Content="About"
                            Command="{Binding ShowAboutCommand}"
                            Appearance="{Binding IsAboutSelected, Converter={StaticResource BoolToAppearance}}" />
@@ -185,6 +195,82 @@
                     </ItemsControl>
                 </StackPanel>
             </ScrollViewer>
+
+            <!-- Hotkeys -->
+            <Grid Visibility="{Binding IsHotkeysSelected, Converter={StaticResource BoolToVisibility}}"
+                  Margin="24,16,24,16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="Hotkeys" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
+                <TextBlock Grid.Row="1" Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                           Text="Click Rebind, then press the new key combination. Any combo works including OS-reserved ones (Win+V, Win+Shift+S, …)." />
+                <ItemsControl Grid.Row="2" ItemsSource="{Binding Hotkeys.Items}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:HotkeyItemViewModel}">
+                            <Border Margin="0,0,0,8" Padding="14,10" Background="#1A1A1A"
+                                    BorderBrush="#333" BorderThickness="1" CornerRadius="6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
+                                               FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                                    <Border Grid.Column="1" Padding="8,3" Background="#2A2A2A"
+                                            BorderBrush="#444" BorderThickness="1" CornerRadius="3"
+                                            Margin="0,0,8,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding BindingDisplay}" FontFamily="Consolas"
+                                                   FontSize="12" Foreground="#DDD" />
+                                    </Border>
+                                    <ui:Button Grid.Column="2" Content="Rebind"
+                                               Command="{Binding RebindCommand}"
+                                               Margin="0,0,4,0" />
+                                    <ui:Button Grid.Column="3" Content="Reset"
+                                               Command="{Binding ResetToDefaultCommand}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+
+            <!-- Capture -->
+            <Grid Visibility="{Binding IsCaptureSelected, Converter={StaticResource BoolToVisibility}}"
+                  Margin="24,16,24,16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="Capture" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
+                <TextBlock Grid.Row="1" Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                           Text="Defaults applied when triggering captures from the tray menu or hotkeys." />
+
+                <TextBlock Grid.Row="2" Text="Save folder" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <Grid Grid.Row="3" Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBox Grid.Column="0" Text="{Binding Capture.Folder, UpdateSourceTrigger=PropertyChanged}"
+                                PlaceholderText="%USERPROFILE%\Pictures\ShareQ" />
+                    <ui:Button Grid.Column="1" Content="Browse…" Command="{Binding Capture.BrowseFolderCommand}" Margin="6,0,0,0" />
+                </Grid>
+
+                <TextBlock Grid.Row="4" Text="Screenshot delay (seconds)" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <ui:NumberBox Grid.Row="5" Value="{Binding Capture.DelaySeconds, Mode=TwoWay}"
+                              Minimum="0" Maximum="30" SmallChange="1"
+                              HorizontalAlignment="Left" Width="120" />
+            </Grid>
 
             <!-- About -->
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
