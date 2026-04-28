@@ -1,0 +1,10 @@
+{
+  "id": "litterbox",
+  "version": "1.0.0",
+  "displayName": "Litterbox (temporary)",
+  "dllName": "ShareQ.Uploaders.Litterbox.dll",
+  "contractVersion": "1.0.0",
+  "description": "Temporary uploads to litterbox.catbox.moe (24h auto-expiry, no API key).",
+  "author": "ShareQ",
+  "repositoryUrl": "https://github.com/Areshys/ShareQ"
+}

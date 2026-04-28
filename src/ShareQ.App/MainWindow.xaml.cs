@@ -1,11 +1,13 @@
+using ShareQ.App.ViewModels;
 using Wpf.Ui.Controls;
 
 namespace ShareQ.App;
 
 public partial class MainWindow : FluentWindow
 {
-    public MainWindow()
+    public MainWindow(SettingsViewModel viewModel)
     {
         InitializeComponent();
+        DataContext = viewModel;
     }
 }

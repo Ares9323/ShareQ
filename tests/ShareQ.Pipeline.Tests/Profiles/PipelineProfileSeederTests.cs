@@ -45,22 +45,24 @@ public class PipelineProfileSeederTests
     }
 
     [Fact]
-    public async Task SeedAsync_LeavesUserCustomizationsUntouched()
+    public async Task SeedAsync_OverwritesExistingDefaultsOnEachRun()
     {
+        // Default profiles evolve as the app adds pipeline steps (e.g. upload). Until a profile
+        // editor exists, the seeder always re-upserts so installs upgrade transparently.
         await using var fx = await new TempPipelineDatabaseFixture().InitializeAsync();
         var (seeder, store) = Build(fx);
-        var customized = new PipelineProfile(
+        var stale = new PipelineProfile(
             DefaultPipelineProfiles.OnClipboardId,
-            "User-renamed",
+            "Old name",
             "event:clipboard",
-            new[] { new PipelineStep("user.custom.task") });
-        await store.UpsertAsync(customized, CancellationToken.None);
+            new[] { new PipelineStep("legacy.task") });
+        await store.UpsertAsync(stale, CancellationToken.None);
 
         await seeder.SeedAsync(CancellationToken.None);
 
         var loaded = await store.GetAsync(DefaultPipelineProfiles.OnClipboardId, CancellationToken.None);
-        Assert.Equal("User-renamed", loaded!.DisplayName);
-        Assert.Single(loaded.Steps);
-        Assert.Equal("user.custom.task", loaded.Steps[0].TaskId);
+        var expected = DefaultPipelineProfiles.All.Single(p => p.Id == DefaultPipelineProfiles.OnClipboardId);
+        Assert.Equal(expected.DisplayName, loaded!.DisplayName);
+        Assert.Equal(expected.Steps.Count, loaded.Steps.Count);
     }
 }

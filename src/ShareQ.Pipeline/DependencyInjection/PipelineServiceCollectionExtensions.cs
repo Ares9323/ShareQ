@@ -18,6 +18,7 @@ public static class PipelineServiceCollectionExtensions
         // Each baked task is registered as IPipelineTask so the registry sees them.
         services.AddSingleton<IPipelineTask, AddToHistoryTask>();
         services.AddSingleton<IPipelineTask, SaveToFileTask>();
+        services.AddSingleton<IPipelineTask, UpdateItemUrlTask>();
 
         services.AddSingleton<IPipelineTaskRegistry, PipelineTaskRegistry>();
         services.AddSingleton<PipelineExecutor>();

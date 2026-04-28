@@ -30,7 +30,12 @@
     <ProjectReference Include="..\ShareQ.Hotkeys\ShareQ.Hotkeys.csproj" />
     <ProjectReference Include="..\ShareQ.Pipeline\ShareQ.Pipeline.csproj" />
     <ProjectReference Include="..\ShareQ.Editor\ShareQ.Editor.csproj" />
+    <ProjectReference Include="..\ShareQ.PluginContracts\ShareQ.PluginContracts.csproj" />
     <ProjectReference Include="..\ShareQ.Plugins\ShareQ.Plugins.csproj" />
     <ProjectReference Include="..\ShareQ.Updater\ShareQ.Updater.csproj" />
+    <!-- Bundled plugins: ship in the box. External plugins live only on disk under
+         %LOCALAPPDATA%\ShareQ\plugins\ and are loaded by PluginLoader at startup. -->
+    <ProjectReference Include="..\..\plugins\ShareQ.Uploaders.Catbox\ShareQ.Uploaders.Catbox.csproj" />
+    <ProjectReference Include="..\..\plugins\ShareQ.Uploaders.Litterbox\ShareQ.Uploaders.Litterbox.csproj" />
   </ItemGroup>
 </Project>

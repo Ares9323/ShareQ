@@ -21,6 +21,9 @@ public static class PipelineBagKeys
     /// <summary>URL produced by an upload task. Type: <c>string</c>.</summary>
     public const string UploadUrl = "upload_url";
 
+    /// <summary>Id of the uploader that produced <see cref="UploadUrl"/>. Type: <c>string</c>.</summary>
+    public const string UploaderId = "uploader_id";
+
     /// <summary>Title of the window that was snap-captured (when applicable). Type: <c>string</c>.</summary>
     public const string WindowTitle = "window_title";
 }

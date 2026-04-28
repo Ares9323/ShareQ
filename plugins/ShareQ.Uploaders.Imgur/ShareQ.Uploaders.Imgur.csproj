@@ -3,9 +3,13 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>ShareQ.Uploaders.Imgur</RootNamespace>
     <AssemblyName>ShareQ.Uploaders.Imgur</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- External plugin: only the contracts assembly. No reference to ShareQ.Plugins / .App /
+         .Storage — those are host concerns. The host loads this DLL into an isolated
+         AssemblyLoadContext at runtime. -->
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\ShareQ.Core\ShareQ.Core.csproj" />
-    <ProjectReference Include="..\..\src\ShareQ.Plugins\ShareQ.Plugins.csproj" />
+    <ProjectReference Include="..\..\src\ShareQ.PluginContracts\ShareQ.PluginContracts.csproj" />
   </ItemGroup>
 </Project>

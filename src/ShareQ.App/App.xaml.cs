@@ -16,6 +16,7 @@ using ShareQ.Editor.DependencyInjection;
 using ShareQ.Hotkeys;
 using ShareQ.Pipeline.DependencyInjection;
 using ShareQ.Pipeline.Profiles;
+using ShareQ.Plugins.DependencyInjection;
 using ShareQ.Storage.Database;
 using ShareQ.Storage.DependencyInjection;
 
@@ -46,6 +47,11 @@ public partial class App : Application
             return;
         }
 
+        // Discover external plugins from disk before building the host so their types can be
+        // registered alongside built-in services. Errors per plugin are isolated.
+        var pluginLoader = new ShareQ.App.Services.Plugins.PluginLoader();
+        var loadedPlugins = new List<ShareQ.App.Services.Plugins.PluginDescriptor>();
+
         _host = Host.CreateDefaultBuilder()
             .ConfigureLogging(logging => { logging.ClearProviders(); logging.AddConsole(); })
             .ConfigureServices(services =>
@@ -56,10 +62,30 @@ public partial class App : Application
                 services.AddShareQClipboard();
                 services.AddShareQCapture();
                 services.AddShareQPipeline();
+                services.AddShareQPlugins();
                 services.AddShareQEditor();
+
+                // Bundled plugins: registered as IUploader so the registry treats them like any
+                // other plugin. The same toggle on/off (in Settings → Plugins) applies.
+                services.AddSingleton<ShareQ.PluginContracts.IUploader, ShareQ.Uploaders.Catbox.CatboxUploader>();
+                services.AddSingleton<ShareQ.PluginContracts.IUploader, ShareQ.Uploaders.Litterbox.LitterboxUploader>();
+
+                // External plugins (drop a folder under %LOCALAPPDATA%\ShareQ\plugins).
+                var pluginsRoot = ShareQ.App.Services.Plugins.PluginLoader.DefaultPluginsRoot;
+                loadedPlugins.AddRange(pluginLoader.LoadFromFolder(pluginsRoot, services,
+                    onError: (folder, ex) => System.Diagnostics.Debug.WriteLine($"[Plugins] failed to load {folder}: {ex.Message}")));
+
+                services.AddSingleton<ShareQ.App.Services.Plugins.PluginRegistry>(sp =>
+                    new ShareQ.App.Services.Plugins.PluginRegistry(
+                        sp.GetRequiredService<ShareQ.Storage.Settings.ISettingsStore>(),
+                        sp.GetServices<ShareQ.PluginContracts.IUploader>(),
+                        loadedPlugins));
+                services.AddSingleton<ShareQ.Plugins.IUploaderResolver>(sp =>
+                    sp.GetRequiredService<ShareQ.App.Services.Plugins.PluginRegistry>());
 
                 // App-side pipeline tasks (registered as IPipelineTask alongside Pipeline's baked tasks).
                 services.AddSingleton<IPipelineTask, CopyImageToClipboardTask>();
+                services.AddSingleton<IPipelineTask, CopyTextToClipboardTask>();
                 services.AddSingleton<IPipelineTask, NotifyToastTask>();
 
                 services.AddSingleton<IHotkeyRegistrar, Win32HotkeyRegistrar>();
@@ -86,6 +112,7 @@ public partial class App : Application
                 services.AddTransient<PopupWindowViewModel>();
                 services.AddTransient<PopupWindow>();
 
+                services.AddSingleton<SettingsViewModel>();
                 services.AddSingleton<MainWindow>();
                 services.AddSingleton<TrayIconService>();
             })

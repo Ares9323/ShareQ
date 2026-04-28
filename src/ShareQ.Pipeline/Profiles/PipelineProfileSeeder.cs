@@ -15,16 +15,12 @@ public sealed class PipelineProfileSeeder
 
     public async Task SeedAsync(CancellationToken cancellationToken)
     {
+        // Until we have a profile editor, always re-seed defaults so changes to the built-in
+        // pipelines (e.g. adding upload steps) reach existing installs without manual DB surgery.
         foreach (var profile in DefaultPipelineProfiles.All)
         {
-            var existing = await _store.GetAsync(profile.Id, cancellationToken).ConfigureAwait(false);
-            if (existing is not null)
-            {
-                _logger.LogDebug("Pipeline profile {Id} already present; leaving untouched", profile.Id);
-                continue;
-            }
             await _store.UpsertAsync(profile, cancellationToken).ConfigureAwait(false);
-            _logger.LogInformation("Pipeline profile {Id} seeded", profile.Id);
+            _logger.LogInformation("Pipeline profile {Id} (re)seeded", profile.Id);
         }
     }
 }

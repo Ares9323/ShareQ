@@ -1,0 +1,10 @@
+{
+  "id": "catbox",
+  "version": "1.0.0",
+  "displayName": "Catbox.moe",
+  "dllName": "ShareQ.Uploaders.Catbox.dll",
+  "contractVersion": "1.0.0",
+  "description": "Permanent anonymous uploads to catbox.moe (no API key).",
+  "author": "ShareQ",
+  "repositoryUrl": "https://github.com/Areshys/ShareQ"
+}
