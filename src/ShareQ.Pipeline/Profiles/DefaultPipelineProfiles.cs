@@ -40,7 +40,7 @@ public static class DefaultPipelineProfiles
                 // Image goes on the clipboard immediately as a fallback so the user has something to
                 // paste even if the upload is slow/fails.
                 new PipelineStep(CopyImageToClipboardTaskId),
-                new PipelineStep(UploadTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"uploader\":\"catbox\"}")),
+                new PipelineStep(UploadTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"uploader\":\"onedrive\"}")),
                 new PipelineStep(UpdateItemUrlTask.TaskId),
                 // On successful upload, replace the image on the clipboard with the URL. On failure
                 // bag.upload_url is missing and the template expands to empty → the task no-ops.

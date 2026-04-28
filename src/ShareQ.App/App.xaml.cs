@@ -69,6 +69,7 @@ public partial class App : Application
                 // other plugin. The same toggle on/off (in Settings → Plugins) applies.
                 services.AddSingleton<ShareQ.PluginContracts.IUploader, ShareQ.Uploaders.Catbox.CatboxUploader>();
                 services.AddSingleton<ShareQ.PluginContracts.IUploader, ShareQ.Uploaders.Litterbox.LitterboxUploader>();
+                services.AddSingleton<ShareQ.PluginContracts.IUploader, ShareQ.Uploaders.OneDrive.OneDriveUploader>();
 
                 // External plugins (drop a folder under %LOCALAPPDATA%\ShareQ\plugins).
                 var pluginsRoot = ShareQ.App.Services.Plugins.PluginLoader.DefaultPluginsRoot;
@@ -82,6 +83,12 @@ public partial class App : Application
                         loadedPlugins));
                 services.AddSingleton<ShareQ.Plugins.IUploaderResolver>(sp =>
                     sp.GetRequiredService<ShareQ.App.Services.Plugins.PluginRegistry>());
+
+                // Host services exposed to every plugin (built-in + external).
+                services.AddSingleton<ShareQ.PluginContracts.IPluginConfigStoreFactory,
+                                      ShareQ.App.Services.Plugins.HostPluginConfigStoreFactory>();
+                services.AddSingleton<ShareQ.PluginContracts.IOAuthHelper,
+                                      ShareQ.App.Services.Plugins.HostOAuthHelper>();
 
                 // App-side pipeline tasks (registered as IPipelineTask alongside Pipeline's baked tasks).
                 services.AddSingleton<IPipelineTask, CopyImageToClipboardTask>();

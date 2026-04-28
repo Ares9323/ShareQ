@@ -31,22 +31,53 @@ public sealed class NotifyToastTask : IPipelineTask
         ArgumentNullException.ThrowIfNull(context);
 
         var title = (string?)config?["title"] ?? "ShareQ";
-        var template = (string?)config?["message"] ?? "Done.";
-        var message = ExpandPlaceholders(template, context);
 
+        // If an upload succeeded, prefer the upload-specific template + use the URL as the
+        // click target. Falls back to the generic "message" template (e.g. "Saved {bag.local_path}")
+        // when no URL is available.
+        var hasUploadUrl = context.Bag.TryGetValue(PipelineBagKeys.UploadUrl, out var rawUrl)
+            && rawUrl is string uploadUrl
+            && !string.IsNullOrEmpty(uploadUrl);
+
+        string message;
         Action? onClick = null;
-        if (context.Bag.TryGetValue(PipelineBagKeys.ItemId, out var rawId) && rawId is long itemId
-            && context.Bag.TryGetValue(PipelineBagKeys.NewItem, out var rawItem) && rawItem is NewItem item
-            && item.Kind == ItemKind.Image)
+
+        if (hasUploadUrl)
         {
+            var url = (string)context.Bag[PipelineBagKeys.UploadUrl]!;
+            var uploadTemplate = (string?)config?["uploadMessage"] ?? "Link ready: {bag.upload_url}";
+            message = ExpandPlaceholders(uploadTemplate, context);
             onClick = () =>
             {
-                Application.Current.Dispatcher.InvokeAsync(async () =>
+                try
                 {
-                    try { await _editorLauncher.OpenAsync(itemId, CancellationToken.None).ConfigureAwait(true); }
-                    catch (Exception ex) { _logger.LogError(ex, "Toast→editor open failed for item {Id}", itemId); }
-                });
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = url,
+                        UseShellExecute = true,
+                    });
+                }
+                catch (Exception ex) { _logger.LogError(ex, "Toast→browser open failed for {Url}", url); }
             };
+        }
+        else
+        {
+            var template = (string?)config?["message"] ?? "Done.";
+            message = ExpandPlaceholders(template, context);
+
+            if (context.Bag.TryGetValue(PipelineBagKeys.ItemId, out var rawId) && rawId is long itemId
+                && context.Bag.TryGetValue(PipelineBagKeys.NewItem, out var rawItem) && rawItem is NewItem item
+                && item.Kind == ItemKind.Image)
+            {
+                onClick = () =>
+                {
+                    Application.Current.Dispatcher.InvokeAsync(async () =>
+                    {
+                        try { await _editorLauncher.OpenAsync(itemId, CancellationToken.None).ConfigureAwait(true); }
+                        catch (Exception ex) { _logger.LogError(ex, "Toast→editor open failed for item {Id}", itemId); }
+                    });
+                };
+            }
         }
 
         _notifier.Show(title, message, onClick);

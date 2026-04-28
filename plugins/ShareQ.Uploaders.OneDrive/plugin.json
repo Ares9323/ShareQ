@@ -1,0 +1,10 @@
+{
+  "id": "onedrive",
+  "version": "1.0.0",
+  "displayName": "OneDrive",
+  "dllName": "ShareQ.Uploaders.OneDrive.dll",
+  "contractVersion": "1.0.0",
+  "description": "Uploads files to your personal OneDrive via Microsoft Graph (signs you in with your Microsoft account on first use).",
+  "author": "ShareQ",
+  "repositoryUrl": "https://github.com/Areshys/ShareQ"
+}

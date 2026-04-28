@@ -37,5 +37,6 @@
          %LOCALAPPDATA%\ShareQ\plugins\ and are loaded by PluginLoader at startup. -->
     <ProjectReference Include="..\..\plugins\ShareQ.Uploaders.Catbox\ShareQ.Uploaders.Catbox.csproj" />
     <ProjectReference Include="..\..\plugins\ShareQ.Uploaders.Litterbox\ShareQ.Uploaders.Litterbox.csproj" />
+    <ProjectReference Include="..\..\plugins\ShareQ.Uploaders.OneDrive\ShareQ.Uploaders.OneDrive.csproj" />
   </ItemGroup>
 </Project>
