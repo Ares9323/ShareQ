@@ -280,6 +280,15 @@ public partial class PopupWindow : Window
                 }
                 break;
             default:
+                // Ctrl+F focuses the searchbox and selects all text so the user can start typing
+                // immediately (matches the convention from browsers, IDEs, etc).
+                if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control && e.Key == Key.F)
+                {
+                    SearchBox.Focus();
+                    SearchBox.SelectAll();
+                    e.Handled = true;
+                    break;
+                }
                 // Ctrl+P toggles pin on the selected row. Plain "P" can't be used because the search
                 // box always holds focus and P is a valid search character.
                 if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control && e.Key == Key.P)
