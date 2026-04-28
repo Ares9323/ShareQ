@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Documents;
@@ -6,26 +7,62 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using ShareQ.App.ViewModels;
 using ShareQ.Core.Domain;
+using ShareQ.Storage.Settings;
 
 namespace ShareQ.App.Windows;
 
 public partial class PopupWindow : Window
 {
-    public PopupWindow(PopupWindowViewModel viewModel)
+    private readonly ISettingsStore _settings;
+    private const string SizeWidthKey = "popup.size.width";
+    private const string SizeHeightKey = "popup.size.height";
+    private bool _sizeRestored;
+
+    public PopupWindow(PopupWindowViewModel viewModel, ISettingsStore settings)
     {
         InitializeComponent();
         DataContext = viewModel;
         ViewModel = viewModel;
+        _settings = settings;
 
-        Loaded += (_, _) => SearchBox.Focus();
+        Loaded += OnLoaded;
         Deactivated += (_, _) => Hide();
         // PreviewKeyDown (tunneling) so the Window sees Ctrl+digits before the SearchBox swallows them.
         PreviewKeyDown += OnKeyDown;
         ResultsList.MouseDoubleClick += OnResultsListDoubleClick;
+        SizeChanged += OnSizeChanged;
 
         // RichTextBox.Document and WebBrowser.NavigateToString aren't bindable, so we wire them up
         // imperatively when the VM publishes new preview bytes/html.
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
+    }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        SearchBox.Focus();
+        try
+        {
+            var w = await _settings.GetAsync(SizeWidthKey, CancellationToken.None).ConfigureAwait(true);
+            var h = await _settings.GetAsync(SizeHeightKey, CancellationToken.None).ConfigureAwait(true);
+            if (w is not null && double.TryParse(w, NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
+                && h is not null && double.TryParse(h, NumberStyles.Float, CultureInfo.InvariantCulture, out var height))
+            {
+                Width = Math.Max(MinWidth, width);
+                Height = Math.Max(MinHeight, height);
+            }
+        }
+        catch { /* settings unavailable — keep defaults */ }
+        _sizeRestored = true;
+    }
+
+    private void OnSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Skip writes during the initial restore + WPF layout passes; only persist real user resizes.
+        if (!_sizeRestored) return;
+        var w = ActualWidth.ToString(CultureInfo.InvariantCulture);
+        var h = ActualHeight.ToString(CultureInfo.InvariantCulture);
+        _ = _settings.SetAsync(SizeWidthKey, w, sensitive: false, CancellationToken.None);
+        _ = _settings.SetAsync(SizeHeightKey, h, sensitive: false, CancellationToken.None);
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
