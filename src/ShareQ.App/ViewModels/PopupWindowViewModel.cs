@@ -1,21 +1,36 @@
 using System.Collections.ObjectModel;
 using System.Text;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
+using ShareQ.App.Services;
 using ShareQ.Core.Domain;
 using ShareQ.Storage.Items;
 
 namespace ShareQ.App.ViewModels;
 
-public sealed partial class PopupWindowViewModel : ObservableObject
+public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
 {
     private readonly IItemStore _items;
+    private readonly IServiceProvider _services;
     private long _previewLoadToken;
+    private string? _selectedItemBlobRef;
 
-    public PopupWindowViewModel(IItemStore items)
+    public PopupWindowViewModel(IItemStore items, IServiceProvider services)
     {
         _items = items;
+        _services = services;
         Rows = [];
+        _items.ItemsChanged += OnItemsChanged;
+    }
+
+    public void Dispose() => _items.ItemsChanged -= OnItemsChanged;
+
+    private void OnItemsChanged(object? sender, ItemsChangedEventArgs e)
+    {
+        // Marshal to UI thread; Refresh updates the ObservableCollection.
+        Application.Current?.Dispatcher.InvokeAsync(() => _ = RefreshAsync(CancellationToken.None));
     }
 
     public ObservableCollection<ItemRowViewModel> Rows { get; }
@@ -25,6 +40,21 @@ public sealed partial class PopupWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private ItemRowViewModel? _selectedRow;
+
+    [ObservableProperty]
+    private ItemKind? _kindFilter;
+
+    public bool IsAllFilter => KindFilter is null;
+    public bool IsTextFilter => KindFilter == ItemKind.Text;
+    public bool IsImageFilter => KindFilter == ItemKind.Image;
+
+    partial void OnKindFilterChanged(ItemKind? value)
+    {
+        OnPropertyChanged(nameof(IsAllFilter));
+        OnPropertyChanged(nameof(IsTextFilter));
+        OnPropertyChanged(nameof(IsImageFilter));
+        _ = RefreshAsync(CancellationToken.None);
+    }
 
     // Preview state for the side panel. Code-behind on PopupWindow watches Rtf/Html bytes since
     // those formats can't be data-bound directly into RichTextBox / WebBrowser.
@@ -61,13 +91,16 @@ public sealed partial class PopupWindowViewModel : ObservableObject
     {
         if (row is null)
         {
+            _selectedItemBlobRef = null;
             ApplyPreview(PreviewKind.None, null, null, null, null, null);
+            NotifyCommandsCanExecuteChanged();
             return;
         }
 
         var record = await _items.GetByIdAsync(row.Id, CancellationToken.None).ConfigureAwait(true);
         if (token != System.Threading.Interlocked.Read(ref _previewLoadToken)) return;
         if (record is null) { ApplyPreview(PreviewKind.None, null, null, null, null, null); return; }
+        _selectedItemBlobRef = record.BlobRef;
 
         var payload = record.Payload;
         var meta = $"{record.Kind} · {row.SourceProcess} · {row.Age}";
@@ -92,6 +125,16 @@ public sealed partial class PopupWindowViewModel : ObservableObject
                 ApplyPreview(PreviewKind.None, null, null, null, null, meta);
                 break;
         }
+        NotifyCommandsCanExecuteChanged();
+    }
+
+    private void NotifyCommandsCanExecuteChanged()
+    {
+        TogglePinSelectedCommand.NotifyCanExecuteChanged();
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
+        PasteSelectedCommand.NotifyCanExecuteChanged();
+        OpenInEditorCommand.NotifyCanExecuteChanged();
+        OpenInExplorerCommand.NotifyCanExecuteChanged();
     }
 
     private void ApplyPreview(PreviewKind kind, string? text, byte[]? image, byte[]? rtf, string? html, string? meta)
@@ -109,14 +152,22 @@ public sealed partial class PopupWindowViewModel : ObservableObject
         // Skip payload decryption for the list view — only metadata + SearchText is needed for the
         // row preview. Payload (decrypted via DPAPI) is fetched on-demand via GetByIdAsync when the
         // user actually pastes / opens an item.
-        var query = new ItemQuery(Limit: 200, Search: NormalizeSearch(SearchText), IncludePayload: false);
+        var query = new ItemQuery(
+            Limit: 500,
+            Search: NormalizeSearch(SearchText),
+            Kind: KindFilter,
+            IncludePayload: false);
+        var previousId = SelectedRow?.Id;
         var loaded = await _items.ListAsync(query, cancellationToken).ConfigureAwait(false);
         Rows.Clear();
         for (var i = 0; i < loaded.Count; i++)
         {
             Rows.Add(new ItemRowViewModel(loaded[i], displayIndex: i));
         }
-        SelectedRow = Rows.FirstOrDefault();
+        // Preserve selection across reloads when the same id is still present.
+        if (previousId is { } id) SelectedRow = Rows.FirstOrDefault(r => r.Id == id);
+        SelectedRow ??= Rows.FirstOrDefault();
+        NotifyCommandsCanExecuteChanged();
     }
 
     partial void OnSearchTextChanged(string value)
@@ -133,17 +184,84 @@ public sealed partial class PopupWindowViewModel : ObservableObject
         SelectedRow = Rows[index];
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task TogglePinSelectedAsync()
     {
         if (SelectedRow is not { } row) return;
         var keepId = row.Id;
         await _items.SetPinnedAsync(row.Id, !row.Pinned, CancellationToken.None).ConfigureAwait(true);
+        // ItemsChanged event will refresh; re-select the same id.
         await RefreshAsync(CancellationToken.None).ConfigureAwait(true);
-        // Pinning floats the row to the top of the pinned group; keep it selected so the user can
-        // quickly unpin or paste.
         SelectedRow = Rows.FirstOrDefault(r => r.Id == keepId) ?? Rows.FirstOrDefault();
     }
+
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task DeleteSelectedAsync()
+    {
+        if (SelectedRow is not { } row) return;
+        var idx = Rows.IndexOf(row);
+        await _items.SoftDeleteAsync(row.Id, CancellationToken.None).ConfigureAwait(true);
+        await RefreshAsync(CancellationToken.None).ConfigureAwait(true);
+        // Restore selection near the deleted row's position rather than jumping to top.
+        if (Rows.Count > 0)
+        {
+            var newIdx = Math.Min(idx, Rows.Count - 1);
+            if (newIdx >= 0) SelectedRow = Rows[newIdx];
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task PasteSelectedAsync()
+    {
+        if (SelectedRow is not { } row) return;
+        var paster = _services.GetRequiredService<AutoPaster>();
+        await paster.PasteAsync(row.Id, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    [RelayCommand(CanExecute = nameof(IsImageSelection))]
+    private async Task OpenInEditorAsync()
+    {
+        if (SelectedRow is null || SelectedRow.Kind != ItemKind.Image) return;
+        var launcher = _services.GetRequiredService<EditorLauncher>();
+        await launcher.OpenAsync(SelectedRow.Id, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    [RelayCommand(CanExecute = nameof(HasFileOnDisk))]
+    private void OpenInExplorer()
+    {
+        var path = _selectedItemBlobRef;
+        if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) return;
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = $"/select,\"{path}\"",
+            UseShellExecute = true
+        });
+    }
+
+    [RelayCommand]
+    private async Task ClearAllAsync()
+    {
+        var result = MessageBox.Show(
+            "Delete every non-pinned item from history? Pinned items will be kept.",
+            "Clear history",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning,
+            MessageBoxResult.Cancel);
+        if (result != MessageBoxResult.OK) return;
+        await _items.ClearAllExceptPinnedAsync(CancellationToken.None).ConfigureAwait(false);
+    }
+
+    [RelayCommand]
+    private void SetFilterAll() => KindFilter = null;
+    [RelayCommand]
+    private void SetFilterText() => KindFilter = ItemKind.Text;
+    [RelayCommand]
+    private void SetFilterImage() => KindFilter = ItemKind.Image;
+
+    private bool HasSelection() => SelectedRow is not null;
+    private bool IsImageSelection() => SelectedRow?.Kind == ItemKind.Image;
+    private bool HasFileOnDisk() => !string.IsNullOrEmpty(_selectedItemBlobRef);
 
     private static string? NormalizeSearch(string text)
     {

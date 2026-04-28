@@ -21,7 +21,7 @@ public sealed class TrayIconService : IDisposable
         _logger = logger;
         _icon = new TaskbarIcon
         {
-            IconSource = new BitmapImage(new Uri("pack://application:,,,/Assets/tray.ico", UriKind.Absolute)),
+            IconSource = new BitmapImage(new Uri("pack://application:,,,/Assets/icon.ico", UriKind.Absolute)),
             ToolTipText = "ShareQ",
             Visibility = Visibility.Visible
         };

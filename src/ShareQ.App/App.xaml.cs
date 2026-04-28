@@ -86,7 +86,6 @@ public partial class App : Application
                 services.AddTransient<PopupWindowViewModel>();
                 services.AddTransient<PopupWindow>();
 
-                services.AddSingleton<MainWindowViewModel>();
                 services.AddSingleton<MainWindow>();
                 services.AddSingleton<TrayIconService>();
             })

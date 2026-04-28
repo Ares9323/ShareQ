@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:ShareQ.App.ViewModels"
         Title="ShareQ — Clipboard"
+        Icon="pack://application:,,,/Assets/icon.ico"
         Width="920" Height="520"
         MinWidth="600" MinHeight="320"
         WindowStartupLocation="Manual"
@@ -13,21 +14,82 @@
         Topmost="True"
         ShowInTaskbar="False"
         ResizeMode="CanResizeWithGrip">
+    <Window.Resources>
+        <Style x:Key="FilterChip" TargetType="Button">
+            <Setter Property="Background" Value="#2A2A2A" />
+            <Setter Property="Foreground" Value="#CCC" />
+            <Setter Property="BorderBrush" Value="#444" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,3" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+        </Style>
+        <Style x:Key="FilterChipActive" TargetType="Button" BasedOn="{StaticResource FilterChip}">
+            <Setter Property="Background" Value="#3D5A80" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#5A7CA8" />
+        </Style>
+        <Style x:Key="ActionBtn" TargetType="Button">
+            <Setter Property="Background" Value="#2A2A2A" />
+            <Setter Property="Foreground" Value="#DDD" />
+            <Setter Property="BorderBrush" Value="#444" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+        </Style>
+    </Window.Resources>
     <Grid Margin="12">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" MinWidth="380" />
-            <ColumnDefinition Width="320" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition x:Name="PreviewColumn" Width="320" MinWidth="200" />
         </Grid.ColumnDefinitions>
 
+        <!-- Drag handle: small chrome strip in lieu of a real title bar (WindowStyle=None). -->
+        <Border x:Name="DragHandle"
+                Grid.Row="0"
+                Grid.Column="0"
+                Grid.ColumnSpan="3"
+                Height="22"
+                Background="#252525"
+                Cursor="SizeAll"
+                CornerRadius="2,2,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           Text="ShareQ — Clipboard"
+                           Foreground="#888"
+                           FontSize="11"
+                           Margin="8,0,0,0"
+                           VerticalAlignment="Center" />
+                <Button Grid.Column="1"
+                        x:Name="CloseButton"
+                        Content="×"
+                        Width="28"
+                        Background="Transparent"
+                        Foreground="#AAA"
+                        BorderThickness="0"
+                        FontSize="14"
+                        Cursor="Arrow"
+                        ToolTip="Close (Esc)" />
+            </Grid>
+        </Border>
+
         <TextBox x:Name="SearchBox"
-                 Grid.Row="0"
+                 Grid.Row="1"
                  Grid.Column="0"
-                 Grid.ColumnSpan="2"
+                 Margin="0,0,8,0"
                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                  FontSize="16"
                  Padding="8"
@@ -37,8 +99,62 @@
                  BorderThickness="1"
                  CaretBrush="White" />
 
+        <!-- Filter chips + Clear all (left column only — preview pane spans full height on the right). -->
+        <Grid Grid.Row="2" Grid.Column="0" Margin="0,8,8,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <Button Content="All" Command="{Binding SetFilterAllCommand}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource FilterChip}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsAllFilter}" Value="True">
+                                    <Setter Property="Background" Value="#3D5A80" />
+                                    <Setter Property="Foreground" Value="White" />
+                                    <Setter Property="BorderBrush" Value="#5A7CA8" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Content="Text" Command="{Binding SetFilterTextCommand}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource FilterChip}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsTextFilter}" Value="True">
+                                    <Setter Property="Background" Value="#3D5A80" />
+                                    <Setter Property="Foreground" Value="White" />
+                                    <Setter Property="BorderBrush" Value="#5A7CA8" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Content="Image" Command="{Binding SetFilterImageCommand}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource FilterChip}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsImageFilter}" Value="True">
+                                    <Setter Property="Background" Value="#3D5A80" />
+                                    <Setter Property="Foreground" Value="White" />
+                                    <Setter Property="BorderBrush" Value="#5A7CA8" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </StackPanel>
+            <Button Grid.Column="1"
+                    Content="Clear all"
+                    Command="{Binding ClearAllCommand}"
+                    Style="{StaticResource ActionBtn}"
+                    ToolTip="Delete every non-pinned item" />
+        </Grid>
+
         <ListBox x:Name="ResultsList"
-                 Grid.Row="1"
+                 Grid.Row="3"
                  Grid.Column="0"
                  Margin="0,8,8,8"
                  Background="Transparent"
@@ -111,8 +227,16 @@
         <!-- Side panel: rich preview of the selected row. Code-behind on PopupWindow watches the
              VM's PreviewRtfBytes / PreviewHtml since RichTextBox.Document and WebBrowser content
              can't be data-bound directly. -->
-        <Border Grid.Row="1" Grid.Column="1"
-                Margin="0,8,0,8"
+        <GridSplitter Grid.Row="1" Grid.RowSpan="3" Grid.Column="1"
+                      Width="4"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"
+                      Background="Transparent"
+                      ShowsPreview="False" />
+
+        <Border Grid.Row="1" Grid.RowSpan="3" Grid.Column="2"
+                x:Name="PreviewPane"
+                Margin="0,0,0,8"
                 Background="#1A1A1A"
                 BorderBrush="#333" BorderThickness="1"
                 CornerRadius="4">
@@ -120,6 +244,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <TextBlock Grid.Row="0"
                            Margin="8,6"
@@ -163,12 +288,32 @@
                                 Margin="6,0,6,6"
                                 Visibility="{Binding IsHtmlPreview, Converter={StaticResource BoolToVisibility}}" />
                 </Grid>
+                <!-- Action toolbar at bottom of preview pane -->
+                <Border Grid.Row="2" BorderBrush="#333" BorderThickness="0,1,0,0" Padding="6,6">
+                    <WrapPanel>
+                        <Button Content="Paste" ToolTip="Enter"
+                                Command="{Binding PasteSelectedCommand}"
+                                Style="{StaticResource ActionBtn}" />
+                        <Button Content="Pin" ToolTip="Ctrl+P"
+                                Command="{Binding TogglePinSelectedCommand}"
+                                Style="{StaticResource ActionBtn}" />
+                        <Button Content="Editor" ToolTip="Image only"
+                                Command="{Binding OpenInEditorCommand}"
+                                Style="{StaticResource ActionBtn}" />
+                        <Button Content="Folder" ToolTip="Show in explorer"
+                                Command="{Binding OpenInExplorerCommand}"
+                                Style="{StaticResource ActionBtn}" />
+                        <Button Content="Delete" ToolTip="Del"
+                                Command="{Binding DeleteSelectedCommand}"
+                                Style="{StaticResource ActionBtn}" />
+                    </WrapPanel>
+                </Border>
             </Grid>
         </Border>
 
-        <TextBlock Grid.Row="2"
+        <TextBlock Grid.Row="4"
                    Grid.Column="0"
-                   Grid.ColumnSpan="2"
+                   Grid.ColumnSpan="3"
                    Foreground="#666"
                    FontSize="11"
                    Text="↑↓ navigate · Enter paste · Ctrl+1-9 quick paste · Ctrl+P pin · Esc close" />

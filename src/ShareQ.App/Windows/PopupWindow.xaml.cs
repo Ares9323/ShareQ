@@ -16,6 +16,7 @@ public partial class PopupWindow : Window
     private readonly ISettingsStore _settings;
     private const string SizeWidthKey = "popup.size.width";
     private const string SizeHeightKey = "popup.size.height";
+    private const string PreviewWidthKey = "popup.preview.width";
     private bool _sizeRestored;
 
     public PopupWindow(PopupWindowViewModel viewModel, ISettingsStore settings)
@@ -31,6 +32,19 @@ public partial class PopupWindow : Window
         PreviewKeyDown += OnKeyDown;
         ResultsList.MouseDoubleClick += OnResultsListDoubleClick;
         SizeChanged += OnSizeChanged;
+        // GridSplitter drags don't trigger the window's SizeChanged — listen on the preview pane
+        // itself so we capture both window resizes and splitter drags.
+        PreviewPane.SizeChanged += OnPreviewPaneSizeChanged;
+
+        // Custom drag chrome (WindowStyle=None has no native title bar).
+        DragHandle.MouseLeftButtonDown += (_, e) =>
+        {
+            if (e.ButtonState == MouseButtonState.Pressed && e.OriginalSource != CloseButton)
+            {
+                try { DragMove(); } catch { /* DragMove throws if mouse already up */ }
+            }
+        };
+        CloseButton.Click += (_, _) => Hide();
 
         // RichTextBox.Document and WebBrowser.NavigateToString aren't bindable, so we wire them up
         // imperatively when the VM publishes new preview bytes/html.
@@ -40,6 +54,10 @@ public partial class PopupWindow : Window
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         SearchBox.Focus();
+        // Pre-navigate the WebBrowser to a dark blank page so MSHTML doesn't flash white about:blank
+        // before the first real preview lands.
+        try { HtmlPreviewBox.NavigateToString(WrapWithCharset(string.Empty)); }
+        catch { /* MSHTML may not be initialized yet — first real navigation will set the bg */ }
         try
         {
             var w = await _settings.GetAsync(SizeWidthKey, CancellationToken.None).ConfigureAwait(true);
@@ -49,6 +67,12 @@ public partial class PopupWindow : Window
             {
                 Width = Math.Max(MinWidth, width);
                 Height = Math.Max(MinHeight, height);
+            }
+
+            var pw = await _settings.GetAsync(PreviewWidthKey, CancellationToken.None).ConfigureAwait(true);
+            if (pw is not null && double.TryParse(pw, NumberStyles.Float, CultureInfo.InvariantCulture, out var previewWidth))
+            {
+                PreviewColumn.Width = new GridLength(Math.Max(PreviewColumn.MinWidth, previewWidth), GridUnitType.Pixel);
             }
         }
         catch { /* settings unavailable — keep defaults */ }
@@ -63,6 +87,18 @@ public partial class PopupWindow : Window
         var h = ActualHeight.ToString(CultureInfo.InvariantCulture);
         _ = _settings.SetAsync(SizeWidthKey, w, sensitive: false, CancellationToken.None);
         _ = _settings.SetAsync(SizeHeightKey, h, sensitive: false, CancellationToken.None);
+    }
+
+    private void OnPreviewPaneSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!_sizeRestored) return;
+        if (!e.WidthChanged) return;
+        // Persist the preview column's current pixel width so the splitter position is restored on
+        // next open. The list column flexes via "*" so we don't store it.
+        _ = _settings.SetAsync(PreviewWidthKey,
+            PreviewPane.ActualWidth.ToString(CultureInfo.InvariantCulture),
+            sensitive: false,
+            CancellationToken.None);
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -107,7 +143,7 @@ public partial class PopupWindow : Window
     {
         if (string.IsNullOrEmpty(html))
         {
-            HtmlPreviewBox.NavigateToString("<html><body></body></html>");
+            HtmlPreviewBox.NavigateToString(WrapWithCharset(string.Empty));
             return;
         }
         // Clipboard HTML usually arrives wrapped in CF_HTML metadata (Version: ... StartHTML: ...);
@@ -233,6 +269,15 @@ public partial class PopupWindow : Window
                     PasteRequested?.Invoke(this, row.Id);
                 }
                 e.Handled = true;
+                break;
+            case Key.Delete:
+                // Don't hijack Delete inside the SearchBox — let it edit characters there. Outside
+                // the search box (most of the popup) it deletes the selected item.
+                if (!SearchBox.IsKeyboardFocused)
+                {
+                    ViewModel.DeleteSelectedCommand.Execute(null);
+                    e.Handled = true;
+                }
                 break;
             default:
                 // Ctrl+P toggles pin on the selected row. Plain "P" can't be used because the search
