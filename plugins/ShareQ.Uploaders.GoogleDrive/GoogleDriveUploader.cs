@@ -9,15 +9,16 @@ using ShareQ.PluginContracts;
 namespace ShareQ.Uploaders.GoogleDrive;
 
 /// <summary>
-/// Uploads files to the user's Google Drive. Auth is OAuth2 + PKCE — first upload triggers a
-/// browser sign-in via the host's <see cref="IOAuthHelper"/>; tokens persist (encrypted) in
-/// <see cref="IPluginConfigStore"/> and refresh automatically.
+/// Uploads files to the user's Google Drive. Auth is OAuth2 + PKCE — sign-in goes through the
+/// host's <see cref="IOAuthHelper"/>; tokens persist (encrypted) in <see cref="IPluginConfigStore"/>
+/// and refresh automatically.
 ///
-/// Files land in a top-level "ShareQ" folder (created on first upload, id cached per-account)
-/// and are shared as public read-only links. Scope is <c>drive.file</c> — the app can only see
-/// files it created, not the user's full Drive.
+/// Settings (via <see cref="IConfigurableUploader"/>): target folder picker (loaded from the
+/// user's Drive at runtime, defaults to "My Drive root"), public/private toggle. Scope is
+/// <c>drive.file</c> — the app can only see files / folders it created, not the user's full
+/// Drive — so the folder dropdown only shows folders ShareQ has access to.
 /// </summary>
-public sealed class GoogleDriveUploader : IUploader
+public sealed class GoogleDriveUploader : IUploader, IAuthenticatedUploader, IConfigurableUploader
 {
     public const string UploaderId = "google-drive";
 
@@ -34,9 +35,10 @@ public sealed class GoogleDriveUploader : IUploader
     private const string AccessTokenKey  = "access_token";
     private const string RefreshTokenKey = "refresh_token";
     private const string ExpiresAtKey    = "expires_at_utc";
-    private const string FolderIdKey     = "folder_id";   // cached after first lookup/create
-    private const string FolderNameKey   = "folder_name";
-    private const string DefaultFolder   = "ShareQ";
+
+    // Settings keys exposed via IConfigurableUploader.
+    private const string FolderIdKey     = "folder_id";   // empty = upload to My Drive root
+    private const string MakePublicKey   = "make_public"; // "true"/"false"
 
     private readonly IPluginConfigStore _config;
     private readonly IOAuthHelper _oauth;
@@ -71,14 +73,11 @@ public sealed class GoogleDriveUploader : IUploader
         using var http = _httpFactory.CreateClient(nameof(GoogleDriveUploader));
         http.BaseAddress = new Uri("https://www.googleapis.com/");
 
-        var folderName = (await _config.GetAsync(FolderNameKey, cancellationToken).ConfigureAwait(false)) ?? DefaultFolder;
-        _lastApiError = null;
-        var folderId = await EnsureFolderAsync(http, folderName, token, cancellationToken).ConfigureAwait(false);
-        if (folderId is null)
-        {
-            var detail = string.IsNullOrEmpty(_lastApiError) ? "failed to resolve / create the ShareQ folder on Drive" : _lastApiError;
-            return UploadResult.Failure($"Google Drive: {detail}");
-        }
+        // Settings: empty folder_id means "upload to My Drive root" (ShareX-equivalent default).
+        // make_public defaults to true to preserve current behaviour for existing users.
+        var folderId = await _config.GetAsync(FolderIdKey, cancellationToken).ConfigureAwait(false);
+        var makePublicRaw = await _config.GetAsync(MakePublicKey, cancellationToken).ConfigureAwait(false);
+        var makePublic = makePublicRaw is null || string.Equals(makePublicRaw, "true", StringComparison.OrdinalIgnoreCase);
 
         var fileName = SanitizeFileName(request.FileName);
 
@@ -92,10 +91,15 @@ public sealed class GoogleDriveUploader : IUploader
         }
         if (!uploadOk || fileId is null) return UploadResult.Failure(errorMessage ?? "upload failed");
 
-        var shareLinkOk = await MakeFilePublicAsync(http, fileId, token, cancellationToken).ConfigureAwait(false);
-        if (!shareLinkOk) return UploadResult.Failure("upload succeeded but failed to set public sharing");
+        if (makePublic)
+        {
+            var shareLinkOk = await MakeFilePublicAsync(http, fileId, token, cancellationToken).ConfigureAwait(false);
+            if (!shareLinkOk) return UploadResult.Failure("upload succeeded but failed to set public sharing");
+        }
 
         // webViewLink format is stable for Drive: opens the in-Drive viewer the same way ShareX does.
+        // Private files at this URL prompt the viewer to request access — that's the user's intent
+        // when they've turned off make_public.
         return UploadResult.Success($"https://drive.google.com/file/d/{fileId}/view?usp=sharing");
     }
 
@@ -141,7 +145,6 @@ public sealed class GoogleDriveUploader : IUploader
     /// user sees the actual Google response (e.g. "invalid_client", "redirect_uri_mismatch")
     /// rather than a generic "sign-in refused".</summary>
     private string? _lastSignInError;
-    private string? _lastApiError;
 
     private async Task<string?> InteractiveSignInAsync(CancellationToken cancellationToken)
     {
@@ -183,81 +186,65 @@ public sealed class GoogleDriveUploader : IUploader
             await _config.SetAsync(ExpiresAtKey, exp.ToString("O", CultureInfo.InvariantCulture), sensitive: false, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<string?> EnsureFolderAsync(HttpClient http, string folderName, string accessToken, CancellationToken cancellationToken)
+    /// <summary>List folders visible to ShareQ (drive.file scope sees only app-created folders).
+    /// Used by the settings dropdown — auto-create is gone, the user picks an existing folder
+    /// (or accepts the default "My Drive root"). Same approach ShareX takes.</summary>
+    private async Task<IReadOnlyList<DropdownOption>> ListFoldersAsync(string accessToken, CancellationToken cancellationToken)
     {
-        var cached = await _config.GetAsync(FolderIdKey, cancellationToken).ConfigureAwait(false);
-        if (!string.IsNullOrEmpty(cached)) return cached;
+        using var http = _httpFactory.CreateClient(nameof(GoogleDriveUploader));
+        http.BaseAddress = new Uri("https://www.googleapis.com/");
 
-        // Look up by name first — drive.file scope only sees app-created files, so this won't
-        // collide with unrelated folders the user has named "ShareQ".
-        var queryEscaped = Uri.EscapeDataString(
-            $"mimeType='application/vnd.google-apps.folder' and name='{folderName.Replace("'", "\\'", StringComparison.Ordinal)}' and trashed=false");
-        using (var search = new HttpRequestMessage(HttpMethod.Get, $"drive/v3/files?q={queryEscaped}&fields=files(id,name)"))
+        var queryEscaped = Uri.EscapeDataString("mimeType='application/vnd.google-apps.folder' and trashed=false");
+        var results = new List<DropdownOption>();
+        // Empty value = upload to My Drive root (no parent set on the file metadata).
+        results.Add(new DropdownOption("", "(My Drive root)"));
+
+        var pageToken = "";
+        do
         {
-            search.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            using var response = await http.SendAsync(search, cancellationToken).ConfigureAwait(false);
-            var searchBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            if (response.IsSuccessStatusCode)
+            var url = $"drive/v3/files?q={queryEscaped}&fields=nextPageToken,files(id,name)&pageSize=100";
+            if (!string.IsNullOrEmpty(pageToken)) url += $"&pageToken={Uri.EscapeDataString(pageToken)}";
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
             {
-                using var doc = JsonDocument.Parse(searchBody);
-                if (doc.RootElement.TryGetProperty("files", out var files) && files.GetArrayLength() > 0)
+                Debug.WriteLine($"[GoogleDriveUploader] folder list HTTP {(int)response.StatusCode}: {body}");
+                break;
+            }
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("files", out var files))
+            {
+                foreach (var f in files.EnumerateArray())
                 {
-                    var id = files[0].GetProperty("id").GetString();
-                    if (!string.IsNullOrEmpty(id))
-                    {
-                        await _config.SetAsync(FolderIdKey, id, sensitive: false, cancellationToken).ConfigureAwait(false);
-                        return id;
-                    }
+                    var id = f.GetProperty("id").GetString();
+                    var name = f.GetProperty("name").GetString();
+                    if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(name))
+                        results.Add(new DropdownOption(id, name));
                 }
             }
-            else
-            {
-                Debug.WriteLine($"[GoogleDriveUploader] folder search HTTP {(int)response.StatusCode}: {searchBody}");
-            }
+            pageToken = doc.RootElement.TryGetProperty("nextPageToken", out var pt) ? pt.GetString() ?? "" : "";
         }
+        while (!string.IsNullOrEmpty(pageToken));
 
-        // Not found → create.
-        using var create = new HttpRequestMessage(HttpMethod.Post, "drive/v3/files");
-        create.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        var meta = JsonSerializer.Serialize(new
-        {
-            name = folderName,
-            mimeType = "application/vnd.google-apps.folder",
-        });
-        create.Content = new StringContent(meta, Encoding.UTF8, "application/json");
-        using var createResponse = await http.SendAsync(create, cancellationToken).ConfigureAwait(false);
-        var createBody = await createResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        if (!createResponse.IsSuccessStatusCode)
-        {
-            // Common cause for 403 here: the Google Drive API isn't enabled on the Cloud project
-            // that owns the OAuth client. Body usually contains a link to the enablement page.
-            _lastApiError = $"HTTP {(int)createResponse.StatusCode}: {createBody}";
-            Debug.WriteLine($"[GoogleDriveUploader] folder create {_lastApiError}");
-            return null;
-        }
-        using var createDoc = JsonDocument.Parse(createBody);
-        var newId = createDoc.RootElement.GetProperty("id").GetString();
-        if (!string.IsNullOrEmpty(newId))
-            await _config.SetAsync(FolderIdKey, newId, sensitive: false, cancellationToken).ConfigureAwait(false);
-        return newId;
+        return results;
     }
 
     private static async Task<(bool Ok, string? FileId, string? Error)> UploadMultipartAsync(
-        HttpClient http, string fileName, string folderId, UploadRequest request, string accessToken, CancellationToken cancellationToken)
+        HttpClient http, string fileName, string? folderId, UploadRequest request, string accessToken, CancellationToken cancellationToken)
     {
-        // Drive multipart upload: one boundary, two parts — JSON metadata + raw bytes. Sets parent
-        // so the file lands in the ShareQ folder. uploadType=multipart is the simplest path that
-        // accepts both metadata and bytes in a single round-trip; resumable would only matter for
-        // larger files than typical screenshot/clip uploads.
+        // Drive multipart upload: one boundary, two parts — JSON metadata + raw bytes.
+        // uploadType=multipart is the simplest path that accepts both metadata and bytes in a
+        // single round-trip; resumable would only matter for files larger than typical
+        // screenshot/clip uploads. When folderId is null the file lands in My Drive root.
         var boundary = "shareq_" + Guid.NewGuid().ToString("N");
         using var multipart = new MultipartContent("related", boundary);
 
-        var metadata = JsonSerializer.Serialize(new
-        {
-            name = fileName,
-            parents = new[] { folderId },
-        });
-        var metadataPart = new StringContent(metadata, Encoding.UTF8, "application/json");
+        object metadata = string.IsNullOrEmpty(folderId)
+            ? new { name = fileName }
+            : new { name = fileName, parents = new[] { folderId } };
+        var metadataPart = new StringContent(JsonSerializer.Serialize(metadata), Encoding.UTF8, "application/json");
         multipart.Add(metadataPart);
 
         var bytesPart = new ByteArrayContent(request.Bytes);
@@ -306,5 +293,66 @@ public sealed class GoogleDriveUploader : IUploader
         foreach (var c in name)
             sb.Append(Array.IndexOf(invalid, c) >= 0 ? '_' : c);
         return sb.ToString();
+    }
+
+    // ── IAuthenticatedUploader ───────────────────────────────────────────────────────────────
+
+    public async Task<AuthState> GetAuthStateAsync(CancellationToken cancellationToken)
+    {
+        // We deliberately don't call Drive's /about endpoint to fetch the email — drive.file scope
+        // doesn't grant access to it (would need userinfo.profile / userinfo.email scopes, which
+        // means a re-consent for existing users). Showing a generic "Signed in" is sufficient.
+        var refresh = await _config.GetAsync(RefreshTokenKey, cancellationToken).ConfigureAwait(false);
+        var access = await _config.GetAsync(AccessTokenKey, cancellationToken).ConfigureAwait(false);
+        var signedIn = !string.IsNullOrEmpty(refresh) || !string.IsNullOrEmpty(access);
+        return new AuthState(signedIn, signedIn ? "Signed in" : null);
+    }
+
+    public async Task<AuthResult> SignInAsync(CancellationToken cancellationToken)
+    {
+        // Force a fresh interactive sign-in (don't try to reuse cached tokens — the user clicked
+        // Sign in deliberately, presumably because something went wrong with the existing creds
+        // or they want to switch account).
+        var token = await InteractiveSignInAsync(cancellationToken).ConfigureAwait(false);
+        return token is null
+            ? AuthResult.Failure(_lastSignInError ?? "sign-in cancelled")
+            : AuthResult.Success();
+    }
+
+    public async Task SignOutAsync(CancellationToken cancellationToken)
+    {
+        // Wipe tokens + folder selection. Folder cache is also cleared because a new account has
+        // a different drive — the previously-saved folder id likely doesn't resolve.
+        await _config.SetAsync(AccessTokenKey,  string.Empty, sensitive: true,  cancellationToken).ConfigureAwait(false);
+        await _config.SetAsync(RefreshTokenKey, string.Empty, sensitive: true,  cancellationToken).ConfigureAwait(false);
+        await _config.SetAsync(ExpiresAtKey,    string.Empty, sensitive: false, cancellationToken).ConfigureAwait(false);
+        await _config.SetAsync(FolderIdKey,     string.Empty, sensitive: false, cancellationToken).ConfigureAwait(false);
+    }
+
+    // ── IConfigurableUploader ────────────────────────────────────────────────────────────────
+
+    public IReadOnlyList<PluginSettingDescriptor> GetSettings() =>
+    [
+        new DropdownSetting(
+            Key: FolderIdKey,
+            Label: "Target folder",
+            Description: "Folders ShareQ has previously created or that the user explicitly granted via the Google picker. Empty selection = upload to My Drive root.",
+            IsAsyncLoaded: true),
+        new BoolSetting(
+            Key: MakePublicKey,
+            Label: "Make uploads public",
+            Description: "When on, ShareQ adds an anyone-with-link viewer permission so the URL is shareable. When off, uploads stay private — only signed-in viewers with explicit access can open them.",
+            DefaultValue: true),
+    ];
+
+    public async Task<IReadOnlyList<DropdownOption>> LoadDropdownOptionsAsync(string settingKey, CancellationToken cancellationToken)
+    {
+        if (string.Equals(settingKey, FolderIdKey, StringComparison.Ordinal))
+        {
+            var token = await EnsureAccessTokenAsync(cancellationToken).ConfigureAwait(false);
+            if (token is null) return [new DropdownOption("", "(sign in to load folders)")];
+            return await ListFoldersAsync(token, cancellationToken).ConfigureAwait(false);
+        }
+        return [];
     }
 }

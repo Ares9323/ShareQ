@@ -3,6 +3,8 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShareQ.App.Services.Plugins;
+using ShareQ.App.Windows;
+using ShareQ.PluginContracts;
 using MessageBox = System.Windows.MessageBox;
 using MessageBoxButton = System.Windows.MessageBoxButton;
 using MessageBoxImage = System.Windows.MessageBoxImage;
@@ -18,11 +20,20 @@ namespace ShareQ.App.ViewModels;
 public sealed partial class PluginItemViewModel : ObservableObject
 {
     private readonly PluginRegistry _registry;
+    private readonly IUploader? _uploader;
+    private readonly IPluginConfigStoreFactory? _configFactory;
     private bool _suppressPersist;
 
-    public PluginItemViewModel(PluginDescriptor descriptor, bool isEnabled, PluginRegistry registry)
+    public PluginItemViewModel(
+        PluginDescriptor descriptor,
+        bool isEnabled,
+        PluginRegistry registry,
+        IUploader? uploader,
+        IPluginConfigStoreFactory? configFactory)
     {
         _registry = registry;
+        _uploader = uploader;
+        _configFactory = configFactory;
         Id = descriptor.Id;
         DisplayName = descriptor.DisplayName;
         Version = descriptor.Version;
@@ -31,6 +42,10 @@ public sealed partial class PluginItemViewModel : ObservableObject
         RepositoryUrl = descriptor.Manifest.RepositoryUrl;
         BuiltIn = descriptor.BuiltIn;
         FolderPath = descriptor.FolderPath;
+        // The Configure button is meaningful only for plugins that opt into either auth or
+        // declarative settings — anything else has nothing to show. Built-in toggle-only
+        // plugins like Catbox / Litterbox skip both interfaces, so the button stays hidden.
+        HasConfig = uploader is IAuthenticatedUploader or IConfigurableUploader;
         _suppressPersist = true;
         IsEnabled = isEnabled;
         _suppressPersist = false;
@@ -60,6 +75,7 @@ public sealed partial class PluginItemViewModel : ObservableObject
     public string Badge => BuiltIn ? "Built-in" : "External";
 
     public bool CanUninstall => !BuiltIn && !string.IsNullOrEmpty(FolderPath);
+    public bool HasConfig { get; }
 
     [ObservableProperty]
     private bool _isEnabled;
@@ -68,6 +84,15 @@ public sealed partial class PluginItemViewModel : ObservableObject
     {
         if (_suppressPersist) return;
         _ = _registry.SetEnabledAsync(Id, value, CancellationToken.None);
+    }
+
+    [RelayCommand(CanExecute = nameof(HasConfig))]
+    private void Configure()
+    {
+        if (_uploader is null || _configFactory is null) return;
+        var vm = new PluginConfigViewModel(_uploader, _configFactory.Create(_uploader.Id));
+        var dialog = new PluginConfigDialog(vm) { Owner = Application.Current.MainWindow };
+        dialog.ShowDialog();
     }
 
     [RelayCommand(CanExecute = nameof(CanUninstall))]

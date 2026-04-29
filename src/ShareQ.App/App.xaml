@@ -16,6 +16,7 @@
             <cv:NullToVisibilityConverter x:Key="NullToVisibility" />
             <cv:NonEmptyToVisibilityConverter x:Key="NonEmptyToVisibility" />
             <cv:BoolToOpacityConverter x:Key="BoolToOpacity" />
+            <cv:InverseBoolConverter x:Key="InverseBool" />
             <cv:BytesToImageConverter x:Key="BytesToImage" />
         </ResourceDictionary>
     </Application.Resources>

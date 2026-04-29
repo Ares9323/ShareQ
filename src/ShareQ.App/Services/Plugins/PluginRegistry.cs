@@ -38,6 +38,10 @@ public sealed class PluginRegistry : IUploaderResolver
     /// <summary>All known uploaders (enabled + disabled), used by the settings UI listing.</summary>
     public IReadOnlyList<IUploader> AllUploaders => _uploaders.Values.ToList();
 
+    /// <summary>Look up an uploader by id ignoring enabled state — used by the settings UI to
+    /// build a per-plugin Configure dialog before the user has toggled the plugin on.</summary>
+    public IUploader? GetUploader(string id) => _uploaders.TryGetValue(id, out var u) ? u : null;
+
     public IReadOnlyList<PluginDescriptor> ExternalDescriptors => _externalDescriptors;
 
     /// <summary>Descriptor list for the settings UI: built-in entries are synthesized so

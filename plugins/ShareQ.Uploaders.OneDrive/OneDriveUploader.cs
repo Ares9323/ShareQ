@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -9,11 +10,13 @@ namespace ShareQ.Uploaders.OneDrive;
 
 /// <summary>
 /// Uploads files to the user's OneDrive (consumer / personal account) via Microsoft Graph.
-/// Authentication is OAuth2 + PKCE — the first upload triggers a browser sign-in via the host's
-/// <see cref="IOAuthHelper"/>; tokens are persisted (encrypted) in <see cref="IPluginConfigStore"/>
-/// and refreshed automatically when expired.
+/// Authentication is OAuth2 + PKCE through the host's <see cref="IOAuthHelper"/>; tokens persist
+/// (encrypted) in <see cref="IPluginConfigStore"/> and refresh automatically.
+///
+/// Settings (via <see cref="IConfigurableUploader"/>): target folder path under My Files
+/// (defaults to "ShareQ"), public/private toggle for the share link.
 /// </summary>
-public sealed class OneDriveUploader : IUploader
+public sealed class OneDriveUploader : IUploader, IAuthenticatedUploader, IConfigurableUploader
 {
     public const string UploaderId = "onedrive";
 
@@ -28,7 +31,8 @@ public sealed class OneDriveUploader : IUploader
     private const string AccessTokenKey  = "access_token";
     private const string RefreshTokenKey = "refresh_token";
     private const string ExpiresAtKey    = "expires_at_utc";
-    private const string FolderKey       = "folder_path";
+    private const string FolderKey       = "folder_path";   // path under root, e.g. "ShareQ" or "ShareQ/2026"
+    private const string MakePublicKey   = "make_public";   // "true"/"false"; OneDrive share link scope
     private const string DefaultFolder   = "ShareQ";
 
     private readonly IPluginConfigStore _config;
@@ -58,6 +62,9 @@ public sealed class OneDriveUploader : IUploader
         if (token is null) return UploadResult.Failure("OneDrive sign-in required (or refused)");
 
         var folder = (await _config.GetAsync(FolderKey, cancellationToken).ConfigureAwait(false)) ?? DefaultFolder;
+        if (string.IsNullOrEmpty(folder)) folder = DefaultFolder;
+        var makePublicRaw = await _config.GetAsync(MakePublicKey, cancellationToken).ConfigureAwait(false);
+        var makePublic = makePublicRaw is null || string.Equals(makePublicRaw, "true", StringComparison.OrdinalIgnoreCase);
         var fileName = SanitizeFileName(request.FileName);
         // Relative path without leading '/': appended to BaseAddress so the "/v1.0/" segment is
         // preserved. A leading '/' would make the URI root-relative and drop the version prefix
@@ -77,7 +84,7 @@ public sealed class OneDriveUploader : IUploader
         }
         if (!uploadOk || itemId is null) return UploadResult.Failure(errorMessage ?? "upload failed");
 
-        var shareUrl = await CreateShareLinkAsync(http, itemId, token, cancellationToken).ConfigureAwait(false);
+        var shareUrl = await CreateShareLinkAsync(http, itemId, token, makePublic, cancellationToken).ConfigureAwait(false);
         return shareUrl is null
             ? UploadResult.Failure("upload succeeded but failed to create sharing link")
             : UploadResult.Success(shareUrl);
@@ -166,24 +173,44 @@ public sealed class OneDriveUploader : IUploader
     }
 
     private static async Task<string?> CreateShareLinkAsync(
-        HttpClient http, string itemId, string accessToken, CancellationToken cancellationToken)
+        HttpClient http, string itemId, string accessToken, bool makePublic, CancellationToken cancellationToken)
     {
-        var path = $"me/drive/items/{Uri.EscapeDataString(itemId)}/createLink";
-        using var content = new StringContent("{\"type\":\"view\",\"scope\":\"anonymous\"}", Encoding.UTF8, "application/json");
-        using var message = new HttpRequestMessage(HttpMethod.Post, path) { Content = content };
-        message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
-        using var response = await http.SendAsync(message, cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode) return null;
-        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        try
+        // scope=anonymous → anyone with the link can view (no Microsoft sign-in required).
+        // scope=organization → only people in the same tenant. For a personal account we map
+        // !makePublic to a regular item URL (private) — the share endpoint with scope=organization
+        // doesn't make sense without an org. Skip createLink entirely and return the web URL of
+        // the item, which only the owner can open without sign-in.
+        if (!makePublic)
         {
-            using var doc = JsonDocument.Parse(body);
-            return doc.RootElement.GetProperty("link").GetProperty("webUrl").GetString();
+            // Fetch the item's webUrl (the in-OneDrive link). Recipient must sign in as owner.
+            var path = $"me/drive/items/{Uri.EscapeDataString(itemId)}?select=webUrl";
+            using var message = new HttpRequestMessage(HttpMethod.Get, path);
+            message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            using var response = await http.SendAsync(message, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) return null;
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                return doc.RootElement.GetProperty("webUrl").GetString();
+            }
+            catch { return null; }
         }
-        catch
+        else
         {
-            return null;
+            var path = $"me/drive/items/{Uri.EscapeDataString(itemId)}/createLink";
+            using var content = new StringContent("{\"type\":\"view\",\"scope\":\"anonymous\"}", Encoding.UTF8, "application/json");
+            using var message = new HttpRequestMessage(HttpMethod.Post, path) { Content = content };
+            message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            using var response = await http.SendAsync(message, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) return null;
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                return doc.RootElement.GetProperty("link").GetProperty("webUrl").GetString();
+            }
+            catch { return null; }
         }
     }
 
@@ -194,5 +221,95 @@ public sealed class OneDriveUploader : IUploader
         foreach (var c in name)
             sb.Append(Array.IndexOf(invalid, c) >= 0 ? '_' : c);
         return sb.ToString();
+    }
+
+    // ── IAuthenticatedUploader ───────────────────────────────────────────────────────────────
+
+    public async Task<AuthState> GetAuthStateAsync(CancellationToken cancellationToken)
+    {
+        var refresh = await _config.GetAsync(RefreshTokenKey, cancellationToken).ConfigureAwait(false);
+        var access = await _config.GetAsync(AccessTokenKey, cancellationToken).ConfigureAwait(false);
+        var signedIn = !string.IsNullOrEmpty(refresh) || !string.IsNullOrEmpty(access);
+        return new AuthState(signedIn, signedIn ? "Signed in" : null);
+    }
+
+    public async Task<AuthResult> SignInAsync(CancellationToken cancellationToken)
+    {
+        var token = await InteractiveSignInAsync(cancellationToken).ConfigureAwait(false);
+        return token is null
+            ? AuthResult.Failure("sign-in cancelled or refused")
+            : AuthResult.Success();
+    }
+
+    public async Task SignOutAsync(CancellationToken cancellationToken)
+    {
+        await _config.SetAsync(AccessTokenKey,  string.Empty, sensitive: true,  cancellationToken).ConfigureAwait(false);
+        await _config.SetAsync(RefreshTokenKey, string.Empty, sensitive: true,  cancellationToken).ConfigureAwait(false);
+        await _config.SetAsync(ExpiresAtKey,    string.Empty, sensitive: false, cancellationToken).ConfigureAwait(false);
+    }
+
+    // ── IConfigurableUploader ────────────────────────────────────────────────────────────────
+
+    public IReadOnlyList<PluginSettingDescriptor> GetSettings() =>
+    [
+        new DropdownSetting(
+            Key: FolderKey,
+            Label: "Target folder",
+            Description: "Top-level folder under My Files. Pick from the existing folders or leave the default 'ShareQ' — the plugin creates it on first upload if missing.",
+            IsAsyncLoaded: true,
+            DefaultValue: DefaultFolder),
+        new BoolSetting(
+            Key: MakePublicKey,
+            Label: "Make uploads public",
+            Description: "When on, ShareQ generates an anonymous view link so anyone with the URL can open the file. When off, the URL points to the OneDrive item — only the owner can view it without an explicit share invite.",
+            DefaultValue: true),
+    ];
+
+    public async Task<IReadOnlyList<DropdownOption>> LoadDropdownOptionsAsync(string settingKey, CancellationToken cancellationToken)
+    {
+        if (string.Equals(settingKey, FolderKey, StringComparison.Ordinal))
+        {
+            var token = await EnsureAccessTokenAsync(cancellationToken).ConfigureAwait(false);
+            if (token is null) return [new DropdownOption(DefaultFolder, "(sign in to load folders)")];
+            return await ListRootFoldersAsync(token, cancellationToken).ConfigureAwait(false);
+        }
+        return [];
+    }
+
+    /// <summary>Lists top-level folders under the user's OneDrive root via Graph. Each option's
+    /// Value is the folder name (used as path segment in the upload URL); folder paths can be
+    /// nested by typing manually but the picker only shows top-level for simplicity.</summary>
+    private async Task<IReadOnlyList<DropdownOption>> ListRootFoldersAsync(string accessToken, CancellationToken cancellationToken)
+    {
+        using var http = _httpFactory.CreateClient(nameof(OneDriveUploader));
+        http.BaseAddress = new Uri("https://graph.microsoft.com/v1.0/");
+
+        // Filter to children that have a "folder" facet — files don't.
+        var url = "me/drive/root/children?$select=name,folder&$top=200";
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            Debug.WriteLine($"[OneDriveUploader] folder list HTTP {(int)response.StatusCode}: {body}");
+            return [new DropdownOption(DefaultFolder, DefaultFolder)];
+        }
+
+        var results = new List<DropdownOption>();
+        // Always include the default so the user can stick with it without typing.
+        results.Add(new DropdownOption(DefaultFolder, $"{DefaultFolder} (default)"));
+        using var doc = JsonDocument.Parse(body);
+        if (doc.RootElement.TryGetProperty("value", out var arr))
+        {
+            foreach (var item in arr.EnumerateArray())
+            {
+                if (!item.TryGetProperty("folder", out _)) continue; // not a folder
+                var name = item.GetProperty("name").GetString();
+                if (string.IsNullOrEmpty(name) || string.Equals(name, DefaultFolder, StringComparison.Ordinal)) continue;
+                results.Add(new DropdownOption(name, name));
+            }
+        }
+        return results;
     }
 }

@@ -122,12 +122,16 @@
                                         <TextBlock Text="{Binding Subtitle}" Foreground="#888" FontSize="11"
                                                    TextWrapping="Wrap" Margin="0,2,0,0" />
                                     </StackPanel>
-                                    <ui:Button Grid.Column="1"
-                                               Content="Uninstall"
-                                               Command="{Binding UninstallCommand}"
-                                               Visibility="{Binding CanUninstall, Converter={StaticResource BoolToVisibility}}"
-                                               Margin="0,0,12,0"
-                                               VerticalAlignment="Center" />
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <ui:Button Content="Configure"
+                                                   Command="{Binding ConfigureCommand}"
+                                                   Visibility="{Binding HasConfig, Converter={StaticResource BoolToVisibility}}"
+                                                   Margin="0,0,4,0"
+                                                   ToolTip="Open this plugin's settings (sign-in, target folder, public/private, …)" />
+                                        <ui:Button Content="Uninstall"
+                                                   Command="{Binding UninstallCommand}"
+                                                   Visibility="{Binding CanUninstall, Converter={StaticResource BoolToVisibility}}" />
+                                    </StackPanel>
                                     <ui:ToggleSwitch Grid.Column="2"
                                                      IsChecked="{Binding IsEnabled, Mode=TwoWay}"
                                                      VerticalAlignment="Center" />
@@ -282,10 +286,34 @@
                                Text="Each workflow is a pipeline triggered by a hotkey or menu action. Pick one to toggle its steps on/off, reorder them, or reset to the original sequence." />
 
                     <TextBlock Text="Workflow" FontWeight="SemiBold" Margin="0,4,0,4" />
-                    <ComboBox ItemsSource="{Binding Workflows.Workflows}"
-                              SelectedItem="{Binding Workflows.SelectedWorkflow, Mode=TwoWay}"
-                              DisplayMemberPath="DisplayName"
-                              HorizontalAlignment="Stretch" Margin="0,0,0,4" />
+                    <Grid Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ComboBox Grid.Column="0"
+                                  ItemsSource="{Binding Workflows.Workflows}"
+                                  SelectedItem="{Binding Workflows.SelectedWorkflow, Mode=TwoWay}"
+                                  DisplayMemberPath="DisplayName"
+                                  HorizontalAlignment="Stretch" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0">
+                            <ui:Button Content="Add"       Margin="0,0,4,0"
+                                       Command="{Binding Workflows.AddWorkflowCommand}"
+                                       ToolTip="Create a new empty workflow" />
+                            <ui:Button Content="Rename"    Margin="0,0,4,0"
+                                       Command="{Binding Workflows.RenameWorkflowCommand}"
+                                       ToolTip="Rename the selected workflow" />
+                            <ui:Button Content="Duplicate" Margin="0,0,4,0"
+                                       Command="{Binding Workflows.DuplicateWorkflowCommand}"
+                                       ToolTip="Clone the selected workflow into a new editable copy" />
+                            <ui:Button Content="Remove"    Margin="0,0,4,0"
+                                       Command="{Binding Workflows.RemoveWorkflowCommand}"
+                                       ToolTip="Delete the selected workflow (built-ins can't be deleted)" />
+                            <ui:Button Content="Reset all"
+                                       Command="{Binding Workflows.ResetAllToDefaultsCommand}"
+                                       ToolTip="Reset every built-in workflow to its default steps and hotkey. Custom workflows are not touched." />
+                        </StackPanel>
+                    </Grid>
                     <TextBlock Text="{Binding Workflows.SelectedWorkflow.Description}"
                                Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16" />
 

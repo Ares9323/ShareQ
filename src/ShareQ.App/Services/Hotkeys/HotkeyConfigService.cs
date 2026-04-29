@@ -16,7 +16,7 @@ namespace ShareQ.App.Services.Hotkeys;
 /// </summary>
 public sealed class HotkeyConfigService
 {
-    public sealed record HotkeyEntry(string Id, string DisplayName, HotkeyModifiers DefaultModifiers, uint DefaultVirtualKey);
+    public sealed record HotkeyEntry(string Id, string DisplayName, HotkeyModifiers DefaultModifiers, uint DefaultVirtualKey, bool IsBuiltIn);
 
     private readonly IPipelineProfileStore _profiles;
 
@@ -27,20 +27,27 @@ public sealed class HotkeyConfigService
 
     public event EventHandler<HotkeyDefinition>? Changed;
 
-    /// <summary>Workflow ids that the user can bind to a hotkey. Built from every default profile
-    /// whose <see cref="PipelineProfile.Trigger"/> starts with <c>"hotkey:"</c> — that includes
-    /// profiles shipped without a default binding (e.g. <c>open-screenshot-folder</c>).</summary>
-    public static readonly IReadOnlyList<HotkeyEntry> Catalog = BuildCatalog();
-
-    private static IReadOnlyList<HotkeyEntry> BuildCatalog()
+    /// <summary>List of every workflow that can be bound to a hotkey, loaded from the profile
+    /// store. Includes both built-in profiles and user-created custom workflows. Filters by
+    /// <see cref="PipelineProfile.Trigger"/> starting with <c>"hotkey:"</c> so non-hotkey profiles
+    /// (on-clipboard, manual-upload) don't pollute the rebind UI. Re-queried each time the
+    /// hotkey settings tab is opened.</summary>
+    public async Task<IReadOnlyList<HotkeyEntry>> GetCatalogAsync(CancellationToken cancellationToken)
     {
-        var list = new List<HotkeyEntry>();
-        foreach (var profile in DefaultPipelineProfiles.All)
+        var stored = await _profiles.ListAsync(cancellationToken).ConfigureAwait(false);
+        var list = new List<HotkeyEntry>(stored.Count);
+        foreach (var profile in stored)
         {
             if (!profile.Trigger.StartsWith("hotkey:", StringComparison.Ordinal)) continue;
-            var mods = profile.Hotkey is { } hk ? (HotkeyModifiers)hk.Modifiers : HotkeyModifiers.None;
-            var vk = profile.Hotkey?.VirtualKey ?? 0u;
-            list.Add(new HotkeyEntry(profile.Id, profile.DisplayName, mods, vk));
+            // For built-ins look up the seeded default so the Reset button has something to fall
+            // back to even when the user has cleared the binding. Custom workflows have no
+            // default — Reset on those just clears.
+            var defaults = profile.IsBuiltIn
+                ? DefaultPipelineProfiles.All.FirstOrDefault(p => p.Id == profile.Id)?.Hotkey
+                : null;
+            var mods = defaults is not null ? (HotkeyModifiers)defaults.Modifiers : HotkeyModifiers.None;
+            var vk = defaults?.VirtualKey ?? 0u;
+            list.Add(new HotkeyEntry(profile.Id, profile.DisplayName, mods, vk, profile.IsBuiltIn));
         }
         return list;
     }
@@ -59,9 +66,11 @@ public sealed class HotkeyConfigService
                 return new HotkeyDefinition(id, (HotkeyModifiers)binding.Modifiers, binding.VirtualKey);
             return new HotkeyDefinition(id, HotkeyModifiers.None, 0);
         }
-        var entry = Catalog.FirstOrDefault(e => e.Id == id)
-            ?? throw new ArgumentException($"unknown workflow id '{id}'", nameof(id));
-        return new HotkeyDefinition(id, entry.DefaultModifiers, entry.DefaultVirtualKey);
+        // Profile not in store yet — fall back to seeded defaults if this is a known built-in id.
+        var seeded = DefaultPipelineProfiles.All.FirstOrDefault(p => p.Id == id);
+        if (seeded?.Hotkey is { } seededBinding)
+            return new HotkeyDefinition(id, (HotkeyModifiers)seededBinding.Modifiers, seededBinding.VirtualKey);
+        return new HotkeyDefinition(id, HotkeyModifiers.None, 0);
     }
 
     public async Task UpdateAsync(string id, HotkeyModifiers modifiers, uint virtualKey, CancellationToken cancellationToken)
@@ -80,11 +89,33 @@ public sealed class HotkeyConfigService
     public Task ClearAsync(string id, CancellationToken cancellationToken)
         => UpdateAsync(id, HotkeyModifiers.None, 0, cancellationToken);
 
+    /// <summary>Tell subscribers (App.xaml.cs) that the workflow with the given id is going away
+    /// so the keyboard hook unregisters its binding. Use when deleting a workflow — calling
+    /// <see cref="ClearAsync"/> would fail because the profile is being removed entirely.</summary>
+    public void NotifyHotkeyRemoved(string id)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(id);
+        Changed?.Invoke(this, new HotkeyDefinition(id, HotkeyModifiers.None, 0));
+    }
+
+    /// <summary>Force-emit a Changed event with the given binding so the keyboard hook re-binds
+    /// without us having to re-upsert the profile. Used by "Reset all to defaults" which has
+    /// already overwritten the profile via the seeder.</summary>
+    public void NotifyHotkeyRebound(string id, HotkeyModifiers modifiers, uint virtualKey)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(id);
+        Changed?.Invoke(this, new HotkeyDefinition(id, modifiers, virtualKey));
+    }
+
     public async Task ResetAsync(string id, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(id);
-        var entry = Catalog.FirstOrDefault(e => e.Id == id)
-            ?? throw new ArgumentException($"unknown workflow id '{id}'", nameof(id));
-        await UpdateAsync(id, entry.DefaultModifiers, entry.DefaultVirtualKey, cancellationToken).ConfigureAwait(false);
+        // For built-ins reset to the seeded default; for custom workflows there's no default to
+        // restore so reset is equivalent to clear.
+        var seeded = DefaultPipelineProfiles.All.FirstOrDefault(p => p.Id == id);
+        if (seeded?.Hotkey is { } binding)
+            await UpdateAsync(id, (HotkeyModifiers)binding.Modifiers, binding.VirtualKey, cancellationToken).ConfigureAwait(false);
+        else
+            await ClearAsync(id, cancellationToken).ConfigureAwait(false);
     }
 }

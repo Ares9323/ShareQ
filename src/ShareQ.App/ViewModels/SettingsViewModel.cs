@@ -2,21 +2,25 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShareQ.App.Services.Plugins;
+using ShareQ.PluginContracts;
 
 namespace ShareQ.App.ViewModels;
 
 public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly PluginRegistry _registry;
+    private readonly IPluginConfigStoreFactory _configFactory;
 
     public SettingsViewModel(
         PluginRegistry registry,
+        IPluginConfigStoreFactory configFactory,
         UploadersViewModel uploaders,
         HotkeysViewModel hotkeys,
         CaptureDefaultsViewModel capture,
         WorkflowsViewModel workflows)
     {
         _registry = registry;
+        _configFactory = configFactory;
         Uploaders = uploaders;
         Hotkeys = hotkeys;
         Capture = capture;
@@ -73,7 +77,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         foreach (var descriptor in _registry.AllDescriptors())
         {
             var enabled = await _registry.IsEnabledAsync(descriptor.Id, CancellationToken.None).ConfigureAwait(true);
-            Plugins.Add(new PluginItemViewModel(descriptor, enabled, _registry));
+            var uploader = _registry.GetUploader(descriptor.Id);
+            Plugins.Add(new PluginItemViewModel(descriptor, enabled, _registry, uploader, _configFactory));
         }
     }
 }
