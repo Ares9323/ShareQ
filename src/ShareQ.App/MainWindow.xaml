@@ -62,6 +62,11 @@
                            Command="{Binding ShowHotkeysCommand}"
                            Appearance="{Binding IsHotkeysSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                           Margin="0,0,0,4"
+                           Content="Theme"
+                           Command="{Binding ShowThemeCommand}"
+                           Appearance="{Binding IsThemeSelected, Converter={StaticResource BoolToAppearance}}" />
+                <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Content="About"
                            Command="{Binding ShowAboutCommand}"
                            Appearance="{Binding IsAboutSelected, Converter={StaticResource BoolToAppearance}}" />
@@ -79,8 +84,13 @@
                            Text="Press Win+V to open the clipboard popup." />
                 <TextBlock Foreground="#AAA" FontSize="12" HorizontalAlignment="Center" Margin="0,0,0,4"
                            Text="Use the tray icon to toggle incognito or quit." />
-                <TextBlock Foreground="#777" FontSize="11" HorizontalAlignment="Center" Margin="0,16,0,0"
+                <TextBlock Foreground="#777" FontSize="11" HorizontalAlignment="Center" Margin="0,16,0,8"
                            Text="Hotkeys: Ctrl+Alt+R region · Ctrl+Shift+P picker · Ctrl+Alt+S record · Ctrl+Alt+G gif" />
+                <CheckBox IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
+                          Content="Run ShareQ when Windows starts"
+                          Foreground="#DDD" FontSize="12"
+                          HorizontalAlignment="Center" Margin="0,8,0,0"
+                          ToolTip="Adds (or removes) ShareQ to the per-user Windows startup list. No admin rights needed." />
             </StackPanel>
 
             <!-- Plugins: list / configure inline detail. Single tab, two sub-views toggled by
@@ -460,7 +470,7 @@
                                             <RowDefinition Height="*" />
                                         </Grid.RowDefinitions>
                                         <Border Grid.Row="0" Background="Transparent">
-                                            <Border Height="2" Background="#0078D4" CornerRadius="1"
+                                            <Border Height="2" Background="{DynamicResource AccentBackgroundBrush}" CornerRadius="1"
                                                     VerticalAlignment="Center" Margin="2,0"
                                                     Visibility="{Binding IsDropTargetAbove, Converter={StaticResource BoolToVisibility}}" />
                                         </Border>
@@ -534,7 +544,7 @@
                                 DragOver="OnStepFooterDragOver"
                                 DragLeave="OnStepFooterDragLeave"
                                 Drop="OnStepFooterDrop">
-                            <Border Height="2" Background="#0078D4" CornerRadius="1"
+                            <Border Height="2" Background="{DynamicResource AccentBackgroundBrush}" CornerRadius="1"
                                     VerticalAlignment="Center" Margin="2,0"
                                     Visibility="{Binding Hotkeys.Workflows.Editor.IsDropTargetAtEnd, Converter={StaticResource BoolToVisibility}}" />
                         </Border>
@@ -563,10 +573,85 @@
                     <ui:Button Grid.Column="1" Content="Browse…" Command="{Binding Capture.BrowseFolderCommand}" Margin="6,0,0,0" />
                 </Grid>
 
+                <TextBlock Text="Sub-folder pattern (optional)" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <ui:TextBox Text="{Binding Capture.SubFolderPattern, UpdateSourceTrigger=PropertyChanged}"
+                            PlaceholderText="e.g. %y-%mo  →  2026-04 sub-folder under the save folder"
+                            Margin="0,0,0,4" />
+                <TextBlock Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16"
+                           Text="Tokens: %y / %yy 4-digit / 2-digit year, %mo month (01–12), %mon month name, %d day, %h hour, %mi minute, %s second, %pm AM/PM. Leave empty for no sub-folder." />
+
                 <TextBlock Text="Screenshot delay (seconds)" FontWeight="SemiBold" Margin="0,4,0,4" />
                 <ui:NumberBox Value="{Binding Capture.DelaySeconds, Mode=TwoWay}"
                               Minimum="0" Maximum="30" SmallChange="1"
                               HorizontalAlignment="Left" Width="120" />
+            </StackPanel>
+
+            <!-- Theme -->
+            <StackPanel Visibility="{Binding IsThemeSelected, Converter={StaticResource BoolToVisibility}}"
+                        Margin="24,16,24,16">
+                <TextBlock Text="Theme" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
+                <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                           Text="Two colors that flow everywhere ShareQ uses an accent: primary buttons, toggle switches, the pinned-image border, drag-to-reorder indicators, and selected sidebar entries. Edit the hex values to see the changes apply live." />
+
+                <!-- Background row -->
+                <TextBlock Text="Accent background" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
+                            Background="{Binding Theme.AccentBackgroundPreview}"
+                            BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
+                            Cursor="Hand"
+                            ToolTip="Click to open the color picker"
+                            MouseLeftButtonDown="OnAccentBgSwatchClick" />
+                    <ui:TextBox Grid.Column="1"
+                                Text="{Binding Theme.AccentBackgroundHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                PlaceholderText="#0078D4"
+                                FontFamily="Consolas" />
+                </Grid>
+
+                <!-- Foreground row -->
+                <TextBlock Text="Accent foreground" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
+                            Background="{Binding Theme.AccentForegroundPreview}"
+                            BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
+                            Cursor="Hand"
+                            ToolTip="Click to open the color picker"
+                            MouseLeftButtonDown="OnAccentFgSwatchClick" />
+                    <ui:TextBox Grid.Column="1"
+                                Text="{Binding Theme.AccentForegroundHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                PlaceholderText="#FFFFFF"
+                                FontFamily="Consolas" />
+                </Grid>
+
+                <TextBlock Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
+                           Text="Foreground is the text/icon color drawn on top of the accent background — pick one with enough contrast (e.g. white on a dark accent, near-black on a light one)." />
+
+                <!-- Live preview block + Apply: the sample shows the chosen pair on accent surfaces;
+                     Apply forces a re-push of the colors through the resource pipeline (handy if
+                     a third-party control templated against a brush before our override took
+                     effect). Both side-by-side keeps the action visually tied to the preview. -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <Border Background="{DynamicResource AccentBackgroundBrush}"
+                            CornerRadius="4" Padding="12,8" VerticalAlignment="Center">
+                        <TextBlock Text="Sample button label" FontWeight="SemiBold" FontSize="12"
+                                   Foreground="{DynamicResource AccentForegroundBrush}" />
+                    </Border>
+                    <ui:Button Content="Apply" Margin="8,0,0,0" VerticalAlignment="Center"
+                               Command="{Binding Theme.ApplyNowCommand}"
+                               ToolTip="Force a refresh of every themed surface — equivalent to a restart for the accent colors." />
+                </StackPanel>
+
+                <ui:Button Content="Reset to defaults" HorizontalAlignment="Left"
+                           Command="{Binding Theme.ResetCommand}"
+                           ToolTip="Restore the original ShareQ accent (#0078D4 background, white foreground)." />
             </StackPanel>
 
             <!-- About -->

@@ -105,6 +105,11 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, PasteHistoryItemTask>();
                 services.AddSingleton<IPipelineTask, PressKeyTask>();
                 services.AddSingleton<IPipelineTask, DelayTask>();
+                services.AddSingleton<IPipelineTask, OpenUrlTask>();
+                services.AddSingleton<IPipelineTask, ShowInExplorerTask>();
+                services.AddSingleton<IPipelineTask, SaveAsTask>();
+                services.AddSingleton<IPipelineTask, QrCodeTask>();
+                services.AddSingleton<IPipelineTask, PinToScreenTask>();
 
                 services.AddSingleton<NativeClipboardHistoryProbe>();
                 services.AddSingleton<NativeClipboardHistoryBanner>();
@@ -116,6 +121,8 @@ public partial class App : Application
                 services.AddSingleton<CaptureCoordinator>();
                 services.AddSingleton<ManualUploadService>();
                 services.AddSingleton<IToastNotifier, WpfToastNotifier>();
+                services.AddSingleton<AutostartService>();
+                services.AddSingleton<PinToScreenLauncher>();
                 services.AddSingleton<EditorLauncher>();
                 services.AddSingleton<ScreenColorPickerService>();
                 services.AddSingleton<Services.Recording.FfmpegLocator>();
@@ -136,6 +143,8 @@ public partial class App : Application
                 services.AddSingleton<WorkflowEditorViewModel>();
                 services.AddSingleton<WorkflowsViewModel>();
                 services.AddSingleton<CaptureDefaultsViewModel>();
+                services.AddSingleton<ThemeService>();
+                services.AddSingleton<ThemeViewModel>();
                 services.AddSingleton<SettingsViewModel>();
                 services.AddSingleton<MainWindow>();
                 services.AddSingleton<TrayIconService>();
@@ -146,6 +155,12 @@ public partial class App : Application
 
         var db = _host.Services.GetRequiredService<IShareQDatabase>();
         await db.InitializeAsync(CancellationToken.None);
+
+        // Apply the user's theme BEFORE any window resolves: ThemeService writes to App.Resources
+        // and to WPF-UI's accent manager, both of which are read at control-template instantiation
+        // time. Loading after MainWindow would cause a one-frame flash of the default blue accent.
+        var theme = _host.Services.GetRequiredService<ThemeService>();
+        await theme.LoadAsync(CancellationToken.None);
 
         // Seed default pipeline profiles (idempotent — leaves user customizations).
         var seeder = _host.Services.GetRequiredService<PipelineProfileSeeder>();

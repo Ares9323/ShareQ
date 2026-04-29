@@ -36,5 +36,8 @@
 
     <!-- Capture -->
     <PackageVersion Include="System.Drawing.Common" Version="9.0.0" />
+
+    <!-- QR code generation (used by the QR pipeline task + Show QR window) -->
+    <PackageVersion Include="QRCoder" Version="1.6.0" />
   </ItemGroup>
 </Project>

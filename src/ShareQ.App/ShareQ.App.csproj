@@ -16,6 +16,7 @@
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="H.NotifyIcon.Wpf" />
     <PackageReference Include="WPF-UI" />
+    <PackageReference Include="QRCoder" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\tray.ico" />

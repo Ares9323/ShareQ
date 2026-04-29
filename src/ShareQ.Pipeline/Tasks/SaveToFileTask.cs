@@ -11,6 +11,7 @@ public sealed class SaveToFileTask : IPipelineTask
     public const string TaskId = "shareq.save-to-file";
     private const string DefaultFolder = "%USERPROFILE%\\Pictures\\ShareQ";
     private const string FolderSettingKey = "capture.folder";
+    private const string SubFolderPatternSettingKey = "capture.subfolder_pattern";
 
     private readonly ISettingsStore _settings;
     private readonly ILogger<SaveToFileTask> _logger;
@@ -44,6 +45,18 @@ public sealed class SaveToFileTask : IPipelineTask
             ?? await _settings.GetAsync(FolderSettingKey, cancellationToken).ConfigureAwait(false)
             ?? DefaultFolder;
         var folder = Environment.ExpandEnvironmentVariables(folderTemplate);
+
+        // Optional sub-folder pattern (ShareX-style tokens). Applied as a relative path appended
+        // to the base folder. Empty / missing pattern = no sub-folder. The pattern goes through
+        // the same env-var expansion so things like "%USERPROFILE%\extra\%y" still work, then the
+        // ShareX tokens are substituted.
+        var subPatternRaw = (string?)config?["subfolder_pattern"]
+            ?? await _settings.GetAsync(SubFolderPatternSettingKey, cancellationToken).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(subPatternRaw))
+        {
+            var sub = ExpandPatternTokens(Environment.ExpandEnvironmentVariables(subPatternRaw), DateTime.Now);
+            folder = Path.Combine(folder, sub);
+        }
         Directory.CreateDirectory(folder);
 
         var stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmssfff", CultureInfo.InvariantCulture);
@@ -60,6 +73,21 @@ public sealed class SaveToFileTask : IPipelineTask
         context.Bag[PipelineBagKeys.LocalPath] = fullPath;
         _logger.LogDebug("SaveToFileTask: wrote {Bytes} bytes to {Path}", bytes.Length, fullPath);
     }
+
+    /// <summary>ShareX-style date / metadata tokens for the sub-folder pattern. Tokens use the
+    /// same prefix style as ShareX (<c>%y</c>, <c>%mo</c>, <c>%d</c>, <c>%h</c>, <c>%mi</c>,
+    /// <c>%s</c>, <c>%yy</c>, <c>%pm</c>) so users migrating from ShareX recognise them.</summary>
+    private static string ExpandPatternTokens(string pattern, DateTime now) => pattern
+        .Replace("%yyyy", now.ToString("yyyy", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+        .Replace("%yy",   now.ToString("yy",   CultureInfo.InvariantCulture), StringComparison.Ordinal)
+        .Replace("%y",    now.ToString("yyyy", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+        .Replace("%mo",   now.ToString("MM",   CultureInfo.InvariantCulture), StringComparison.Ordinal)
+        .Replace("%mon",  now.ToString("MMMM", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+        .Replace("%d",    now.ToString("dd",   CultureInfo.InvariantCulture), StringComparison.Ordinal)
+        .Replace("%h",    now.ToString("HH",   CultureInfo.InvariantCulture), StringComparison.Ordinal)
+        .Replace("%mi",   now.ToString("mm",   CultureInfo.InvariantCulture), StringComparison.Ordinal)
+        .Replace("%s",    now.ToString("ss",   CultureInfo.InvariantCulture), StringComparison.Ordinal)
+        .Replace("%pm",   now.ToString("tt",   CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
     private static string SanitizeForFilename(string title)
     {

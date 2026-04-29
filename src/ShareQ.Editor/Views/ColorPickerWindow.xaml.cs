@@ -47,6 +47,12 @@ public partial class ColorPickerWindow : Window
     /// <summary>Fired when the user clicks the eyedropper button. Host wires this to its picking flow.</summary>
     public event EventHandler? EyedropperRequested;
 
+    /// <summary>Fired on every internal color change (SV-square drag, Hue strip drag, slider value
+    /// changes, hex/numeric commits, eyedropper sample). Hosts subscribe to drive a live preview
+    /// outside the dialog — the Theme tab uses this to repaint the entire app's accent in real time
+    /// as the user picks. <see cref="PickedColor"/> still authoritatively reflects the OK click.</summary>
+    public event EventHandler<ShapeColor>? ColorChanged;
+
     private void WireSliderInputs()
     {
         HSlider.ValueChanged += (_, _) => { if (_suppress) return; _h = HSlider.Value / 360.0; PushFromHsv(); };
@@ -167,6 +173,11 @@ public partial class ColorPickerWindow : Window
             }
 
             PreviewBrush.Color = Color.FromArgb(_a, r, g, b);
+            // Fire AFTER all UI is consistent so subscribers (e.g. the Theme tab's live-preview
+            // pipeline) see the same internal state the OK button would commit. Inside the
+            // _suppress guard is fine — _suppress only short-circuits the slider-driven event
+            // handlers that would otherwise feedback-loop into UpdateAllUi.
+            ColorChanged?.Invoke(this, new ShapeColor(_a, r, g, b));
         }
         finally { _suppress = false; }
     }

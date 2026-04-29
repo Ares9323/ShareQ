@@ -140,6 +140,31 @@ public static class WorkflowActionCatalog
             "Open screenshot folder",
             "Open the configured capture folder (Settings → Capture) in Windows Explorer.",
             "Tools"),
+
+        new("shareq.show-in-explorer",
+            "Show file in Explorer",
+            "Open Windows Explorer with the just-saved file pre-selected. Requires a preceding Save to file step.",
+            "I/O"),
+
+        new("shareq.save-as",
+            "Save image as…",
+            "Open a Save File dialog so the user picks the destination + filename. The chosen path becomes the new local_path for subsequent steps.",
+            "I/O"),
+
+        new("shareq.open-url",
+            "Open URL in browser",
+            "Launch the default browser on the upload URL (or an explicit URL via config). Useful right after an Upload step.",
+            "Notify"),
+
+        new("shareq.show-qr-code",
+            "Show QR code",
+            "Generate a QR code from the upload URL (or explicit text) and pop a small window. Handy for scanning the link on a phone.",
+            "Notify"),
+
+        new("shareq.pin-to-screen",
+            "Pin image to screen",
+            "Show the captured image in an always-on-top window. Drag to move, wheel to zoom, right-click or Esc to close.",
+            "Tools"),
     ];
 
     /// <summary>Only the user-pickable subset, grouped by category. Drives the "+ Add step" menu.</summary>

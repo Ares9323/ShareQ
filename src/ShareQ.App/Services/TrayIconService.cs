@@ -75,6 +75,8 @@ public sealed class TrayIconService : IDisposable
         // Tools submenu — placeholder; we'll grow this with QR / hash / ruler / etc.
         var tools = new MenuItem { Header = "Tools" };
         tools.Items.Add(BuildMenuItem("Color picker", () => Run<ScreenColorPickerService>(s => s.PickAtCursor())));
+        tools.Items.Add(BuildMenuItem("Pin to screen…",
+            () => Run<PinToScreenLauncher>(p => _ = p.ShowAsync(CancellationToken.None))));
         menu.Items.Add(tools);
 
         menu.Items.Add(new Separator());

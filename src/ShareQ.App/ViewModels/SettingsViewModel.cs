@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ShareQ.App.Services;
 using ShareQ.App.Services.Plugins;
 using ShareQ.PluginContracts;
 
@@ -10,17 +11,26 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly PluginRegistry _registry;
     private readonly IPluginConfigStoreFactory _configFactory;
+    private readonly AutostartService _autostart;
 
     public SettingsViewModel(
         PluginRegistry registry,
         IPluginConfigStoreFactory configFactory,
+        AutostartService autostart,
         UploadersViewModel uploaders,
         HotkeysViewModel hotkeys,
         CaptureDefaultsViewModel capture,
-        WorkflowsViewModel workflows)
+        WorkflowsViewModel workflows,
+        ThemeViewModel theme)
     {
         _registry = registry;
         _configFactory = configFactory;
+        _autostart = autostart;
+        Theme = theme;
+        // Initial state mirrors the registry. Future toggles persist via OnStartWithWindowsChanged.
+        _suppressAutostartPersist = true;
+        StartWithWindows = autostart.IsEnabled;
+        _suppressAutostartPersist = false;
         Uploaders = uploaders;
         // Hotkeys "Add custom workflow" button → run the Add flow (no modal — auto-default name)
         // then drop straight into the edit view with the inline name field focused + selected
@@ -45,6 +55,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public HotkeysViewModel Hotkeys { get; }
     public CaptureDefaultsViewModel Capture { get; }
     public WorkflowsViewModel Workflows { get; }
+    public ThemeViewModel Theme { get; }
 
     /// <summary>Non-null while the user is in the Plugins → Configure detail view. Drives the
     /// list/detail toggle in the Plugins XAML; cleared by <see cref="BackFromConfigCommand"/>.
@@ -59,11 +70,26 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private SettingsTab _selectedTab = SettingsTab.Home;
 
+    /// <summary>Bound to the Home-tab "Run ShareQ when Windows starts" checkbox. Reads / writes
+    /// HKCU Run via <see cref="AutostartService"/>. Constructor seeds it from the current
+    /// registry value (no flicker), then user toggles propagate immediately.</summary>
+    [ObservableProperty]
+    private bool _startWithWindows;
+
+    private bool _suppressAutostartPersist;
+
+    partial void OnStartWithWindowsChanged(bool value)
+    {
+        if (_suppressAutostartPersist) return;
+        _autostart.SetEnabled(value);
+    }
+
     public bool IsHomeSelected      => SelectedTab == SettingsTab.Home;
     public bool IsPluginsSelected   => SelectedTab == SettingsTab.Plugins;
     public bool IsUploadersSelected => SelectedTab == SettingsTab.Uploaders;
     public bool IsHotkeysSelected   => SelectedTab == SettingsTab.Hotkeys;
     public bool IsCaptureSelected   => SelectedTab == SettingsTab.Capture;
+    public bool IsThemeSelected     => SelectedTab == SettingsTab.Theme;
     public bool IsAboutSelected     => SelectedTab == SettingsTab.About;
 
     public string AppVersion { get; }
@@ -75,6 +101,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsUploadersSelected));
         OnPropertyChanged(nameof(IsHotkeysSelected));
         OnPropertyChanged(nameof(IsCaptureSelected));
+        OnPropertyChanged(nameof(IsThemeSelected));
         OnPropertyChanged(nameof(IsAboutSelected));
         if (value == SettingsTab.Uploaders) _ = Uploaders.ReloadAsync();
         if (value == SettingsTab.Hotkeys) _ = Hotkeys.ReloadAsync();
@@ -85,6 +112,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand] private void ShowUploaders() => SelectedTab = SettingsTab.Uploaders;
     [RelayCommand] private void ShowHotkeys()   => SelectedTab = SettingsTab.Hotkeys;
     [RelayCommand] private void ShowCapture()   => SelectedTab = SettingsTab.Capture;
+    [RelayCommand] private void ShowTheme()     => SelectedTab = SettingsTab.Theme;
     [RelayCommand] private void ShowAbout()     => SelectedTab = SettingsTab.About;
 
     /// <summary>Open the inline configure view for a plugin. Called by
@@ -115,4 +143,4 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 }
 
-public enum SettingsTab { Home, Plugins, Uploaders, Hotkeys, Capture, About }
+public enum SettingsTab { Home, Plugins, Uploaders, Hotkeys, Capture, Theme, About }

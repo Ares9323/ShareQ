@@ -3,6 +3,8 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using ShareQ.App.ViewModels;
+using ShareQ.Editor.Model;
+using ShareQ.Editor.Views;
 using Wpf.Ui.Controls;
 using Button = Wpf.Ui.Controls.Button;
 using MenuItem = System.Windows.Controls.MenuItem;
@@ -259,5 +261,73 @@ public partial class MainWindow : FluentWindow
         var aboveTarget = editor.Items.FirstOrDefault(i => i.IsDropTargetAbove);
         if (aboveTarget is not null)
             _ = editor.MoveToAsync(source, aboveTarget, insertAfter: false);
+    }
+
+    /// <summary>Theme tab: open the existing editor color picker on the accent-background swatch
+    /// and write the chosen RGB back into the Theme view-model's hex string. Handlers live in
+    /// code-behind (rather than the VM) so we don't drag <see cref="ColorPickerWindow"/> — a UI
+    /// type — into the view-model layer. The hex assignment fires the existing TryApply path
+    /// which propagates colors live across the app.</summary>
+    private void OnAccentBgSwatchClick(object sender, MouseButtonEventArgs e)
+        => PickAccentColor(isBackground: true);
+
+    private void OnAccentFgSwatchClick(object sender, MouseButtonEventArgs e)
+        => PickAccentColor(isBackground: false);
+
+    private void PickAccentColor(bool isBackground)
+    {
+        if (DataContext is not SettingsViewModel vm) return;
+        // Snapshot the original so Cancel can restore — live preview keeps mutating the theme as
+        // the user drags around inside the picker.
+        var originalHex = isBackground ? vm.Theme.AccentBackgroundHex : vm.Theme.AccentForegroundHex;
+        var current = TryParseShapeColor(originalHex) ?? (isBackground ? ShapeColor.Black : new ShapeColor(255, 255, 255, 255));
+        var dialog = new ColorPickerWindow(current) { Owner = this };
+
+        // Live preview: every internal change (SV-square drag, hue strip, sliders, hex commit)
+        // pushes through the existing hex → ThemeService pipeline, so the entire app re-paints
+        // in real time instead of waiting for OK. Hex setter is value-equality-checked, so
+        // setting the same color is a free no-op.
+        EventHandler<ShapeColor> onChanged = (_, c) =>
+        {
+            var hex = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+            if (isBackground) vm.Theme.AccentBackgroundHex = hex;
+            else               vm.Theme.AccentForegroundHex = hex;
+        };
+        dialog.ColorChanged += onChanged;
+        var ok = dialog.ShowDialog() == true;
+        dialog.ColorChanged -= onChanged;
+
+        if (!ok)
+        {
+            // User cancelled — roll the theme back to whatever was active before opening the
+            // picker. The transient mutations from the live preview have already persisted, so
+            // this restoration also persists (one extra write, harmless).
+            if (isBackground) vm.Theme.AccentBackgroundHex = originalHex;
+            else               vm.Theme.AccentForegroundHex = originalHex;
+        }
+        // OK path: the last ColorChanged event already wrote PickedColor's color. Nothing extra
+        // to do — what the user saw during the drag is what they got.
+    }
+
+    private static ShapeColor? TryParseShapeColor(string hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return null;
+        var s = hex.Trim().TrimStart('#');
+        if (s.Length is not (6 or 8)) return null;
+        try
+        {
+            byte a = 255, r, g, b;
+            if (s.Length == 8)
+            {
+                a = Convert.ToByte(s[..2], 16); r = Convert.ToByte(s[2..4], 16);
+                g = Convert.ToByte(s[4..6], 16); b = Convert.ToByte(s[6..8], 16);
+            }
+            else
+            {
+                r = Convert.ToByte(s[..2], 16); g = Convert.ToByte(s[2..4], 16); b = Convert.ToByte(s[4..6], 16);
+            }
+            return new ShapeColor(a, r, g, b);
+        }
+        catch { return null; }
     }
 }

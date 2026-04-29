@@ -10,6 +10,7 @@ public sealed partial class CaptureDefaultsViewModel : ObservableObject
 {
     private const string FolderKey = "capture.folder";
     private const string DelayKey  = "capture.delay_seconds";
+    private const string SubFolderPatternKey = "capture.subfolder_pattern";
     private const string DefaultFolder = "%USERPROFILE%\\Pictures\\ShareQ";
 
     private readonly ISettingsStore _settings;
@@ -26,6 +27,12 @@ public sealed partial class CaptureDefaultsViewModel : ObservableObject
     [ObservableProperty]
     private int _delaySeconds;
 
+    /// <summary>Optional sub-folder pattern appended under <see cref="Folder"/> at save time.
+    /// Supports ShareX-style tokens (<c>%y</c>, <c>%mo</c>, <c>%d</c>, <c>%h</c>, <c>%mi</c>, …).
+    /// Empty = no sub-folder. Persisted to <c>capture.subfolder_pattern</c>.</summary>
+    [ObservableProperty]
+    private string _subFolderPattern = string.Empty;
+
     private bool _suppressPersist;
 
     public async Task LoadAsync()
@@ -34,6 +41,7 @@ public sealed partial class CaptureDefaultsViewModel : ObservableObject
         Folder = (await _settings.GetAsync(FolderKey, CancellationToken.None).ConfigureAwait(true)) ?? DefaultFolder;
         var rawDelay = await _settings.GetAsync(DelayKey, CancellationToken.None).ConfigureAwait(true);
         DelaySeconds = int.TryParse(rawDelay, out var d) ? Math.Clamp(d, 0, 30) : 0;
+        SubFolderPattern = (await _settings.GetAsync(SubFolderPatternKey, CancellationToken.None).ConfigureAwait(true)) ?? string.Empty;
         _suppressPersist = false;
     }
 
@@ -48,6 +56,12 @@ public sealed partial class CaptureDefaultsViewModel : ObservableObject
         if (_suppressPersist) return;
         _ = _settings.SetAsync(DelayKey, value.ToString(System.Globalization.CultureInfo.InvariantCulture),
             sensitive: false, CancellationToken.None);
+    }
+
+    partial void OnSubFolderPatternChanged(string value)
+    {
+        if (_suppressPersist) return;
+        _ = _settings.SetAsync(SubFolderPatternKey, value, sensitive: false, CancellationToken.None);
     }
 
     [RelayCommand]

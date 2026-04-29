@@ -322,8 +322,12 @@ public partial class EditorWindow : FluentWindow
 
         if (ctrl)
         {
+            // Zoom anchored at the cursor: capture the canvas-space point under the mouse, then
+            // after the LayoutTransform resize, scroll so that point sits where the cursor is.
+            // ScaleTransform alone scales from the canvas origin — without the post-scroll the
+            // user would see content shift away from their cursor.
             var factor = e.Delta > 0 ? 1.15 : (1.0 / 1.15);
-            SetZoom(_zoom * factor);
+            ZoomAt(_zoom * factor, e.GetPosition(CanvasHost));
             e.Handled = true;
             return;
         }
@@ -439,6 +443,34 @@ public partial class EditorWindow : FluentWindow
         ZoomLabel.Text = $"{_zoom * 100:F0}%";
         // Grips are sized in screen pixels via inverse zoom; refresh so the new factor applies.
         RefreshSelectionAdorner();
+    }
+
+    /// <summary>Zoom anchored at a canvas-space point (typically the mouse cursor). Applies the
+    /// new zoom factor, then scrolls the viewport so the captured point ends up at the same
+    /// screen position. Without this the canvas appears to slide away from the cursor on every
+    /// wheel notch — disorienting on large images.</summary>
+    private void ZoomAt(double newZoom, Point canvasPoint)
+    {
+        var clamped = Math.Clamp(newZoom, _minZoom, MaxZoom);
+        if (Math.Abs(clamped - _zoom) < 0.001) return;
+        // Pixel coords (in the viewport) BEFORE the zoom. Same point's pixel coords AFTER zoom
+        // is canvasPoint * clamped. The difference is what the viewport needs to scroll by to
+        // keep it stationary on screen.
+        var beforeX = canvasPoint.X * _zoom;
+        var beforeY = canvasPoint.Y * _zoom;
+        _zoom = clamped;
+        CanvasHost.LayoutTransform = new ScaleTransform(_zoom, _zoom);
+        ZoomLabel.Text = $"{_zoom * 100:F0}%";
+        var afterX = canvasPoint.X * _zoom;
+        var afterY = canvasPoint.Y * _zoom;
+        // Defer the scroll adjustment until layout has flushed the new ScaleTransform — without
+        // this the ScrollViewer's extents are still the old size and Scroll calls clamp wrong.
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, () =>
+        {
+            CanvasScrollViewer.ScrollToHorizontalOffset(CanvasScrollViewer.HorizontalOffset + (afterX - beforeX));
+            CanvasScrollViewer.ScrollToVerticalOffset(CanvasScrollViewer.VerticalOffset + (afterY - beforeY));
+            RefreshSelectionAdorner();
+        });
     }
 
     /// <summary>On first open, zoom out so the entire screenshot fits in the viewport. Capped at 100%
