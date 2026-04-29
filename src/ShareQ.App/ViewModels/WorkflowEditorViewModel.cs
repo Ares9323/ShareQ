@@ -35,6 +35,12 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
     private string? _profileId;
     private bool _isReloading;
 
+    /// <summary>True when the currently-loaded profile is a built-in. The "Reset to defaults"
+    /// button binds Visibility to this — custom workflows have no seeded default so the button
+    /// has nothing meaningful to do (it would crash trying to look up a non-existent default).</summary>
+    [ObservableProperty]
+    private bool _canResetToDefaults;
+
     public WorkflowEditorViewModel(IPipelineProfileStore profiles, PipelineProfileSeeder seeder, WorkflowActionProvider actions)
     {
         _profiles = profiles;
@@ -72,6 +78,7 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
 
             var profile = await _profiles.GetAsync(profileId, CancellationToken.None).ConfigureAwait(true);
             _storage = profile?.Steps.ToList() ?? [];
+            CanResetToDefaults = profile?.IsBuiltIn ?? false;
             SyncItemsFromStorage();
         }
         finally { _isReloading = false; }
@@ -93,6 +100,9 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
     private async Task ResetToDefaultsAsync()
     {
         if (_profileId is null) return;
+        // Defensive guard: the button is hidden for custom workflows but a stale binding could
+        // still trigger this. The seeder would throw on a non-built-in id, so refuse early.
+        if (!CanResetToDefaults) return;
         var confirm = MessageBox.Show(
             $"Reset the '{_profileId}' workflow to its default steps and order?\n\nThis discards any custom additions, removals, reordering or per-step toggles you've made here.",
             "Reset workflow",

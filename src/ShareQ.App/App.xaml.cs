@@ -217,7 +217,8 @@ public partial class App : Application
                 id, ShareQ.App.Services.Hotkeys.HotkeyDisplay.Format(def.Modifiers, def.VirtualKey));
         }
 
-        foreach (var entry in ShareQ.App.Services.Hotkeys.HotkeyConfigService.Catalog)
+        var catalog = await hotkeyConfig.GetCatalogAsync(CancellationToken.None);
+        foreach (var entry in catalog)
             await RegisterCatalogAsync(entry.Id);
 
         // Settings UI raises Changed when the user rebinds, clears, or resets → keep the hook in

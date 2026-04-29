@@ -10,18 +10,33 @@ public sealed partial class HotkeyItemViewModel : ObservableObject
 {
     private readonly HotkeyConfigService _config;
     private readonly Action _refreshList;
+    private readonly Action<string> _openInWorkflows;
 
-    public HotkeyItemViewModel(string id, string displayName, HotkeyDefinition current, HotkeyConfigService config, Action refreshList)
+    public HotkeyItemViewModel(
+        string id,
+        string displayName,
+        bool isBuiltIn,
+        HotkeyDefinition current,
+        HotkeyConfigService config,
+        Action refreshList,
+        Action<string> openInWorkflows)
     {
         Id = id;
         DisplayName = displayName;
+        IsBuiltIn = isBuiltIn;
         _config = config;
         _refreshList = refreshList;
+        _openInWorkflows = openInWorkflows;
         UpdateBindingDisplay(current);
     }
 
     public string Id { get; }
     public string DisplayName { get; }
+    public bool IsBuiltIn { get; }
+
+    /// <summary>Reset is meaningful only for built-ins (which have a seeded default); on a custom
+    /// workflow there's nothing to "reset to", so we hide the button.</summary>
+    public bool CanReset => IsBuiltIn;
 
     [ObservableProperty]
     private string _bindingDisplay = string.Empty;
@@ -36,8 +51,19 @@ public sealed partial class HotkeyItemViewModel : ObservableObject
         var ok = dialog.ShowDialog();
         if (ok != true) return;
 
-        await _config.UpdateAsync(Id, dialog.CapturedModifiers, dialog.CapturedVirtualKey, CancellationToken.None).ConfigureAwait(true);
-        UpdateBindingDisplay(new HotkeyDefinition(Id, dialog.CapturedModifiers, dialog.CapturedVirtualKey));
+        // Clear-binding path: dialog returns success but with the (None, 0) sentinel and
+        // ClearRequested set. We route that to ClearAsync so the keyboard hook unregisters and
+        // the persisted Hotkey on the profile becomes null.
+        if (dialog.ClearRequested)
+        {
+            await _config.ClearAsync(Id, CancellationToken.None).ConfigureAwait(true);
+            UpdateBindingDisplay(new HotkeyDefinition(Id, HotkeyModifiers.None, 0));
+        }
+        else
+        {
+            await _config.UpdateAsync(Id, dialog.CapturedModifiers, dialog.CapturedVirtualKey, CancellationToken.None).ConfigureAwait(true);
+            UpdateBindingDisplay(new HotkeyDefinition(Id, dialog.CapturedModifiers, dialog.CapturedVirtualKey));
+        }
         _refreshList();
     }
 
@@ -45,16 +71,11 @@ public sealed partial class HotkeyItemViewModel : ObservableObject
     private async Task ResetToDefault()
     {
         await _config.ResetAsync(Id, CancellationToken.None).ConfigureAwait(true);
-        var entry = HotkeyConfigService.Catalog.First(e => e.Id == Id);
-        UpdateBindingDisplay(new HotkeyDefinition(Id, entry.DefaultModifiers, entry.DefaultVirtualKey));
+        var current = await _config.GetEffectiveAsync(Id, CancellationToken.None).ConfigureAwait(true);
+        UpdateBindingDisplay(current);
         _refreshList();
     }
 
     [RelayCommand]
-    private async Task Clear()
-    {
-        await _config.ClearAsync(Id, CancellationToken.None).ConfigureAwait(true);
-        UpdateBindingDisplay(new HotkeyDefinition(Id, HotkeyModifiers.None, 0));
-        _refreshList();
-    }
+    private void OpenInWorkflows() => _openInWorkflows(Id);
 }

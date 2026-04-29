@@ -27,10 +27,25 @@ public partial class HotkeyCaptureWindow : Window
         Loaded += (_, _) => InstallHook();
         Closed += (_, _) => UninstallHook();
         CancelButton.Click += (_, _) => { DialogResult = false; Close(); };
+        ClearButton.Click += (_, _) =>
+        {
+            // Distinct from Cancel: caller checks ClearRequested and runs ClearAsync instead of
+            // UpdateAsync. DialogResult is still true (the user gave us an answer), but the
+            // captured combo is left at the default (None, 0) sentinel.
+            ClearRequested = true;
+            CapturedModifiers = HotkeyModifiers.None;
+            CapturedVirtualKey = 0;
+            DialogResult = true;
+            Close();
+        };
     }
 
     public HotkeyModifiers CapturedModifiers { get; private set; }
     public uint CapturedVirtualKey { get; private set; }
+
+    /// <summary>True when the user clicked "Clear binding". Caller treats this as
+    /// <c>ClearAsync</c> rather than <c>UpdateAsync</c>.</summary>
+    public bool ClearRequested { get; private set; }
 
     private void InstallHook()
     {

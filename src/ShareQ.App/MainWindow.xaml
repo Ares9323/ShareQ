@@ -42,11 +42,6 @@
                            Appearance="{Binding IsUploadersSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Margin="0,0,0,4"
-                           Content="Hotkeys"
-                           Command="{Binding ShowHotkeysCommand}"
-                           Appearance="{Binding IsHotkeysSelected, Converter={StaticResource BoolToAppearance}}" />
-                <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                           Margin="0,0,0,4"
                            Content="Capture"
                            Command="{Binding ShowCaptureCommand}"
                            Appearance="{Binding IsCaptureSelected, Converter={StaticResource BoolToAppearance}}" />
@@ -55,6 +50,11 @@
                            Content="Workflows"
                            Command="{Binding ShowWorkflowsCommand}"
                            Appearance="{Binding IsWorkflowsSelected, Converter={StaticResource BoolToAppearance}}" />
+                <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                           Margin="0,0,0,4"
+                           Content="Hotkeys"
+                           Command="{Binding ShowHotkeysCommand}"
+                           Appearance="{Binding IsHotkeysSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Content="About"
                            Command="{Binding ShowAboutCommand}"
@@ -206,51 +206,98 @@
             </ScrollViewer>
 
             <!-- Hotkeys -->
-            <Grid Visibility="{Binding IsHotkeysSelected, Converter={StaticResource BoolToVisibility}}"
-                  Margin="24,16,24,16">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <TextBlock Grid.Row="0" Text="Hotkeys" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
-                <TextBlock Grid.Row="1" Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
-                           Text="Click Rebind, then press the new key combination. Any combo works including OS-reserved ones (Win+V, Win+Shift+S, …)." />
-                <ItemsControl Grid.Row="2" ItemsSource="{Binding Hotkeys.Items}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type vm:HotkeyItemViewModel}">
-                            <Border Margin="0,0,0,8" Padding="14,10" Background="#1A1A1A"
-                                    BorderBrush="#333" BorderThickness="1" CornerRadius="6">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
-                                               FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
-                                    <Border Grid.Column="1" Padding="8,3" Background="#2A2A2A"
-                                            BorderBrush="#444" BorderThickness="1" CornerRadius="3"
-                                            Margin="0,0,8,0" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding BindingDisplay}" FontFamily="Consolas"
-                                                   FontSize="12" Foreground="#DDD" />
-                                    </Border>
-                                    <ui:Button Grid.Column="2" Content="Rebind"
-                                               Command="{Binding RebindCommand}"
-                                               Margin="0,0,4,0" />
-                                    <ui:Button Grid.Column="3" Content="Clear"
-                                               Command="{Binding ClearCommand}"
-                                               Margin="0,0,4,0" />
-                                    <ui:Button Grid.Column="4" Content="Reset"
-                                               Command="{Binding ResetToDefaultCommand}" />
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </Grid>
+            <ScrollViewer Visibility="{Binding IsHotkeysSelected, Converter={StaticResource BoolToVisibility}}"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="24,16,24,16">
+                    <TextBlock Text="Hotkeys" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                               Text="Click Rebind, then press the new key combination. Any combo works including OS-reserved ones (Win+V, Win+Shift+S, …). Use Edit workflow to jump to the workflow's step list." />
+
+                    <!-- Built-in section header -->
+                    <TextBlock Text="Built-in workflows" FontSize="13" FontWeight="SemiBold" Foreground="#BBB"
+                               Margin="0,0,0,6" />
+                    <ItemsControl ItemsSource="{Binding Hotkeys.BuiltInItems}" Margin="0,0,0,16">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:HotkeyItemViewModel}">
+                                <Border Margin="0,0,0,8" Padding="14,10" Background="#1A1A1A"
+                                        BorderBrush="#333" BorderThickness="1" CornerRadius="6">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
+                                                   FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                                        <Border Grid.Column="1" Padding="8,3" Background="#2A2A2A"
+                                                BorderBrush="#444" BorderThickness="1" CornerRadius="3"
+                                                Margin="0,0,8,0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding BindingDisplay}" FontFamily="Consolas"
+                                                       FontSize="12" Foreground="#DDD" />
+                                        </Border>
+                                        <ui:Button Grid.Column="2" Content="Edit"
+                                                   Command="{Binding OpenInWorkflowsCommand}"
+                                                   Margin="0,0,4,0"
+                                                   ToolTip="Jump to this workflow's step list in the Workflows tab" />
+                                        <ui:Button Grid.Column="3" Content="Rebind"
+                                                   Command="{Binding RebindCommand}"
+                                                   Margin="0,0,4,0" />
+                                        <ui:Button Grid.Column="4" Content="Reset"
+                                                   Command="{Binding ResetToDefaultCommand}"
+                                                   Visibility="{Binding CanReset, Converter={StaticResource BoolToVisibility}}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Custom section header -->
+                    <TextBlock Text="Custom workflows" FontSize="13" FontWeight="SemiBold" Foreground="#BBB"
+                               Margin="0,0,0,6" />
+                    <TextBlock Text="(none yet — add one from the Workflows tab)"
+                               Foreground="#666" FontSize="11" FontStyle="Italic"
+                               Visibility="{Binding Hotkeys.CustomItems.Count, Converter={StaticResource ZeroToVisibility}}"
+                               Margin="0,0,0,8" />
+                    <ItemsControl ItemsSource="{Binding Hotkeys.CustomItems}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:HotkeyItemViewModel}">
+                                <Border Margin="0,0,0,8" Padding="14,10" Background="#1A1A1A"
+                                        BorderBrush="#333" BorderThickness="1" CornerRadius="6">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
+                                                   FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                                        <Border Grid.Column="1" Padding="8,3" Background="#2A2A2A"
+                                                BorderBrush="#444" BorderThickness="1" CornerRadius="3"
+                                                Margin="0,0,8,0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding BindingDisplay}" FontFamily="Consolas"
+                                                       FontSize="12" Foreground="#DDD" />
+                                        </Border>
+                                        <ui:Button Grid.Column="2" Content="Edit"
+                                                   Command="{Binding OpenInWorkflowsCommand}"
+                                                   Margin="0,0,4,0"
+                                                   ToolTip="Jump to this workflow's step list in the Workflows tab" />
+                                        <ui:Button Grid.Column="3" Content="Rebind"
+                                                   Command="{Binding RebindCommand}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <!-- Quick-add: jumps to the Workflows tab and runs the Add flow there. Saves
+                         the user from having to navigate away just to create a new workflow. -->
+                    <ui:Button Content="+ Add custom workflow" HorizontalAlignment="Left" Margin="0,4,0,0"
+                               Command="{Binding Hotkeys.AddCustomWorkflowCommand}" />
+                </StackPanel>
+            </ScrollViewer>
 
             <!-- Capture -->
             <StackPanel Visibility="{Binding IsCaptureSelected, Converter={StaticResource BoolToVisibility}}"
@@ -281,7 +328,24 @@
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="24,16,24,16">
-                    <TextBlock Text="Workflows" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <!-- Page title row: Add and Reset all sit here because they operate on the
+                         workflow set as a whole, not on the currently-selected one. -->
+                    <Grid Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Workflows" FontSize="20" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <ui:Button Content="Add" Margin="0,0,4,0"
+                                       Command="{Binding Workflows.AddWorkflowCommand}"
+                                       ToolTip="Create a new empty workflow" />
+                            <ui:Button Content="Reset all"
+                                       Command="{Binding Workflows.ResetAllToDefaultsCommand}"
+                                       ToolTip="Reset every built-in workflow to its default steps and hotkey. Custom workflows are not touched." />
+                        </StackPanel>
+                    </Grid>
                     <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
                                Text="Each workflow is a pipeline triggered by a hotkey or menu action. Pick one to toggle its steps on/off, reorder them, or reset to the original sequence." />
 
@@ -297,21 +361,15 @@
                                   DisplayMemberPath="DisplayName"
                                   HorizontalAlignment="Stretch" />
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0">
-                            <ui:Button Content="Add"       Margin="0,0,4,0"
-                                       Command="{Binding Workflows.AddWorkflowCommand}"
-                                       ToolTip="Create a new empty workflow" />
                             <ui:Button Content="Rename"    Margin="0,0,4,0"
                                        Command="{Binding Workflows.RenameWorkflowCommand}"
                                        ToolTip="Rename the selected workflow" />
                             <ui:Button Content="Duplicate" Margin="0,0,4,0"
                                        Command="{Binding Workflows.DuplicateWorkflowCommand}"
                                        ToolTip="Clone the selected workflow into a new editable copy" />
-                            <ui:Button Content="Remove"    Margin="0,0,4,0"
+                            <ui:Button Content="Remove"
                                        Command="{Binding Workflows.RemoveWorkflowCommand}"
                                        ToolTip="Delete the selected workflow (built-ins can't be deleted)" />
-                            <ui:Button Content="Reset all"
-                                       Command="{Binding Workflows.ResetAllToDefaultsCommand}"
-                                       ToolTip="Reset every built-in workflow to its default steps and hotkey. Custom workflows are not touched." />
                         </StackPanel>
                     </Grid>
                     <TextBlock Text="{Binding Workflows.SelectedWorkflow.Description}"
@@ -325,7 +383,8 @@
                         <TextBlock Grid.Column="0" Text="Pipeline steps" FontWeight="SemiBold" FontSize="14"
                                    VerticalAlignment="Center" />
                         <ui:Button Grid.Column="1" Content="Reset to defaults"
-                                   Command="{Binding Workflows.Editor.ResetToDefaultsCommand}" />
+                                   Command="{Binding Workflows.Editor.ResetToDefaultsCommand}"
+                                   Visibility="{Binding Workflows.Editor.CanResetToDefaults, Converter={StaticResource BoolToVisibility}}" />
                     </Grid>
                     <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"
                                Text="Add actions with the picker below; drag the ⋮⋮ handle to reorder; toggle to mute without removing; × removes. Plumbing steps run automatically and aren't shown." />

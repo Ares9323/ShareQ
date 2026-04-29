@@ -22,6 +22,25 @@ public sealed partial class SettingsViewModel : ObservableObject
         _registry = registry;
         _configFactory = configFactory;
         Uploaders = uploaders;
+        // Hotkeys "Edit workflow" link → switch to the Workflows tab and select the matching row.
+        hotkeys.OpenWorkflowRequested += (_, id) =>
+        {
+            SelectedTab = SettingsTab.Workflows;
+            var match = workflows.Workflows.FirstOrDefault(w => w.Id == id);
+            if (match is not null) workflows.SelectedWorkflow = match;
+        };
+        // Hotkeys "Add custom workflow" button → jump to Workflows tab and run the Add flow.
+        // The Add command opens the name dialog and selects the new row on success, so the user
+        // lands on Workflows ready to configure the new workflow's steps.
+        hotkeys.AddCustomWorkflowRequested += async (_, _) =>
+        {
+            SelectedTab = SettingsTab.Workflows;
+            // Reload first so the dropdown is fresh, then trigger Add. The order matters because
+            // ReloadWorkflowsAsync may reset SelectedWorkflow; running Add after the reload means
+            // the new entry's selection sticks.
+            await workflows.ReloadWorkflowsAsync().ConfigureAwait(true);
+            workflows.AddWorkflowCommand.Execute(null);
+        };
         Hotkeys = hotkeys;
         Capture = capture;
         Workflows = workflows;
@@ -60,7 +79,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsAboutSelected));
         if (value == SettingsTab.Uploaders) _ = Uploaders.ReloadAsync();
         if (value == SettingsTab.Hotkeys) _ = Hotkeys.ReloadAsync();
-        if (value == SettingsTab.Workflows) _ = Workflows.ReloadAsync();
+        if (value == SettingsTab.Workflows) _ = Workflows.ReloadWorkflowsAsync();
     }
 
     [RelayCommand] private void ShowHome()      => SelectedTab = SettingsTab.Home;

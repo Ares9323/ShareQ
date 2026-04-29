@@ -26,8 +26,17 @@
                            Text="Hold modifiers (Ctrl / Alt / Shift / Win) then press a key. Esc cancels." />
             </StackPanel>
         </Border>
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="CancelButton" Content="Cancel" Width="80" />
-        </StackPanel>
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <!-- Clear lives on the left so it reads as a destructive/separate action — Cancel
+                 dismisses without changes, Clear actively removes the binding. -->
+            <Button Grid.Column="0" x:Name="ClearButton" Content="Clear binding" Width="120"
+                    HorizontalAlignment="Left" />
+            <Button Grid.Column="2" x:Name="CancelButton" Content="Cancel" Width="80" />
+        </Grid>
     </Grid>
 </Window>
