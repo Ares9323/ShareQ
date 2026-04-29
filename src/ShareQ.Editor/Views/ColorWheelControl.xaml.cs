@@ -78,14 +78,21 @@ public partial class ColorWheelControl : UserControl
     }
 
     /// <summary>Fills the bitmap once with the H×S disc at V=1. Anything outside the inscribed
-    /// circle is fully transparent so the parent's background shows through (preserves the
-    /// rounded look without anti-aliasing artefacts).</summary>
+    /// circle is fully transparent. The outermost <see cref="RimWidth"/> px are baked as opaque
+    /// black so the colour→transparent transition at the disc edge is hidden behind a hard
+    /// black ring — no antialias bleed regardless of how the bitmap gets scaled by Stretch.</summary>
     private void RenderDiscAtFullValue()
     {
         if (_disc is null) return;
         const int w = BitmapSize, h = BitmapSize;
         const double cx = w / 2.0, cy = h / 2.0;
         const double radius = w / 2.0;
+        // RimWidth (in source pixels) = how much of the outer disc to paint solid black. The
+        // disc lives in a 360×360 source bitmap that gets scaled down to ~272 DIPs; 6 source
+        // pixels ≈ 4-5 displayed pixels of black ring, comfortably more than the antialias
+        // skirt the scaler can produce.
+        const double rimWidth = 1.0;
+        const double colorRadius = radius - rimWidth;
         var pixels = new uint[w * h];
         for (var y = 0; y < h; y++)
         {
@@ -99,8 +106,15 @@ public partial class ColorWheelControl : UserControl
                     pixels[y * w + x] = 0;   // fully transparent (Pbgra32 — A premultiplied)
                     continue;
                 }
-                var sat = Math.Min(1.0, dist / (radius - 1));
-                // atan2 returns -π…π; remap to 0…1 with red at the right (theta=0).
+                if (dist > colorRadius)
+                {
+                    // Solid rim — opaque, hides any colour-leak as the bitmap is rescaled.
+                    // Tinted to match the input-row background (#1A1A1A) so the wheel reads
+                    // as part of the form rather than wearing a hard black halo.
+                    pixels[y * w + x] = 0xFF1A1A1A;
+                    continue;
+                }
+                var sat = Math.Min(1.0, dist / (colorRadius - 1));
                 var theta = Math.Atan2(-dy, dx);
                 if (theta < 0) theta += 2 * Math.PI;
                 var hue = theta / (2 * Math.PI);
@@ -119,23 +133,34 @@ public partial class ColorWheelControl : UserControl
         // gives the disc a permanent black outline regardless of V, hiding the antialias seam
         // between the round bitmap area and the rectangular Image element's transparent corners.
         var alpha = (byte)Math.Clamp(Math.Round((1.0 - V) * 255.0), 0, 255);
-        ValueOverlayBrush.Color = System.Windows.Media.Color.FromArgb(alpha, 0, 0, 0);
+        // Tint toward the rim colour (#1A1A1A) instead of pure black so the V=0 disc blends
+        // smoothly into the rim instead of revealing a brighter ring inside a black ellipse.
+        ValueOverlayBrush.Color = System.Windows.Media.Color.FromArgb(alpha, 0x1A, 0x1A, 0x1A);
     }
 
     private void UpdateCursor()
     {
         if (ActualWidth <= 0 || ActualHeight <= 0) return;
+        // The disc is inset by InsetMargin px on each side (see ColorWheelControl.xaml: WheelImage
+        // and Ellipse have Margin="2"). Effective radius accounts for that — so S=1 puts the
+        // cursor exactly on the visible disc rim, not the UserControl bound.
         var size = Math.Min(ActualWidth, ActualHeight);
         var cx = ActualWidth / 2.0;
         var cy = ActualHeight / 2.0;
-        var radius = size / 2.0 - 1;            // -1: keep inside the visual edge
+        var radius = (size / 2.0) - InsetMargin - 1;
         var theta = H * 2 * Math.PI;
         var r = S * radius;
         var px = cx + r * Math.Cos(theta);
-        var py = cy - r * Math.Sin(theta);       // -sin: y axis flipped
+        var py = cy - r * Math.Sin(theta);
         Canvas.SetLeft(WheelCursor, px - WheelCursor.Width / 2);
         Canvas.SetTop(WheelCursor, py - WheelCursor.Height / 2);
     }
+
+    /// <summary>Margin set on WheelImage / ValueOverlay in XAML. Centralised here so the
+    /// mouse-test + cursor math stay in sync if the inset ever changes. The bitmap itself
+    /// bakes a 6px black rim into its outer ring, so this margin is just a small breathing
+    /// gap rather than the primary defence against antialias bleed.</summary>
+    private const double InsetMargin = 2.0;
 
     private void OnMouseDown(object sender, MouseButtonEventArgs e)
     {
@@ -153,14 +178,15 @@ public partial class ColorWheelControl : UserControl
 
     /// <summary>Map mouse pos → (H, S). Clamps saturation at 1 so dragging outside the disc
     /// snaps to the edge instead of returning >1 garbage; the angle keeps tracking the cursor
-    /// even past the rim, which feels natural during quick rotations.</summary>
+    /// even past the rim, which feels natural during quick rotations. Effective radius matches
+    /// the visible disc (InsetMargin shrinks it on each side).</summary>
     private void UpdateFromMouse(Point p)
     {
         if (ActualWidth <= 0 || ActualHeight <= 0) return;
         var size = Math.Min(ActualWidth, ActualHeight);
         var cx = ActualWidth / 2.0;
         var cy = ActualHeight / 2.0;
-        var radius = size / 2.0;
+        var radius = (size / 2.0) - InsetMargin;
         var dx = p.X - cx;
         var dy = p.Y - cy;
         var dist = Math.Sqrt(dx * dx + dy * dy);

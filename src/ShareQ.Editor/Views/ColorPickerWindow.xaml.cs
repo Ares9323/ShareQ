@@ -1,9 +1,11 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using ShareQ.Editor.Model;
 
@@ -53,6 +55,30 @@ public partial class ColorPickerWindow : Window
             UpdateAllUi();
         };
     }
+
+    /// <summary>Apply the immersive dark-mode title bar attribute as soon as the HWND exists,
+    /// so the system-drawn title bar matches the dark picker chrome instead of staying white.
+    /// Win32 only — works on Windows 10 1809+ / Windows 11. Errors are silent (older Windows
+    /// just keeps the default light title bar).</summary>
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        int useDark = 1;
+        // Try the modern attribute first (build 19041+); fall back to the pre-20H1 index
+        // (build 18985–19040). Both write the same darken-titlebar flag.
+        if (DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, sizeof(int)) != 0)
+        {
+            _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, ref useDark, sizeof(int));
+        }
+    }
+
+    private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+    private const int DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
+
+    [LibraryImport("dwmapi.dll")]
+    private static partial int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
 
     /// <summary>The picked color when the dialog closes with OK. Read this only after ShowDialog() == true.</summary>
     public ShapeColor PickedColor { get; private set; } = ShapeColor.Black;
@@ -451,19 +477,19 @@ public partial class ColorPickerWindow : Window
         RebuildPalette();
     }
 
-    private void OnPaletteSourceChanged(object sender, RoutedEventArgs e) => RebuildPalette();
-
     private void RebuildPalette()
     {
         if (_paletteItems is null) return;
         _paletteItems.Clear();
-        var source = PaletteRecent.IsChecked == true
-            ? ColorSwatchButton.CurrentRecents
-            : (IReadOnlyList<ShapeColor>)StandardColors.Palette;
-        // Pad / truncate to 28 swatches so the grid stays a tidy 14×2 even when recents are sparse.
-        // Each swatch's brush goes through gamma so toggling sRGB Preview shifts the palette in
-        // sync with the New-preview swatch + slider gradients.
-        for (var i = 0; i < 28; i++)
+        // Recent picks only — Standard palette removed since users rarely reached for it and
+        // the radio toggle was just chrome. The picks live in ColorSwatchButton.CurrentRecents,
+        // populated by the host (Theme tab / wheel launcher / editor) before ShowDialog.
+        var source = ColorSwatchButton.CurrentRecents;
+        // Pad / truncate to 10 swatches — the grid is 10×1 and lives compact under the copy
+        // buttons. Going wider would either bleed past the wheel column or push the picker tall
+        // again. Each swatch's brush goes through gamma so toggling sRGB Preview shifts the
+        // palette in sync with the New-preview swatch + slider gradients.
+        for (var i = 0; i < 10; i++)
         {
             var color = i < source.Count ? source[i] : ShapeColor.Transparent;
             Brush brush;
