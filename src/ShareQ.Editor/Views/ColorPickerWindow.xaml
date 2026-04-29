@@ -4,7 +4,7 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:local="clr-namespace:ShareQ.Editor.Views"
         Title="Color picker"
-        Width="780" Height="425"
+        Width="780" Height="435"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="#252525"
@@ -61,8 +61,14 @@
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
+            <!-- Wheel and Square share the same Grid cell, identical 280×280 footprint.
+                 Visibility is toggled by the Wheel/Square radios in the right column;
+                 H/S/V dependency-property bindings keep both in sync regardless of which is
+                 visible, so switching has no visual jump. -->
             <local:ColorWheelControl Grid.Row="0" x:Name="ColorWheel" Width="280" Height="280"
                                      HorizontalAlignment="Center" />
+            <local:ColorSquareControl Grid.Row="0" x:Name="ColorSquare" Width="280" Height="280"
+                                      HorizontalAlignment="Center" Visibility="Collapsed" />
             <!-- Copy-format buttons — UniformGrid 3 cols × 2 rows so every button is exactly
                  1/3 of the column width. Visually consistent block under the wheel. -->
             <UniformGrid Grid.Row="2" Columns="3" Rows="2">
@@ -100,8 +106,6 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="100" />
                     <ColumnDefinition Width="100" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
@@ -121,10 +125,13 @@
                         </Border.Background>
                     </Border>
                 </Border>
-                <CheckBox Grid.Column="3" x:Name="SrgbToggle" Content="sRGB" IsChecked="True"
-                          Foreground="White" VerticalAlignment="Center"
+                <!-- sRGB centred in the slack between Old preview and Eyedropper. The * column
+                     absorbs all the remaining width and HorizontalAlignment="Center" parks the
+                     checkbox in the middle of that gap, so it visually anchors the row. -->
+                <CheckBox Grid.Column="2" x:Name="SrgbToggle" Content="sRGB" IsChecked="True"
+                          Foreground="White" VerticalAlignment="Center" HorizontalAlignment="Center"
                           ToolTip="Apply sRGB gamma to the preview swatches / sliders / wheel. Disable to see colors interpreted as linear (closer to how renderers like Unreal treat texture pixels)." />
-                <ui:Button Grid.Column="5" Content="🔍 Eyedropper"
+                <ui:Button Grid.Column="3" Content="🔍 Eyedropper"
                            VerticalAlignment="Center"
                            Click="OnEyedropperClicked"
                            ToolTip="Sample a pixel from anywhere on screen" />
@@ -162,13 +169,22 @@
                 <TextBox Grid.Column="2" x:Name="VBox" />
             </Grid>
 
-            <!-- Tab switch RGB / CMYK -->
-            <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
+            <!-- RGB / CMYK / Wheel / Square in one row, every cell exact same width via
+                 UniformGrid so the four toggles read as a balanced four-up bank instead of
+                 a left-clump + right-clump. RGB+CMYK pick the numeric channel block below;
+                 Wheel+Square pick the 2D shape on the left column. -->
+            <UniformGrid Columns="4" Margin="0,4,0,4">
                 <RadioButton x:Name="RgbTab" Content="RGB" GroupName="ColorMode" IsChecked="True"
-                             Foreground="White" Margin="0,0,12,0" Checked="OnTabChanged" />
+                             Foreground="White" Checked="OnTabChanged" />
                 <RadioButton x:Name="CmykTab" Content="CMYK" GroupName="ColorMode"
                              Foreground="White" Checked="OnTabChanged" />
-            </StackPanel>
+                <RadioButton x:Name="WheelShape" Content="Wheel" GroupName="PickerShape" IsChecked="True"
+                             Foreground="White" Checked="OnShapeChanged"
+                             ToolTip="HSV wheel — Hue around the rim, Saturation centre→edge. V on the slider." />
+                <RadioButton x:Name="SquareShape" Content="Square" GroupName="PickerShape"
+                             Foreground="White" Checked="OnShapeChanged"
+                             ToolTip="SV square at fixed Hue — every pixel a distinct colour, all of S×V on a single drag." />
+            </UniformGrid>
 
             <Grid x:Name="RgbBlock">
                 <StackPanel>

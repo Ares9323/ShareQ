@@ -47,6 +47,17 @@ public partial class ColorPickerWindow : Window
         // Hand the wheel our gamma function so its disc bitmap follows the sRGB toggle the same
         // way the sliders / palette / New-preview do. Identity transform when toggle ON.
         ColorWheel.PixelGamma = ApplyPreviewGamma;
+        // Square mirrors the wheel: same PointPicked → same UpdateAllUi pipeline, same gamma
+        // hookup. The shape radios just flip Visibility — bindings keep state coherent.
+        ColorSquare.PointPicked += (_, _) =>
+        {
+            if (_suppress) return;
+            _h = ColorSquare.H;
+            _s = ColorSquare.S;
+            _v = ColorSquare.V;
+            UpdateAllUi();
+        };
+        ColorSquare.PixelGamma = ApplyPreviewGamma;
         SizeChanged += (_, _) => UpdateAllUi();
         Loaded += (_, _) =>
         {
@@ -143,6 +154,7 @@ public partial class ColorPickerWindow : Window
             UpdateAllUi();
             RebuildPalette();
             ColorWheel.PixelGamma = ApplyPreviewGamma;
+            ColorSquare.PixelGamma = ApplyPreviewGamma;
         };
 
         foreach (var b in new[] { HBox, SBox, VBox, RBox, GBox, BBox, ABox, CBox, MBox, YBox, KBox })
@@ -303,12 +315,16 @@ public partial class ColorPickerWindow : Window
             DecBox.Text = (((uint)_a << 24) | ((uint)r << 16) | ((uint)g << 8) | b)
                 .ToString(CultureInfo.InvariantCulture);
 
-            // Push HSV into the wheel so its cursor + brightness overlay stay in lockstep with
-            // the rest of the picker. _suppress is already set, so the wheel's PointPicked handler
-            // (which would otherwise loop right back into UpdateAllUi) bails out at its guard.
+            // Push HSV into both 2D pickers so their cursor + brightness state stay in lockstep
+            // with the rest of the picker. _suppress is already set, so PointPicked handlers
+            // (which would otherwise loop right back into UpdateAllUi) bail at their guard. The
+            // hidden control still receives updates — switching shape doesn't lose state.
             ColorWheel.H = _h;
             ColorWheel.S = _s;
             ColorWheel.V = _v;
+            ColorSquare.H = _h;
+            ColorSquare.S = _s;
+            ColorSquare.V = _v;
 
             // Preview swatches respect the sRGB toggle: ON = display the byte values straight (the
             // OS / display already applies sRGB gamma during compositing). OFF = treat the bytes
@@ -465,6 +481,21 @@ public partial class ColorPickerWindow : Window
         if (RgbBlock is null || CmykBlock is null) return;
         RgbBlock.Visibility  = RgbTab.IsChecked == true  ? Visibility.Visible : Visibility.Collapsed;
         CmykBlock.Visibility = CmykTab.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>Toggle Wheel / Square 2D picker. Both controls live in the same Grid cell; this
+    /// just flips Visibility. State (H/S/V) is shared via dependency-property bindings + the
+    /// UpdateAllUi pass, so switching is instantaneous and never drops the current pick.</summary>
+    private void OnShapeChanged(object sender, RoutedEventArgs e)
+    {
+        // Skip the init-time firing: the RadioButton's Checked event also fires when XAML
+        // applies IsChecked="True" during construction, but at that point the visibility is
+        // already what the handler would set anyway. Gating on IsLoaded keeps the breakpoint
+        // quiet when the picker opens — handler only runs on real user toggles.
+        if (!IsLoaded) return;
+        if (ColorWheel is null || ColorSquare is null) return;
+        ColorWheel.Visibility  = WheelShape.IsChecked  == true ? Visibility.Visible : Visibility.Collapsed;
+        ColorSquare.Visibility = SquareShape.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ── Palette ─────────────────────────────────────────────────────────────────────
