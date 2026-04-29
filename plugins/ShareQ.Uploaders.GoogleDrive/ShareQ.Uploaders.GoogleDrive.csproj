@@ -10,4 +10,11 @@
     <PackageReference Include="Microsoft.Extensions.Http" />
     <ProjectReference Include="..\..\src\ShareQ.PluginContracts\ShareQ.PluginContracts.csproj" />
   </ItemGroup>
+  <!-- When the developer has supplied a Secrets.Local.cs (git-ignored, holds the real OAuth
+       credentials) we exclude the committed placeholder Secrets.cs from compilation so we don't
+       hit a duplicate-symbol error. CI / fresh clones don't have Secrets.Local.cs and compile the
+       placeholder as-is — build passes, the plugin just won't authenticate at runtime. -->
+  <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\Secrets.Local.cs')">
+    <Compile Remove="Secrets.cs" />
+  </ItemGroup>
 </Project>
