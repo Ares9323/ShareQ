@@ -1,9 +1,7 @@
 using System.IO;
-using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShareQ.App.Services.Plugins;
-using ShareQ.App.Windows;
 using ShareQ.PluginContracts;
 using MessageBox = System.Windows.MessageBox;
 using MessageBoxButton = System.Windows.MessageBoxButton;
@@ -22,6 +20,7 @@ public sealed partial class PluginItemViewModel : ObservableObject
     private readonly PluginRegistry _registry;
     private readonly IUploader? _uploader;
     private readonly IPluginConfigStoreFactory? _configFactory;
+    private readonly Action<PluginConfigViewModel>? _openConfig;
     private bool _suppressPersist;
 
     public PluginItemViewModel(
@@ -29,11 +28,13 @@ public sealed partial class PluginItemViewModel : ObservableObject
         bool isEnabled,
         PluginRegistry registry,
         IUploader? uploader,
-        IPluginConfigStoreFactory? configFactory)
+        IPluginConfigStoreFactory? configFactory,
+        Action<PluginConfigViewModel>? openConfig = null)
     {
         _registry = registry;
         _uploader = uploader;
         _configFactory = configFactory;
+        _openConfig = openConfig;
         Id = descriptor.Id;
         DisplayName = descriptor.DisplayName;
         Version = descriptor.Version;
@@ -89,10 +90,12 @@ public sealed partial class PluginItemViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(HasConfig))]
     private void Configure()
     {
-        if (_uploader is null || _configFactory is null) return;
+        if (_uploader is null || _configFactory is null || _openConfig is null) return;
         var vm = new PluginConfigViewModel(_uploader, _configFactory.Create(_uploader.Id));
-        var dialog = new PluginConfigDialog(vm) { Owner = Application.Current.MainWindow };
-        dialog.ShowDialog();
+        // Hands the VM off to the parent (SettingsViewModel) which switches the Plugins tab to
+        // its inline detail view. Same pattern as Hotkeys → Edit workflow: single tab, two
+        // sub-views, Back / Esc returns to the list.
+        _openConfig(vm);
     }
 
     [RelayCommand(CanExecute = nameof(CanUninstall))]

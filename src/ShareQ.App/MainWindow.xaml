@@ -11,12 +11,14 @@
                  WindowBackdropType="Mica"
                  ExtendsContentIntoTitleBar="True">
     <ui:FluentWindow.InputBindings>
-        <!-- Esc anywhere in the app routes to BackToList. The command's CanExecute is gated on
-             IsEditingWorkflow, so this is a no-op when not in edit view. KeyBindings sit on the
-             Window's command routing layer and fire regardless of which descendant has focus —
-             unlike KeyDown handlers which require focus to be inside the listening element. The
-             inline rename TextBox swallows Esc (e.Handled=true) so it doesn't bubble out and
-             trigger this binding while the user is still typing the name. -->
+        <!-- Esc routes to whichever inline-detail view is active. Each command's CanExecute is
+             gated on its mode flag (IsConfiguringPlugin / IsEditingWorkflow); WPF picks the first
+             KeyBinding whose CanExecute returns true. List the more specific modes first so they
+             take precedence. KeyBindings sit on the Window's command routing layer and fire
+             regardless of focus — unlike KeyDown handlers which require focus to be inside the
+             listening element. The inline rename TextBox swallows Esc (e.Handled=true) so it
+             doesn't bubble out and trigger these bindings while the user is still typing. -->
+        <KeyBinding Key="Escape" Command="{Binding BackFromConfigCommand}" />
         <KeyBinding Key="Escape" Command="{Binding Hotkeys.BackToListCommand}" />
     </ui:FluentWindow.InputBindings>
     <Grid>
@@ -81,62 +83,155 @@
                            Text="Hotkeys: Ctrl+Alt+R region · Ctrl+Shift+P picker · Ctrl+Alt+S record · Ctrl+Alt+G gif" />
             </StackPanel>
 
-            <!-- Plugins -->
-            <Grid Visibility="{Binding IsPluginsSelected, Converter={StaticResource BoolToVisibility}}"
-                  Margin="24,16,24,16">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <TextBlock Grid.Row="0" Text="Plugins" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
-                <TextBlock Grid.Row="1" Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
-                           Text="Toggle plugins on or off. Built-in plugins ship with ShareQ. External plugins live under %LOCALAPPDATA%\ShareQ\plugins\." />
-                <!-- ItemsControl (not ListBox) — there's no selection state to render here, each
-                     row is its own self-styled Border. ListBox would wrap items in ListBoxItems
-                     and paint its own #202020 chrome around the list (visible as a sharp-cornered
-                     area below the last row). ItemsControl renders just the items, period. -->
-                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <ItemsControl ItemsSource="{Binding Plugins}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type vm:PluginItemViewModel}">
-                            <Border Margin="0,0,0,8" Padding="14,10" Background="#1A1A1A"
-                                    BorderBrush="#333" BorderThickness="1" CornerRadius="6">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13" />
-                                            <Border Margin="8,0,0,0" Padding="6,1" Background="#333" CornerRadius="3"
-                                                    VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Badge}" Foreground="#BBB" FontSize="10" />
-                                            </Border>
+            <!-- Plugins: list / configure inline detail. Single tab, two sub-views toggled by
+                 IsConfiguringPlugin. Same shape as Hotkeys & workflows. -->
+            <Grid Visibility="{Binding IsPluginsSelected, Converter={StaticResource BoolToVisibility}}">
+
+                <!-- ── LIST VIEW ──────────────────────────────────────────────────────────── -->
+                <ScrollViewer Visibility="{Binding IsConfiguringPlugin, Converter={StaticResource InverseBoolToVisibility}}"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="24,16,24,16">
+                        <TextBlock Text="Plugins" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                                   Text="Toggle plugins on or off. Built-in plugins ship with ShareQ. External plugins live under %LOCALAPPDATA%\ShareQ\plugins\." />
+                        <ItemsControl ItemsSource="{Binding Plugins}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:PluginItemViewModel}">
+                                    <Border Margin="0,0,0,8" Padding="14,10" Background="#1A1A1A"
+                                            BorderBrush="#333" BorderThickness="1" CornerRadius="6">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13" />
+                                                    <Border Margin="8,0,0,0" Padding="6,1" Background="#333" CornerRadius="3"
+                                                            VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Badge}" Foreground="#BBB" FontSize="10" />
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding Subtitle}" Foreground="#888" FontSize="11"
+                                                           TextWrapping="Wrap" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                                                <ui:Button Content="Configure"
+                                                           Command="{Binding ConfigureCommand}"
+                                                           Visibility="{Binding HasConfig, Converter={StaticResource BoolToVisibility}}"
+                                                           Margin="0,0,4,0"
+                                                           ToolTip="Open this plugin's settings inline (sign-in, target folder, public/private, …)" />
+                                                <ui:Button Content="Uninstall"
+                                                           Command="{Binding UninstallCommand}"
+                                                           Visibility="{Binding CanUninstall, Converter={StaticResource BoolToVisibility}}" />
+                                            </StackPanel>
+                                            <ui:ToggleSwitch Grid.Column="2"
+                                                             IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                                             VerticalAlignment="Center" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ── CONFIGURE DETAIL VIEW ───────────────────────────────────────────────── -->
+                <!-- DataContext is set on the inner StackPanel rather than the ScrollViewer so
+                     the ScrollViewer's Visibility binding still resolves against SettingsViewModel
+                     (parent DataContext). Setting it on the ScrollViewer would re-root the binding
+                     scope to ConfiguringPlugin, where IsConfiguringPlugin doesn't exist — the
+                     binding would fall back to Visible and the panel would always render. -->
+                <ScrollViewer Visibility="{Binding IsConfiguringPlugin, Converter={StaticResource BoolToVisibility}}"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="24,16,24,16" DataContext="{Binding ConfiguringPlugin}">
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <ui:Button Grid.Column="0" Content="← Back"
+                                       Command="{Binding DataContext.BackFromConfigCommand, RelativeSource={RelativeSource AncestorType=ui:FluentWindow}}"
+                                       VerticalAlignment="Center"
+                                       ToolTip="Back to the plugin list (Esc)" />
+                            <TextBlock Grid.Column="1" Text="{Binding DisplayName}"
+                                       FontSize="16" FontWeight="SemiBold"
+                                       VerticalAlignment="Center" Margin="12,0,0,0" />
+                        </Grid>
+
+                        <!-- Auth section: visible only when the plugin implements IAuthenticatedUploader -->
+                        <Border Background="#2A2A2A" BorderBrush="#444" BorderThickness="1" CornerRadius="4"
+                                Padding="12,10" Margin="0,0,0,16"
+                                Visibility="{Binding SupportsAuth, Converter={StaticResource BoolToVisibility}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="Account" FontWeight="SemiBold" FontSize="12" />
+                                    <TextBlock Text="{Binding AuthStatus}" Foreground="#BBB" FontSize="11" />
+                                </StackPanel>
+                                <ui:Button Grid.Column="1" Content="Sign in"  Margin="0,0,4,0"
+                                           Command="{Binding SignInCommand}" />
+                                <ui:Button Grid.Column="2" Content="Sign out"
+                                           Command="{Binding SignOutCommand}" />
+                            </Grid>
+                        </Border>
+
+                        <!-- Settings list — auto-generated from IConfigurableUploader.GetSettings() -->
+                        <ItemsControl ItemsSource="{Binding Settings}">
+                            <ItemsControl.Resources>
+                                <DataTemplate DataType="{x:Type vm:PluginSettingBoolRowViewModel}">
+                                    <Border Margin="0,0,0,8" Padding="12,8" Background="#1A1A1A"
+                                            BorderBrush="#333" BorderThickness="1" CornerRadius="4">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="12" />
+                                                <TextBlock Text="{Binding Description}" Foreground="#888" FontSize="11"
+                                                           TextWrapping="Wrap" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                            <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Value, Mode=TwoWay}"
+                                                             VerticalAlignment="Center" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                                <DataTemplate DataType="{x:Type vm:PluginSettingDropdownRowViewModel}">
+                                    <Border Margin="0,0,0,8" Padding="12,8" Background="#1A1A1A"
+                                            BorderBrush="#333" BorderThickness="1" CornerRadius="4">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="12" />
+                                            <TextBlock Text="{Binding Description}" Foreground="#888" FontSize="11"
+                                                       TextWrapping="Wrap" Margin="0,2,0,6" />
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <ComboBox Grid.Column="0"
+                                                          ItemsSource="{Binding Options}"
+                                                          SelectedValue="{Binding SelectedValue, Mode=TwoWay}"
+                                                          SelectedValuePath="Value"
+                                                          DisplayMemberPath="Display" />
+                                                <ui:Button Grid.Column="1" Content="Refresh" Margin="6,0,0,0"
+                                                           Command="{Binding RefreshOptionsCommand}"
+                                                           Visibility="{Binding IsAsyncLoaded, Converter={StaticResource BoolToVisibility}}"
+                                                           IsEnabled="{Binding IsLoadingOptions, Converter={StaticResource InverseBool}}" />
+                                            </Grid>
                                         </StackPanel>
-                                        <TextBlock Text="{Binding Subtitle}" Foreground="#888" FontSize="11"
-                                                   TextWrapping="Wrap" Margin="0,2,0,0" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
-                                        <ui:Button Content="Configure"
-                                                   Command="{Binding ConfigureCommand}"
-                                                   Visibility="{Binding HasConfig, Converter={StaticResource BoolToVisibility}}"
-                                                   Margin="0,0,4,0"
-                                                   ToolTip="Open this plugin's settings (sign-in, target folder, public/private, …)" />
-                                        <ui:Button Content="Uninstall"
-                                                   Command="{Binding UninstallCommand}"
-                                                   Visibility="{Binding CanUninstall, Converter={StaticResource BoolToVisibility}}" />
-                                    </StackPanel>
-                                    <ui:ToggleSwitch Grid.Column="2"
-                                                     IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                                                     VerticalAlignment="Center" />
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.Resources>
+                        </ItemsControl>
+                    </StackPanel>
                 </ScrollViewer>
             </Grid>
 

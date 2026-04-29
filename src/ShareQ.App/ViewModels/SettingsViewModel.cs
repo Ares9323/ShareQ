@@ -46,6 +46,16 @@ public sealed partial class SettingsViewModel : ObservableObject
     public CaptureDefaultsViewModel Capture { get; }
     public WorkflowsViewModel Workflows { get; }
 
+    /// <summary>Non-null while the user is in the Plugins → Configure detail view. Drives the
+    /// list/detail toggle in the Plugins XAML; cleared by <see cref="BackFromConfigCommand"/>.
+    /// Same shape as Hotkeys' edit-view pattern — single tab, two sub-views.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsConfiguringPlugin))]
+    [NotifyCanExecuteChangedFor(nameof(BackFromConfigCommand))]
+    private PluginConfigViewModel? _configuringPlugin;
+
+    public bool IsConfiguringPlugin => ConfiguringPlugin is not null;
+
     [ObservableProperty]
     private SettingsTab _selectedTab = SettingsTab.Home;
 
@@ -77,6 +87,20 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand] private void ShowCapture()   => SelectedTab = SettingsTab.Capture;
     [RelayCommand] private void ShowAbout()     => SelectedTab = SettingsTab.About;
 
+    /// <summary>Open the inline configure view for a plugin. Called by
+    /// <see cref="PluginItemViewModel"/> via the openConfig callback wired up in
+    /// <see cref="LoadPluginsAsync"/>.</summary>
+    public async Task OpenPluginConfigAsync(PluginConfigViewModel vm)
+    {
+        ConfiguringPlugin = vm;
+        await vm.LoadAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
+    private bool CanGoBackFromConfig() => IsConfiguringPlugin;
+
+    [RelayCommand(CanExecute = nameof(CanGoBackFromConfig))]
+    private void BackFromConfig() => ConfiguringPlugin = null;
+
     private async Task LoadPluginsAsync()
     {
         Plugins.Clear();
@@ -84,7 +108,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             var enabled = await _registry.IsEnabledAsync(descriptor.Id, CancellationToken.None).ConfigureAwait(true);
             var uploader = _registry.GetUploader(descriptor.Id);
-            Plugins.Add(new PluginItemViewModel(descriptor, enabled, _registry, uploader, _configFactory));
+            Plugins.Add(new PluginItemViewModel(
+                descriptor, enabled, _registry, uploader, _configFactory,
+                openConfig: vm => _ = OpenPluginConfigAsync(vm)));
         }
     }
 }
