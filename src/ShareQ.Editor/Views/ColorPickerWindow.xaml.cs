@@ -24,6 +24,16 @@ public partial class ColorPickerWindow : Window
     private bool _suppress;
     private readonly ShapeColor _originalColor;
 
+    // ── UI preferences persisted across picker openings (same app session). Defaults match
+    //    the XAML-default selections so the very first open is unchanged. Static-only:
+    //    survives every dialog close/reopen but resets on app restart. Cross-restart
+    //    persistence would need an ISettingsStore injection; not done yet on purpose —
+    //    these are tiny UI prefs, in-session is plenty for the "don't make me re-toggle"
+    //    annoyance the user flagged.
+    private static bool _persistedSquareShape;   // false → Wheel
+    private static bool _persistedCmykTab;       // false → RGB
+    private static bool _persistedSrgbOff;       // false → sRGB ON (XAML default)
+
     public ColorPickerWindow(ShapeColor initial)
     {
         InitializeComponent();
@@ -35,6 +45,7 @@ public partial class ColorPickerWindow : Window
         _a = initial.A;
 
         WireSliderInputs();
+        RestorePersistedPreferences();
         // Wheel pushes (H, S) back into our HSV state — same path used by the H/S text inputs
         // and sliders, so it goes through UpdateAllUi which keeps every other channel in sync.
         ColorWheel.PointPicked += (_, _) =>
@@ -155,6 +166,7 @@ public partial class ColorPickerWindow : Window
             RebuildPalette();
             ColorWheel.PixelGamma = ApplyPreviewGamma;
             ColorSquare.PixelGamma = ApplyPreviewGamma;
+            _persistedSrgbOff = SrgbToggle.IsChecked != true;
         };
 
         foreach (var b in new[] { HBox, SBox, VBox, RBox, GBox, BBox, ABox, CBox, MBox, YBox, KBox })
@@ -481,6 +493,7 @@ public partial class ColorPickerWindow : Window
         if (RgbBlock is null || CmykBlock is null) return;
         RgbBlock.Visibility  = RgbTab.IsChecked == true  ? Visibility.Visible : Visibility.Collapsed;
         CmykBlock.Visibility = CmykTab.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        _persistedCmykTab = CmykTab.IsChecked == true;
     }
 
     /// <summary>Toggle Wheel / Square 2D picker. Both controls live in the same Grid cell; this
@@ -491,11 +504,43 @@ public partial class ColorPickerWindow : Window
         // Skip the init-time firing: the RadioButton's Checked event also fires when XAML
         // applies IsChecked="True" during construction, but at that point the visibility is
         // already what the handler would set anyway. Gating on IsLoaded keeps the breakpoint
-        // quiet when the picker opens — handler only runs on real user toggles.
+        // quiet when the picker opens — handler only runs on real user toggles. The session
+        // restore path applies visibility directly, so it doesn't depend on this firing.
         if (!IsLoaded) return;
         if (ColorWheel is null || ColorSquare is null) return;
         ColorWheel.Visibility  = WheelShape.IsChecked  == true ? Visibility.Visible : Visibility.Collapsed;
         ColorSquare.Visibility = SquareShape.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        _persistedSquareShape = SquareShape.IsChecked == true;
+    }
+
+    /// <summary>Apply the static-cached UI preferences (Wheel/Square, RGB/CMYK, sRGB) so reopening
+    /// the picker keeps the user's last-chosen modes. Called once during construction, after
+    /// WireSliderInputs has hooked the handlers we'll write back through.</summary>
+    private void RestorePersistedPreferences()
+    {
+        if (_persistedSquareShape)
+        {
+            SquareShape.IsChecked = true;
+            // OnShapeChanged is gated on IsLoaded so it bails during ctor — apply the visibility
+            // flip directly here. Without this the dialog would show the radio as Square but the
+            // wheel still rendered behind it.
+            ColorWheel.Visibility  = Visibility.Collapsed;
+            ColorSquare.Visibility = Visibility.Visible;
+        }
+        if (_persistedCmykTab)
+        {
+            // OnTabChanged is null-guarded only and fields are non-null after InitializeComponent,
+            // so it runs naturally and flips the slider blocks.
+            CmykTab.IsChecked = true;
+        }
+        if (_persistedSrgbOff)
+        {
+            // CheckBox.Click doesn't fire on programmatic IsChecked changes, so the slider
+            // gradients / palette / wheel re-rasterisation that the click handler triggers
+            // happen naturally via the Loaded handler's UpdateAllUi + RebuildPalette + the
+            // ColorWheel/Square.PixelGamma assignments later in this constructor.
+            SrgbToggle.IsChecked = false;
+        }
     }
 
     // ── Palette ─────────────────────────────────────────────────────────────────────

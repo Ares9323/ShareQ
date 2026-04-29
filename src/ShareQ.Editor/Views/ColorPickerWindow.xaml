@@ -4,7 +4,7 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:local="clr-namespace:ShareQ.Editor.Views"
         Title="Color picker"
-        Width="780" Height="435"
+        Width="780" Height="445"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="#252525"
