@@ -550,6 +550,45 @@
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
+                                                    <!-- Free-form text inputs for the step's path / args / shell-command config.
+                                                         One row per StringParameter; UpdateSourceTrigger=PropertyChanged so each
+                                                         keystroke persists immediately via OnStringParameterChangedAsync. -->
+                                                    <ItemsControl ItemsSource="{Binding StringParameters}"
+                                                                  Visibility="{Binding HasStringParameters, Converter={StaticResource BoolToVisibility}}"
+                                                                  Margin="0,6,0,0">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Grid Margin="0,0,0,4">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="100" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock Grid.Column="0" Text="{Binding Label}"
+                                                                               Foreground="#DDD" FontSize="11"
+                                                                               VerticalAlignment="Center" />
+                                                                    <ui:TextBox Grid.Column="1"
+                                                                                Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                                PlaceholderText="{Binding Placeholder}"
+                                                                                FontSize="11" />
+                                                                    <!-- Picker buttons live to the right of the text box. Visibility is bound
+                                                                         to the entry's ShowFileButton / ShowFolderButton flags so a parameter
+                                                                         without a picker (args, command) shows just the text box. -->
+                                                                    <ui:Button Grid.Column="2" Content="📄"
+                                                                               Margin="4,0,0,0" Padding="6,2" FontSize="11"
+                                                                               Command="{Binding BrowseFileCommand}"
+                                                                               ToolTip="Pick a file…"
+                                                                               Visibility="{Binding ShowFileButton, Converter={StaticResource BoolToVisibility}}" />
+                                                                    <ui:Button Grid.Column="3" Content="📁"
+                                                                               Margin="4,0,0,0" Padding="6,2" FontSize="11"
+                                                                               Command="{Binding BrowseFolderCommand}"
+                                                                               ToolTip="Pick a folder…"
+                                                                               Visibility="{Binding ShowFolderButton, Converter={StaticResource BoolToVisibility}}" />
+                                                                </Grid>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
                                                 </StackPanel>
                                                 <ui:ToggleSwitch Grid.Column="2" IsChecked="{Binding IsEnabled, Mode=TwoWay}"
                                                                  VerticalAlignment="Center" Margin="12,0,0,0" />

@@ -11,6 +11,7 @@ public sealed partial class WorkflowStepViewModel : ObservableObject
     private readonly Action<WorkflowStepViewModel> _onRemove;
     private readonly Action<WorkflowStepViewModel, int>? _onParameterChanged;
     private readonly Action<WorkflowStepViewModel, string, bool>? _onBoolParameterChanged;
+    private readonly Action<WorkflowStepViewModel, string, string>? _onStringParameterChanged;
     private bool _suppress;
 
     public WorkflowStepViewModel(
@@ -24,11 +25,14 @@ public sealed partial class WorkflowStepViewModel : ObservableObject
         int parameterValue,
         IReadOnlyList<BoolParameter>? boolParameters,
         IReadOnlyDictionary<string, bool>? boolParameterValues,
+        IReadOnlyList<StringParameter>? stringParameters,
+        IReadOnlyDictionary<string, string>? stringParameterValues,
         Action<WorkflowStepViewModel, bool> onEnabledChanged,
         Action<WorkflowStepViewModel, int> onMove,
         Action<WorkflowStepViewModel> onRemove,
         Action<WorkflowStepViewModel, int>? onParameterChanged,
-        Action<WorkflowStepViewModel, string, bool>? onBoolParameterChanged = null)
+        Action<WorkflowStepViewModel, string, bool>? onBoolParameterChanged = null,
+        Action<WorkflowStepViewModel, string, string>? onStringParameterChanged = null)
     {
         StorageIndex = storageIndex;
         TaskId = taskId;
@@ -41,6 +45,7 @@ public sealed partial class WorkflowStepViewModel : ObservableObject
         _onRemove = onRemove;
         _onParameterChanged = onParameterChanged;
         _onBoolParameterChanged = onBoolParameterChanged;
+        _onStringParameterChanged = onStringParameterChanged;
         _suppress = true;
         IsEnabled = initiallyEnabled;
         ParameterValue = parameter is null ? 0 : Math.Clamp(parameterValue, parameter.Min, parameter.Max);
@@ -56,6 +61,20 @@ public sealed partial class WorkflowStepViewModel : ObservableObject
                     ? v : bp.DefaultValue;
                 BoolParameters.Add(new BoolParameterEntry(bp.Key, bp.Label, initial,
                     (key, value) => _onBoolParameterChanged?.Invoke(this, key, value)));
+            }
+        }
+
+        // String parameters mirror the bool path: one VM entry per declared parameter, captures
+        // its key + persistence callback. Used for paths / args / shell commands on launch tasks.
+        StringParameters = new ObservableCollection<StringParameterEntry>();
+        if (stringParameters is not null)
+        {
+            foreach (var sp in stringParameters)
+            {
+                var initial = stringParameterValues is not null && stringParameterValues.TryGetValue(sp.Key, out var v)
+                    ? v : sp.DefaultValue;
+                StringParameters.Add(new StringParameterEntry(sp.Key, sp.Label, sp.Placeholder, initial, sp.Picker,
+                    (key, value) => _onStringParameterChanged?.Invoke(this, key, value)));
             }
         }
         _suppress = false;
@@ -74,6 +93,8 @@ public sealed partial class WorkflowStepViewModel : ObservableObject
     public bool HasParameter => Parameter is not null;
     public ObservableCollection<BoolParameterEntry> BoolParameters { get; }
     public bool HasBoolParameters => BoolParameters.Count > 0;
+    public ObservableCollection<StringParameterEntry> StringParameters { get; }
+    public bool HasStringParameters => StringParameters.Count > 0;
     public string? ParameterLabel => Parameter?.Label;
     public int ParameterMin => Parameter?.Min ?? 0;
     public int ParameterMax => Parameter?.Max ?? 0;
@@ -178,5 +199,120 @@ public sealed partial class BoolParameterEntry : ObservableObject
     {
         if (_suppress) return;
         _onChanged(Key, value);
+    }
+}
+
+/// <summary>One row's worth of string-config state for a step (path, args, shell command).
+/// Two-way bindable so a TextBox in the workflow editor commits the change immediately, and
+/// the supplied callback persists the value into step.Config[<see cref="Key"/>]. Picker kind
+/// drives Show* flags + Browse* commands so the UI can opt into file/folder dialogs without
+/// each row needing its own code-behind handler.</summary>
+public sealed partial class StringParameterEntry : ObservableObject
+{
+    private readonly Action<string, string> _onChanged;
+    private bool _suppress;
+
+    public StringParameterEntry(
+        string key,
+        string label,
+        string? placeholder,
+        string initialValue,
+        StringPickerKind picker,
+        Action<string, string> onChanged)
+    {
+        Key = key;
+        Label = label;
+        Placeholder = placeholder;
+        Picker = picker;
+        _onChanged = onChanged;
+        _suppress = true;
+        Value = initialValue;
+        _suppress = false;
+    }
+
+    public string Key { get; }
+    public string Label { get; }
+    public string? Placeholder { get; }
+    public StringPickerKind Picker { get; }
+    public bool ShowFileButton => Picker is StringPickerKind.File or StringPickerKind.FileOrFolder;
+    public bool ShowFolderButton => Picker is StringPickerKind.Folder or StringPickerKind.FileOrFolder;
+
+    [ObservableProperty]
+    private string _value = string.Empty;
+
+    partial void OnValueChanged(string value)
+    {
+        if (_suppress) return;
+        _onChanged(Key, value);
+    }
+
+    /// <summary>Open a file-open dialog seeded at the current value's folder (when valid). On
+    /// confirm, the chosen path replaces <see cref="Value"/> — which fires OnValueChanged →
+    /// persistence callback, same path as a manual edit.</summary>
+    [RelayCommand]
+    private void BrowseFile()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = $"Pick file for {Label}",
+            CheckFileExists = true,
+            Multiselect = false,
+        };
+        SeedInitialDirectory(dlg);
+        if (dlg.ShowDialog() == true)
+        {
+            Value = dlg.FileName;
+        }
+    }
+
+    /// <summary>Open a folder-open dialog. Uses the .NET 8+ <c>OpenFolderDialog</c> which is the
+    /// modern Win32 IFileDialog flavour — no FolderBrowserDialog (that's WinForms-era) and no
+    /// shim around the file picker.</summary>
+    [RelayCommand]
+    private void BrowseFolder()
+    {
+        var dlg = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = $"Pick folder for {Label}",
+        };
+        if (!string.IsNullOrWhiteSpace(Value))
+        {
+            try
+            {
+                var expanded = Environment.ExpandEnvironmentVariables(Value);
+                if (System.IO.Directory.Exists(expanded))
+                {
+                    dlg.InitialDirectory = expanded;
+                }
+                else
+                {
+                    var parent = System.IO.Path.GetDirectoryName(expanded);
+                    if (!string.IsNullOrEmpty(parent) && System.IO.Directory.Exists(parent))
+                        dlg.InitialDirectory = parent;
+                }
+            }
+            catch { /* fall back to dialog default */ }
+        }
+        if (dlg.ShowDialog() == true)
+        {
+            Value = dlg.FolderName;
+        }
+    }
+
+    private void SeedInitialDirectory(Microsoft.Win32.OpenFileDialog dlg)
+    {
+        if (string.IsNullOrWhiteSpace(Value)) return;
+        try
+        {
+            var expanded = Environment.ExpandEnvironmentVariables(Value);
+            var dir = System.IO.Directory.Exists(expanded)
+                ? expanded
+                : System.IO.Path.GetDirectoryName(expanded);
+            if (!string.IsNullOrEmpty(dir) && System.IO.Directory.Exists(dir))
+            {
+                dlg.InitialDirectory = dir;
+            }
+        }
+        catch { /* fall back to dialog default */ }
     }
 }

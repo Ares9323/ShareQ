@@ -141,6 +141,17 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
                     boolValues[bp.Key] = (bool?)step.Config?[bp.Key] ?? bp.DefaultValue;
                 }
             }
+            // Snapshot string parameters the same way as bools — fall back to the descriptor
+            // default when the key isn't yet in step.Config (newly added step, first edit).
+            Dictionary<string, string>? stringValues = null;
+            if (descriptor?.StringParameters is { Count: > 0 } strings)
+            {
+                stringValues = new Dictionary<string, string>(strings.Count);
+                foreach (var sp in strings)
+                {
+                    stringValues[sp.Key] = (string?)step.Config?[sp.Key] ?? sp.DefaultValue;
+                }
+            }
             Items.Add(new WorkflowStepViewModel(
                 storageIndex: i,
                 taskId: step.TaskId,
@@ -152,11 +163,14 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
                 parameterValue: parameterValue,
                 boolParameters: descriptor?.BoolParameters,
                 boolParameterValues: boolValues,
+                stringParameters: descriptor?.StringParameters,
+                stringParameterValues: stringValues,
                 onEnabledChanged: (item, value)   => _ = OnEnabledChangedAsync(item, value),
                 onMove:           (item, delta)   => _ = OnMoveAsync(item, delta),
                 onRemove:         item            => _ = OnRemoveAsync(item),
                 onParameterChanged: (item, value) => _ = OnParameterChangedAsync(item, value),
-                onBoolParameterChanged: (item, key, value) => _ = OnBoolParameterChangedAsync(item, key, value)));
+                onBoolParameterChanged: (item, key, value) => _ = OnBoolParameterChangedAsync(item, key, value),
+                onStringParameterChanged: (item, key, value) => _ = OnStringParameterChangedAsync(item, key, value)));
         }
         UpdateMoveFlags();
     }
@@ -182,6 +196,17 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
     }
 
     private async Task OnBoolParameterChangedAsync(WorkflowStepViewModel item, string key, bool value)
+    {
+        if (_isReloading || _profileId is null) return;
+        if (item.StorageIndex < 0 || item.StorageIndex >= _storage.Count) return;
+        var step = _storage[item.StorageIndex];
+        var config = step.Config?.DeepClone() as JsonObject ?? new JsonObject();
+        config[key] = value;
+        _storage[item.StorageIndex] = step with { Config = config };
+        await PersistAsync().ConfigureAwait(true);
+    }
+
+    private async Task OnStringParameterChangedAsync(WorkflowStepViewModel item, string key, string value)
     {
         if (_isReloading || _profileId is null) return;
         if (item.StorageIndex < 0 || item.StorageIndex >= _storage.Count) return;

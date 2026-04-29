@@ -134,6 +134,9 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, SaveAsTask>();
                 services.AddSingleton<IPipelineTask, QrCodeTask>();
                 services.AddSingleton<IPipelineTask, PinToScreenTask>();
+                services.AddSingleton<IPipelineTask, LaunchAppTask>();
+                services.AddSingleton<IPipelineTask, OpenFileTask>();
+                services.AddSingleton<IPipelineTask, RunCommandTask>();
 
                 services.AddSingleton<NativeClipboardHistoryProbe>();
                 services.AddSingleton<NativeClipboardHistoryBanner>();

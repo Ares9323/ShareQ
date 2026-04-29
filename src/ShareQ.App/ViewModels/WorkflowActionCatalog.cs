@@ -11,6 +11,33 @@ public sealed record IntParameter(string Key, string Label, int DefaultValue, in
 /// step row, persisted under <see cref="Key"/> in the step's JSON config.</summary>
 public sealed record BoolParameter(string Key, string Label, bool DefaultValue);
 
+/// <summary>Hint to the workflow editor about which (if any) system picker buttons to render
+/// next to a <see cref="StringParameter"/>'s text box. The text box itself remains editable
+/// — pickers just populate it from a dialog so the user doesn't have to type long paths.</summary>
+public enum StringPickerKind
+{
+    /// <summary>No picker — plain text box.</summary>
+    None,
+    /// <summary>📄 Browse… opens a file-open dialog and writes the chosen path back.</summary>
+    File,
+    /// <summary>📁 Browse… opens a folder-open dialog and writes the chosen path back.</summary>
+    Folder,
+    /// <summary>Both 📄 and 📁 buttons — for parameters that may target either.</summary>
+    FileOrFolder,
+}
+
+/// <summary>Declarative description of a free-form string config parameter — rendered as a text
+/// box on the step row. <see cref="Placeholder"/> shows as a hint when the value is empty
+/// (paths, args, commands). <see cref="Picker"/> requests file/folder browse buttons
+/// alongside the text box. The text is persisted verbatim under <see cref="Key"/> in the
+/// step's JSON config.</summary>
+public sealed record StringParameter(
+    string Key,
+    string Label,
+    string DefaultValue,
+    string? Placeholder = null,
+    StringPickerKind Picker = StringPickerKind.None);
+
 /// <summary>One entry in the "+ Add step" picker for workflows. Maps a pipeline task id to
 /// human-readable metadata + a default config to apply when the user adds the action.</summary>
 public sealed record WorkflowActionDescriptor(
@@ -28,7 +55,11 @@ public sealed record WorkflowActionDescriptor(
     IntParameter? IntParameter = null,
     /// <summary>Optional list of boolean toggles rendered as checkboxes on the step row. Each
     /// entry's <see cref="BoolParameter.Key"/> is the JSON property the checkbox writes to.</summary>
-    IReadOnlyList<BoolParameter>? BoolParameters = null);
+    IReadOnlyList<BoolParameter>? BoolParameters = null,
+    /// <summary>Optional list of free-form text inputs rendered on the step row (paths, args,
+    /// shell commands). Each entry's <see cref="StringParameter.Key"/> is the JSON property
+    /// the text box writes to.</summary>
+    IReadOnlyList<StringParameter>? StringParameters = null);
 
 public static class WorkflowActionCatalog
 {
@@ -197,6 +228,42 @@ public static class WorkflowActionCatalog
             "Pin image to screen",
             "Show the captured image in an always-on-top window. Drag to move, wheel to zoom, right-click or Esc to close.",
             "Tools"),
+
+        // Launch family — MaxLaunchpad-style "press a shortcut, run a thing". Composable into any
+        // workflow so a single ShareQ shortcut can capture, save, AND launch an app/file/command
+        // in sequence. Use Launch app for .exe / .lnk / .bat targets; Open file for "treat me as
+        // a document and let Windows pick the handler"; Run command for shell pipelines.
+        new("shareq.launch-app",
+            "Launch app",
+            "Start an executable, shortcut, or batch file. Path supports %ENV% expansion. Args are passed verbatim to the target. Working dir defaults to the path's folder.",
+            "Launch",
+            DefaultConfigJson: "{\"path\":\"\",\"args\":\"\",\"workingDir\":\"\"}",
+            StringParameters: new[]
+            {
+                new StringParameter("path",       "Path",        "", "C:\\Program Files\\…\\app.exe", StringPickerKind.File),
+                new StringParameter("args",       "Args",        "", "--flag value"),
+                new StringParameter("workingDir", "Working dir", "", "(defaults to app's folder)",   StringPickerKind.Folder),
+            }),
+
+        new("shareq.open-file",
+            "Open file or folder",
+            "Open a file or folder with its default OS-registered handler — same as double-clicking in Explorer. PDFs land in the PDF viewer, .txt in Notepad, folders in an Explorer window.",
+            "Launch",
+            DefaultConfigJson: "{\"path\":\"\"}",
+            StringParameters: new[]
+            {
+                new StringParameter("path", "Path", "", "C:\\Users\\…\\file.pdf", StringPickerKind.FileOrFolder),
+            }),
+
+        new("shareq.run-command",
+            "Run command",
+            "Run a shell command line via cmd /c — supports PATH lookups, pipes, redirects, chained commands. Fire-and-forget: workflow doesn't block on completion. For interactive console use Launch app with cmd.exe + /k …",
+            "Launch",
+            DefaultConfigJson: "{\"command\":\"\"}",
+            StringParameters: new[]
+            {
+                new StringParameter("command", "Command", "", "git pull && npm test"),
+            }),
     ];
 
     /// <summary>Only the user-pickable subset, grouped by category. Drives the "+ Add step" menu.</summary>
