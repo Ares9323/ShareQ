@@ -17,10 +17,10 @@ public sealed class OneDriveUploader : IUploader
 {
     public const string UploaderId = "onedrive";
 
-    // Public client_id from our Azure App Registration. Public clients use PKCE in lieu of a
-    // client_secret, so this id can ship in source — it identifies the app, it doesn't
-    // authenticate it.
-    private const string ClientId = "31cfd8ee-79e9-4ec6-a523-8b2514552719";
+    // OAuth client_id lives in Secrets.cs (git-ignored) — symmetric with GoogleDriveUploader.
+    // Microsoft PKCE public clients don't need a client_secret, so the file holds only the id.
+    // See Secrets.cs.template for the file shape and Azure App Registration setup steps.
+    private const string ClientId = Secrets.MicrosoftClientId;
     private const string AuthorizeUrl = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize";
     private const string TokenUrl    = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
     private static readonly string[] Scopes = ["Files.ReadWrite", "offline_access"];

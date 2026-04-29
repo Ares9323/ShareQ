@@ -111,11 +111,15 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
         for (var i = 0; i < _storage.Count; i++)
         {
             var step = _storage[i];
-            var descriptor = WorkflowActionCatalog.LookupForStep(_descriptors,step);
+            var descriptor = WorkflowActionCatalog.LookupForStep(_descriptors, step);
             if (descriptor?.IsPlumbing == true) continue; // hidden plumbing
             var display = descriptor?.DisplayName ?? step.TaskId;
             var description = descriptor?.Description ?? $"Custom task ({step.TaskId})";
             var category = descriptor?.Category;
+            var parameter = descriptor?.IntParameter;
+            var parameterValue = parameter is null
+                ? 0
+                : (int?)step.Config?[parameter.Key] ?? parameter.DefaultValue;
             Items.Add(new WorkflowStepViewModel(
                 storageIndex: i,
                 taskId: step.TaskId,
@@ -123,9 +127,12 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
                 description: description,
                 category: category,
                 initiallyEnabled: step.Enabled,
-                onEnabledChanged: (item, value) => _ = OnEnabledChangedAsync(item, value),
-                onMove:           (item, delta) => _ = OnMoveAsync(item, delta),
-                onRemove:         item          => _ = OnRemoveAsync(item)));
+                parameter: parameter,
+                parameterValue: parameterValue,
+                onEnabledChanged: (item, value)   => _ = OnEnabledChangedAsync(item, value),
+                onMove:           (item, delta)   => _ = OnMoveAsync(item, delta),
+                onRemove:         item            => _ = OnRemoveAsync(item),
+                onParameterChanged: (item, value) => _ = OnParameterChangedAsync(item, value)));
         }
         UpdateMoveFlags();
     }
@@ -135,6 +142,18 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
         if (_isReloading || _profileId is null) return;
         if (item.StorageIndex < 0 || item.StorageIndex >= _storage.Count) return;
         _storage[item.StorageIndex] = _storage[item.StorageIndex] with { Enabled = value };
+        await PersistAsync().ConfigureAwait(true);
+    }
+
+    private async Task OnParameterChangedAsync(WorkflowStepViewModel item, int value)
+    {
+        if (_isReloading || _profileId is null) return;
+        if (item.StorageIndex < 0 || item.StorageIndex >= _storage.Count) return;
+        if (item.Parameter is null) return;
+        var step = _storage[item.StorageIndex];
+        var config = step.Config?.DeepClone() as JsonObject ?? new JsonObject();
+        config[item.Parameter.Key] = value;
+        _storage[item.StorageIndex] = step with { Config = config };
         await PersistAsync().ConfigureAwait(true);
     }
 
@@ -153,6 +172,63 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
         _storage.Insert(dst, moving);
         SyncItemsFromStorage();
         await PersistAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>Reorder by dropping <paramref name="source"/> next to <paramref name="target"/>.
+    /// When <paramref name="insertAfter"/> is true the source lands immediately below the target,
+    /// otherwise above. Both arguments are UI rows from <see cref="Items"/>; the editor maps
+    /// them back to storage indices and persists.</summary>
+    public async Task MoveToAsync(WorkflowStepViewModel source, WorkflowStepViewModel target, bool insertAfter)
+    {
+        if (_isReloading || _profileId is null) return;
+        if (ReferenceEquals(source, target)) return;
+        var src = source.StorageIndex;
+        var dst = target.StorageIndex;
+        if (src < 0 || src >= _storage.Count) return;
+        if (dst < 0 || dst >= _storage.Count) return;
+
+        var moving = _storage[src];
+        _storage.RemoveAt(src);
+        // After RemoveAt, indices > src shift left by one. Translate the target row's storage
+        // index into the post-removal coordinate system, then add 1 if dropping below it.
+        if (dst > src) dst--;
+        if (insertAfter) dst++;
+        if (dst < 0) dst = 0;
+        if (dst > _storage.Count) dst = _storage.Count;
+        _storage.Insert(dst, moving);
+        SyncItemsFromStorage();
+        await PersistAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>True when the drag's drop position is "after the last row". Bound by the footer
+    /// gutter element so the user sees the same single-line indicator at the bottom of the list.</summary>
+    [ObservableProperty]
+    private bool _isDropTargetAtEnd;
+
+    /// <summary>Drop the source row at the very end of the storage list — used by the footer
+    /// gutter when the user drops below the last row.</summary>
+    public async Task MoveToEndAsync(WorkflowStepViewModel source)
+    {
+        if (_isReloading || _profileId is null) return;
+        var src = source.StorageIndex;
+        if (src < 0 || src >= _storage.Count) return;
+        var moving = _storage[src];
+        _storage.RemoveAt(src);
+        _storage.Add(moving);
+        SyncItemsFromStorage();
+        await PersistAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>Reset all per-row drag visual flags. Called by the window when the drag operation
+    /// ends (drop or Esc) so no stale highlights linger.</summary>
+    public void ClearDragVisuals()
+    {
+        foreach (var item in Items)
+        {
+            item.IsDragSource = false;
+            item.IsDropTargetAbove = false;
+        }
+        IsDropTargetAtEnd = false;
     }
 
     private async Task OnRemoveAsync(WorkflowStepViewModel item)

@@ -300,12 +300,32 @@
                                    Command="{Binding Workflows.Editor.ResetToDefaultsCommand}" />
                     </Grid>
                     <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"
-                               Text="Add actions with the picker below; reorder with ↑ / ↓; toggle to mute without removing; × removes. Plumbing steps run automatically and aren't shown." />
-                    <ItemsControl ItemsSource="{Binding Workflows.Editor.Items}">
+                               Text="Add actions with the picker below; drag the ⋮⋮ handle to reorder; toggle to mute without removing; × removes. Plumbing steps run automatically and aren't shown." />
+                    <ItemsControl x:Name="StepsItemsControl" ItemsSource="{Binding Workflows.Editor.Items}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:WorkflowStepViewModel}">
-                                <Border Margin="0,0,0,6" Padding="10,8" Background="#1A1A1A"
-                                        BorderBrush="#333" BorderThickness="1" CornerRadius="4">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="8" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+                                    <!-- Top gutter doubles as the "above this row" drop zone. Always 8px so
+                                         row layout doesn't jump when the indicator appears; the 2px line
+                                         floats centred inside it only when this gap is the active target.
+                                         "Drop after row N" is rendered as the next row's top indicator, so
+                                         every gap maps to exactly one indicator slot — never two competing. -->
+                                    <Border Grid.Row="0" Background="Transparent">
+                                        <Border Height="2" Background="#0078D4" CornerRadius="1"
+                                                VerticalAlignment="Center" Margin="2,0"
+                                                Visibility="{Binding IsDropTargetAbove, Converter={StaticResource BoolToVisibility}}" />
+                                    </Border>
+                                <Border Grid.Row="1" Padding="10,8" Background="#1A1A1A"
+                                        BorderBrush="#333" BorderThickness="1" CornerRadius="4"
+                                        Opacity="{Binding IsDragSource, Converter={StaticResource BoolToOpacity}}"
+                                        AllowDrop="True"
+                                        DragOver="OnStepRowDragOver"
+                                        DragLeave="OnStepRowDragLeave"
+                                        Drop="OnStepRowDrop">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
@@ -313,15 +333,15 @@
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Orientation="Vertical" VerticalAlignment="Center" Margin="0,0,12,0">
-                                            <ui:Button Content="↑" Width="30" Height="22" Padding="0"
-                                                       Command="{Binding MoveUpCommand}"
-                                                       IsEnabled="{Binding CanMoveUp}"
-                                                       Margin="0,0,0,2" />
-                                            <ui:Button Content="↓" Width="30" Height="22" Padding="0"
-                                                       Command="{Binding MoveDownCommand}"
-                                                       IsEnabled="{Binding CanMoveDown}" />
-                                        </StackPanel>
+                                        <Border Grid.Column="0" Margin="0,0,12,0" Padding="6,4"
+                                                Cursor="SizeAll" Background="Transparent"
+                                                ToolTip="Drag to reorder"
+                                                MouseLeftButtonDown="OnStepHandleMouseDown"
+                                                MouseMove="OnStepHandleMouseMove"
+                                                MouseLeftButtonUp="OnStepHandleMouseUp">
+                                            <TextBlock Text="⋮⋮" Foreground="#777" FontSize="14"
+                                                       VerticalAlignment="Center" />
+                                        </Border>
                                         <StackPanel Grid.Column="1">
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13" />
@@ -333,6 +353,24 @@
                                             </StackPanel>
                                             <TextBlock Text="{Binding Description}" Foreground="#888" FontSize="11"
                                                        TextWrapping="Wrap" Margin="0,2,0,0" />
+                                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                                        Visibility="{Binding HasParameter, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="{Binding ParameterLabel}" Foreground="#AAA" FontSize="11"
+                                                           VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                <ui:Button Content="−" MinWidth="32" Padding="6,0"
+                                                           VerticalAlignment="Center"
+                                                           Command="{Binding DecrementParameterCommand}"
+                                                           ToolTip="Decrease" />
+                                                <ui:TextBox Text="{Binding ParameterValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                            Width="64" Margin="4,0"
+                                                            TextAlignment="Center"
+                                                            VerticalAlignment="Center"
+                                                            VerticalContentAlignment="Center" />
+                                                <ui:Button Content="+" MinWidth="32" Padding="6,0"
+                                                           VerticalAlignment="Center"
+                                                           Command="{Binding IncrementParameterCommand}"
+                                                           ToolTip="Increase" />
+                                            </StackPanel>
                                         </StackPanel>
                                         <ui:ToggleSwitch Grid.Column="2" IsChecked="{Binding IsEnabled, Mode=TwoWay}"
                                                          VerticalAlignment="Center" Margin="12,0,0,0" />
@@ -342,9 +380,21 @@
                                                    VerticalAlignment="Center" Margin="8,0,0,0" />
                                     </Grid>
                                 </Border>
+                                </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    <!-- Footer gutter: drop zone for "after the last row". Mirrors the per-row top
+                         gutter so the same single-line visual is used for the very last gap. -->
+                    <Border Height="12" Background="Transparent"
+                            AllowDrop="True"
+                            DragOver="OnStepFooterDragOver"
+                            DragLeave="OnStepFooterDragLeave"
+                            Drop="OnStepFooterDrop">
+                        <Border Height="2" Background="#0078D4" CornerRadius="1"
+                                VerticalAlignment="Center" Margin="2,0"
+                                Visibility="{Binding Workflows.Editor.IsDropTargetAtEnd, Converter={StaticResource BoolToVisibility}}" />
+                    </Border>
 
                     <!-- + Add step: code-behind builds a categorized menu (Capture / Upload / I/O / …)
                          from WorkflowEditorViewModel.AddableActions and invokes AddStepCommand. -->

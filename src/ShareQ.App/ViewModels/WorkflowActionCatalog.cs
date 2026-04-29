@@ -3,6 +3,11 @@ using ShareQ.Core.Pipeline;
 
 namespace ShareQ.App.ViewModels;
 
+/// <summary>Declarative description of a single integer-valued config parameter the user can edit
+/// inline on a step row. Today only used for <c>shareq.paste-history-item</c>'s <c>index</c>; the
+/// shape lets us add similar one-knob parameters (delay ms, retry count, …) without bespoke UI.</summary>
+public sealed record IntParameter(string Key, string Label, int DefaultValue, int Min, int Max);
+
 /// <summary>One entry in the "+ Add step" picker for workflows. Maps a pipeline task id to
 /// human-readable metadata + a default config to apply when the user adds the action.</summary>
 public sealed record WorkflowActionDescriptor(
@@ -14,7 +19,10 @@ public sealed record WorkflowActionDescriptor(
     /// after upload). They're hidden from the workflow editor and from the Add picker.</summary>
     bool IsPlumbing = false,
     /// <summary>JSON config string applied as default when the user adds this action via the picker.</summary>
-    string? DefaultConfigJson = null);
+    string? DefaultConfigJson = null,
+    /// <summary>If set, the editor renders an inline integer input on the step row, bound to the
+    /// matching key in <see cref="System.Text.Json.Nodes.JsonNode"/> step config.</summary>
+    IntParameter? IntParameter = null);
 
 public static class WorkflowActionCatalog
 {
@@ -61,6 +69,32 @@ public static class WorkflowActionCatalog
             "Copy image to clipboard",
             "Place the bitmap on the clipboard (overwritten by later text-to-clipboard steps).",
             "I/O"),
+
+        new("shareq.paste-history-item",
+            "Paste history item",
+            "Auto-paste the N-th most recent clipboard history item into the foreground window. Index is 1-based (1 = most recent), same ordering as the popup's Ctrl+1..9 shortcuts. The history snapshot is frozen at the start of the workflow run so chained paste steps target the items the user expects, not whatever just got re-ingested.",
+            "Clipboard",
+            DefaultConfigJson: "{\"index\":1}",
+            IntParameter: new IntParameter(Key: "index", Label: "Index (1 = most recent)", DefaultValue: 1, Min: 1, Max: 99)),
+
+        new("shareq.press-key",
+            "Press Enter",
+            "Send a single Enter keystroke to the foreground window. Useful as a separator between paste steps when chaining clipboard items onto consecutive lines.",
+            "Clipboard",
+            DefaultConfigJson: "{\"key\":\"enter\"}"),
+
+        new("shareq.press-key",
+            "Press Tab",
+            "Send a single Tab keystroke to the foreground window — handy for moving between fields between paste steps.",
+            "Clipboard",
+            DefaultConfigJson: "{\"key\":\"tab\"}"),
+
+        new("shareq.delay",
+            "Delay",
+            "Pause the workflow for the configured number of milliseconds. Useful between paste / press-key steps when the target window is slow to process keystrokes.",
+            "Flow",
+            DefaultConfigJson: "{\"ms\":250}",
+            IntParameter: new IntParameter(Key: "ms", Label: "Milliseconds", DefaultValue: 250, Min: 0, Max: 60000)),
 
         new("shareq.copy-text-to-clipboard",
             "Copy URL to clipboard",
@@ -129,7 +163,7 @@ public static class WorkflowActionCatalog
         var matches = catalog.Where(a => a.TaskId == step.TaskId).ToList();
         if (matches.Count == 0) return null;
         if (matches.Count == 1) return matches[0];
-        foreach (var key in new[] { "uploader", "category", "format" })
+        foreach (var key in new[] { "uploader", "category", "format", "key" })
         {
             var stepValue = (string?)step.Config?[key];
             if (string.IsNullOrEmpty(stepValue)) continue;

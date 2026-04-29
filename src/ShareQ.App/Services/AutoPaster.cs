@@ -97,8 +97,17 @@ public sealed class AutoPaster
         }
 
         await Task.Delay(120, cancellationToken).ConfigureAwait(false);
+
+        // If the user reached us via a hotkey like Win+Shift+P, those modifiers may still be
+        // physically held when we get here — sending Ctrl+V on top would yield Win+Ctrl+V (audio
+        // mixer in Win11), Win+Shift+V, etc., not the plain paste we want. Release them first;
+        // a tiny settle delay lets the up events propagate before the V down arrives.
+        var released = KeyInjector.ReleaseStickyModifiers();
+        if (released > 0)
+            await Task.Delay(40, cancellationToken).ConfigureAwait(false);
+
         var sent = SendCtrlV();
-        _logger.LogDebug("AutoPaster: SendInput returned {Sent} (expected 4)", sent);
+        _logger.LogDebug("AutoPaster: released {Released} sticky modifiers, SendInput returned {Sent} (expected 4)", released, sent);
     }
 
     private static uint SendCtrlV()

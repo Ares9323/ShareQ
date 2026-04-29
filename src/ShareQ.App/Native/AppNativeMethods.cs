@@ -72,10 +72,23 @@ internal static partial class AppNativeMethods
     public const uint KeyEventfKeyUp = 0x0002;
     public const ushort VkControl = 0x11;
     public const ushort VkV = 0x56;
+    public const ushort VkReturn = 0x0D;
+    public const ushort VkTab = 0x09;
     public const ushort VkMenu = 0x12; // Alt key — used in the SetForegroundWindow "Alt trick"
+    public const ushort VkLWin = 0x5B;
+    public const ushort VkRWin = 0x5C;
+    public const ushort VkLShift = 0xA0;
+    public const ushort VkRShift = 0xA1;
+    public const ushort VkLMenu = 0xA4;
+    public const ushort VkRMenu = 0xA5;
+    public const ushort VkLControl = 0xA2;
+    public const ushort VkRControl = 0xA3;
 
     [LibraryImport("user32.dll", SetLastError = true)]
     public static partial uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    [LibraryImport("user32.dll")]
+    public static partial short GetAsyncKeyState(int vKey);
 
     [LibraryImport("kernel32.dll")]
     public static partial uint GetCurrentThreadId();

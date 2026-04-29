@@ -1,3 +1,9 @@
+# OAuth client credentials baked into uploader plugins. The real Secrets.cs ships in releases
+# but stays out of source control — see each plugin's Secrets.cs.template for the file shape
+# and setup steps.
+plugins/ShareQ.Uploaders.GoogleDrive/Secrets.cs
+plugins/ShareQ.Uploaders.OneDrive/Secrets.cs
+
 # Build output
 [Bb]in/
 [Oo]bj/

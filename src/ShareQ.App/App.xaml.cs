@@ -70,6 +70,7 @@ public partial class App : Application
                 services.AddSingleton<ShareQ.PluginContracts.IUploader, ShareQ.Uploaders.Catbox.CatboxUploader>();
                 services.AddSingleton<ShareQ.PluginContracts.IUploader, ShareQ.Uploaders.Litterbox.LitterboxUploader>();
                 services.AddSingleton<ShareQ.PluginContracts.IUploader, ShareQ.Uploaders.OneDrive.OneDriveUploader>();
+                services.AddSingleton<ShareQ.PluginContracts.IUploader, ShareQ.Uploaders.GoogleDrive.GoogleDriveUploader>();
 
                 // External plugins (drop a folder under %LOCALAPPDATA%\ShareQ\plugins).
                 var pluginsRoot = ShareQ.App.Services.Plugins.PluginLoader.DefaultPluginsRoot;
@@ -101,6 +102,9 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, CaptureRegionTask>();
                 services.AddSingleton<IPipelineTask, RecordScreenTask>();
                 services.AddSingleton<IPipelineTask, OpenScreenshotFolderTask>();
+                services.AddSingleton<IPipelineTask, PasteHistoryItemTask>();
+                services.AddSingleton<IPipelineTask, PressKeyTask>();
+                services.AddSingleton<IPipelineTask, DelayTask>();
 
                 services.AddSingleton<NativeClipboardHistoryProbe>();
                 services.AddSingleton<NativeClipboardHistoryBanner>();

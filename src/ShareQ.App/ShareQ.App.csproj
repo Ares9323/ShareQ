@@ -38,5 +38,6 @@
     <ProjectReference Include="..\..\plugins\ShareQ.Uploaders.Catbox\ShareQ.Uploaders.Catbox.csproj" />
     <ProjectReference Include="..\..\plugins\ShareQ.Uploaders.Litterbox\ShareQ.Uploaders.Litterbox.csproj" />
     <ProjectReference Include="..\..\plugins\ShareQ.Uploaders.OneDrive\ShareQ.Uploaders.OneDrive.csproj" />
+    <ProjectReference Include="..\..\plugins\ShareQ.Uploaders.GoogleDrive\ShareQ.Uploaders.GoogleDrive.csproj" />
   </ItemGroup>
 </Project>
