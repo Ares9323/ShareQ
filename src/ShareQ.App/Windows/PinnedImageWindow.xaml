@@ -8,7 +8,8 @@
         AllowsTransparency="False"
         Background="Black"
         ResizeMode="NoResize"
-        ShowInTaskbar="False">
+        ShowInTaskbar="False"
+        WindowStartupLocation="Manual">
     <Grid x:Name="RootGrid"
           MouseEnter="OnRootMouseEnter"
           MouseLeave="OnRootMouseLeave">

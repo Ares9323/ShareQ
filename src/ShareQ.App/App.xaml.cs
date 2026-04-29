@@ -52,10 +52,25 @@ public partial class App : Application
         var pluginLoader = new ShareQ.App.Services.Plugins.PluginLoader();
         var loadedPlugins = new List<ShareQ.App.Services.Plugins.PluginDescriptor>();
 
+        // Single shared sink — both the InMemoryLoggerProvider (registered with the host's
+        // logging builder below) and the DebugViewModel (registered in DI) refer to the same
+        // instance, so log entries flow ILogger → DebugLogService.Entries → Debug tab UI.
+        var debugLog = new ShareQ.App.Services.Logging.DebugLogService();
+
         _host = Host.CreateDefaultBuilder()
-            .ConfigureLogging(logging => { logging.ClearProviders(); logging.AddConsole(); })
+            .ConfigureLogging(logging =>
+            {
+                logging.ClearProviders();
+                // Minimum Debug across the board so the in-app Debug tab is actually useful —
+                // by default Host.CreateDefaultBuilder filters at Information for app categories
+                // and Warning for Microsoft.* / System.*, which would hide most LogDebug calls.
+                logging.SetMinimumLevel(LogLevel.Debug);
+                logging.AddConsole();
+                logging.AddProvider(new ShareQ.App.Services.Logging.InMemoryLoggerProvider(debugLog));
+            })
             .ConfigureServices(services =>
             {
+                services.AddSingleton(debugLog);
                 services.AddSingleton(guard);
 
                 services.AddShareQStorage();
@@ -145,6 +160,7 @@ public partial class App : Application
                 services.AddSingleton<CaptureDefaultsViewModel>();
                 services.AddSingleton<ThemeService>();
                 services.AddSingleton<ThemeViewModel>();
+                services.AddSingleton<DebugViewModel>();
                 services.AddSingleton<SettingsViewModel>();
                 services.AddSingleton<MainWindow>();
                 services.AddSingleton<TrayIconService>();

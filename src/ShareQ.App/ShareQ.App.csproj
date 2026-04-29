@@ -19,7 +19,6 @@
     <PackageReference Include="QRCoder" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Assets\tray.ico" />
     <Resource Include="Assets\icon.ico" />
   </ItemGroup>
   <ItemGroup>

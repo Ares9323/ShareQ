@@ -3,9 +3,10 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
-using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ShareQ.App.Services;
 using ShareQ.Storage.Settings;
 
@@ -18,12 +19,10 @@ public partial class PinnedImageWindow : Window
 
     private readonly ISettingsStore? _settings;
     private readonly EditorLauncher? _editor;
+    private readonly ILogger _logger;
     private BitmapSource _bitmap;
     private double _scale = 1.0;
     private int _borderThickness;
-    // DPI scale of the monitor where the captured pixel lives. Computed in the constructor via
-    // Win32 (no PresentationSource needed) so positioning math runs synchronously before Show —
-    // this is what ShareX does (Form.Location set in ctor, no async wait).
     private double _dpiScaleX = 1.0;
     private double _dpiScaleY = 1.0;
     private readonly (int X, int Y)? _initialScreenPos;
@@ -44,22 +43,23 @@ public partial class PinnedImageWindow : Window
         (int X, int Y)? initialScreenPos = null,
         ISettingsStore? settings = null,
         EditorLauncher? editor = null,
-        int initialBorderThickness = 0)
+        int initialBorderThickness = 0,
+        ILogger<PinnedImageWindow>? logger = null)
     {
         InitializeComponent();
         _bitmap = bitmap;
         _settings = settings;
         _editor = editor;
+        _logger = (ILogger?)logger ?? NullLogger.Instance;
         _borderThickness = Math.Clamp(initialBorderThickness, 0, MaxBorderThickness);
         _initialScreenPos = initialScreenPos;
         PinnedImage.Source = bitmap;
 
-        // Snapshot DPI now (Win32, no PresentationSource needed) so ApplyImageSize below sees
-        // the right scale. For the no-pin-location path we sample primary's DPI as a fallback.
         if (initialScreenPos is { } pos)
         {
-            WindowStartupLocation = WindowStartupLocation.Manual;
             SnapshotDpiFromScreenPoint(pos.X, pos.Y);
+            // XAML default is now Manual — keep it consistent for the pin path.
+            WindowStartupLocation = WindowStartupLocation.Manual;
         }
         else
         {
@@ -70,30 +70,36 @@ public partial class PinnedImageWindow : Window
         ApplyBorder();
         ApplyImageSize();
 
-        // CRITICAL — pre-create the HWND via EnsureHandle so we can position it via SetWindowPos
-        // BEFORE WPF gets a chance to run its WindowStartupLocation logic on Show(). EnsureHandle
-        // synchronously creates the HwndSource (firing OnSourceInitialized) without making the
-        // window visible. After this, the HWND exists at WPF's default position. We then call
-        // SetWindowPos to put it on the captured pixel in physical pixels — no DPI conversion,
-        // no SizeToContent interaction, no layout-pass re-centering. When the launcher calls
-        // Show() afterwards, WPF only flips visibility; positioning is already locked in.
-        // (ShareX achieves this in WinForms by setting Form.Location = ... before Show — same
-        // intent, different framework.)
-        if (initialScreenPos is { } pinPos)
-        {
-            var helper = new WindowInteropHelper(this);
-            helper.EnsureHandle();
-            var borderPx = (int)Math.Round(_borderThickness * _dpiScaleX);
-            var winW = (int)Math.Round(_bitmap.PixelWidth  + 2 * _borderThickness * _dpiScaleX);
-            var winH = (int)Math.Round(_bitmap.PixelHeight + 2 * _borderThickness * _dpiScaleY);
-            var x = pinPos.X - borderPx;
-            var y = pinPos.Y - borderPx;
-            SetWindowPos(helper.Handle, IntPtr.Zero, x, y, winW, winH, SWP_NOZORDER | SWP_NOACTIVATE);
-        }
-
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
 
         Loaded += (_, _) => UpdateZoomLabel();
+    }
+
+    /// <summary>Show + Activate + reposition. Matches PopupWindowController.ShowAsync exactly —
+    /// that path is verified to land its window precisely at cursor on Win+V, so we use the
+    /// same shape. Set Left/Top in DIPs AFTER Show so the layout pass has run and WPF accepts
+    /// the values without falling back to startup-location logic.</summary>
+    public void ShowAtCapturedPixel()
+    {
+        _logger.LogInformation("Pin: ShowAtCapturedPixel — initialScreenPos={Pos}, dpiScale=({Sx}×{Sy}), border={Border} DIPs, bitmap={Bw}×{Bh} px",
+            _initialScreenPos, _dpiScaleX, _dpiScaleY, _borderThickness, _bitmap.PixelWidth, _bitmap.PixelHeight);
+        Show();
+        _logger.LogInformation("Pin: after Show — WPF Left={Left}, Top={Top}, ActualW={W}, ActualH={H}",
+            Left, Top, ActualWidth, ActualHeight);
+        Activate();
+        if (_initialScreenPos is { } pos)
+        {
+            var newLeft = pos.X / _dpiScaleX - _borderThickness;
+            var newTop  = pos.Y / _dpiScaleY - _borderThickness;
+            Left = newLeft;
+            Top  = newTop;
+            _logger.LogInformation("Pin: assigned Left={Left}, Top={Top} (DIPs) — readback Left={ReadL}, Top={ReadT}",
+                newLeft, newTop, Left, Top);
+        }
+        else
+        {
+            _logger.LogInformation("Pin: no initialScreenPos — leaving WPF default placement");
+        }
     }
 
     /// <summary>Caller helper: read the sticky border value from settings BEFORE constructing the
@@ -274,12 +280,4 @@ public partial class PinnedImageWindow : Window
     /// <summary>Returns 0 (S_OK) on success. dpiType 0 = MDT_EFFECTIVE_DPI.</summary>
     [LibraryImport("shcore.dll")]
     private static partial int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-
-    private const uint SWP_NOSIZE = 0x0001;
-    private const uint SWP_NOZORDER = 0x0004;
-    private const uint SWP_NOACTIVATE = 0x0010;
 }

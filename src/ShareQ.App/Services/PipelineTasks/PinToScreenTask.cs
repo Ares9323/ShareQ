@@ -22,12 +22,18 @@ public sealed class PinToScreenTask : IPipelineTask
     private readonly ISettingsStore _settings;
     private readonly EditorLauncher _editor;
     private readonly ILogger<PinToScreenTask> _logger;
+    private readonly ILogger<PinnedImageWindow> _windowLogger;
 
-    public PinToScreenTask(ISettingsStore settings, EditorLauncher editor, ILogger<PinToScreenTask> logger)
+    public PinToScreenTask(
+        ISettingsStore settings,
+        EditorLauncher editor,
+        ILogger<PinToScreenTask> logger,
+        ILogger<PinnedImageWindow> windowLogger)
     {
         _settings = settings;
         _editor = editor;
         _logger = logger;
+        _windowLogger = windowLogger;
     }
 
     public string Id => TaskId;
@@ -63,16 +69,32 @@ public sealed class PinToScreenTask : IPipelineTask
         // place the window synchronously without an async race vs. WPF's first paint.
         var border = await PinnedImageWindow.LoadStickyBorderAsync(_settings, cancellationToken).ConfigureAwait(false);
 
-        // Fire-and-forget the UI marshal: the dispatch itself can't fail, and we don't want to
-        // keep the pipeline waiting on the window's first paint. Explicit discard keeps the
-        // method async-clean (CS4014).
+        // Did a previous step (CaptureRegionTask, monitor capture, …) record where the bitmap
+        // came from? If yes, replay the same on-screen origin so the pinned window covers the
+        // captured pixels in place — the ShareX-style "stay where you grabbed" behaviour.
+        (int X, int Y)? screenPos = null;
+        if (context.Bag.TryGetValue(PipelineBagKeys.CaptureScreenPos, out var posObj) && posObj is ValueTuple<int, int> pos)
+        {
+            screenPos = pos;
+            _logger.LogInformation("PinToScreen: bag has screen pos ({X}, {Y}) — pin will land there", pos.Item1, pos.Item2);
+        }
+        else
+        {
+            _logger.LogInformation("PinToScreen: no screen pos in bag — falling back to active-monitor centring");
+        }
+
         _ = Application.Current.Dispatcher.BeginInvoke(() =>
         {
             // No Owner = independent top-level window. Topmost survives the workflow's lifetime.
             // Activate so it grabs focus even when triggered from tray (MainWindow hidden).
-            var w = new PinnedImageWindow(bitmap, settings: _settings, editor: _editor, initialBorderThickness: border);
-            w.Show();
-            w.Activate();
+            var w = new PinnedImageWindow(
+                bitmap,
+                initialScreenPos: screenPos,
+                settings: _settings,
+                editor: _editor,
+                initialBorderThickness: border,
+                logger: _windowLogger);
+            w.ShowAtCapturedPixel();
         });
     }
 }

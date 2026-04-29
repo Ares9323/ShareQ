@@ -67,6 +67,11 @@
                            Command="{Binding ShowThemeCommand}"
                            Appearance="{Binding IsThemeSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                           Margin="0,0,0,4"
+                           Content="Debug"
+                           Command="{Binding ShowDebugCommand}"
+                           Appearance="{Binding IsDebugSelected, Converter={StaticResource BoolToAppearance}}" />
+                <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Content="About"
                            Command="{Binding ShowAboutCommand}"
                            Appearance="{Binding IsAboutSelected, Converter={StaticResource BoolToAppearance}}" />
@@ -653,6 +658,72 @@
                            Command="{Binding Theme.ResetCommand}"
                            ToolTip="Restore the original ShareQ accent (#0078D4 background, white foreground)." />
             </StackPanel>
+
+            <!-- Debug: live in-app log viewer. Captures every ILogger<T>.Log call across the
+                 codebase via InMemoryLoggerProvider, so packaged builds + non-Rider runs still
+                 give us visibility into errors / warnings / pipeline traces. -->
+            <Grid Visibility="{Binding IsDebugSelected, Converter={StaticResource BoolToVisibility}}"
+                  Margin="24,16,24,16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Debug log" FontSize="20" FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                    <ui:Button Grid.Column="1" Content="Copy all" Margin="0,0,4,0"
+                               Command="{Binding Debug.CopyAllCommand}"
+                               ToolTip="Copy the visible log to the clipboard for pasting into a bug report" />
+                    <ui:Button Grid.Column="2" Content="Clear"
+                               Command="{Binding Debug.ClearCommand}"
+                               ToolTip="Drop every entry in the buffer" />
+                </Grid>
+                <CheckBox Grid.Row="1" Content="Auto-scroll to latest"
+                          IsChecked="{Binding Debug.AutoScroll, Mode=TwoWay}"
+                          Foreground="#888" FontSize="11" Margin="0,8,0,8"
+                          ToolTip="Locks the view to the most recent entry. Uncheck while scrolling up to read older lines." />
+                <Border Grid.Row="2" Background="#0F0F0F" BorderBrush="#333" BorderThickness="1" CornerRadius="4">
+                    <ListBox x:Name="DebugLogList"
+                             ItemsSource="{Binding Debug.Entries}"
+                             Background="Transparent" BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             FontFamily="Consolas" FontSize="11"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="8,2" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding TimestampDisplay}" Foreground="#888" Margin="0,0,8,0" />
+                                    <TextBlock Grid.Column="1" Text="{Binding LevelDisplay}" Margin="0,0,8,0"
+                                               FontWeight="SemiBold"
+                                               Foreground="{Binding LevelBrush}" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Category}" Foreground="#999" Margin="0,0,8,0" />
+                                    <TextBlock Grid.Column="3" Text="{Binding Message}" Foreground="#DDD" TextWrapping="Wrap" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </Grid>
 
             <!-- About -->
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"

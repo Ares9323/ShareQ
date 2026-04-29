@@ -12,6 +12,11 @@ public sealed class KeyboardHook : IDisposable
     // (handful of catalog hotkeys), and we win clarity over a dictionary that hides the order.
     private readonly Dictionary<string, HookBinding> _bindings = new(StringComparer.Ordinal);
     private readonly object _bindingsLock = new();
+    /// <summary>Set of vkCodes currently held down (saw KEYDOWN but not yet KEYUP). Used to
+    /// de-bounce Windows' auto-repeat: a held key fires WM_KEYDOWN every ~33ms, which would
+    /// otherwise re-trigger the hotkey callback indefinitely.</summary>
+    private readonly HashSet<uint> _heldKeys = [];
+    private readonly object _heldKeysLock = new();
     private readonly LowLevelKeyboardProc _hookProc;
     private IntPtr _hookHandle = IntPtr.Zero;
 
@@ -65,13 +70,23 @@ public sealed class KeyboardHook : IDisposable
     private IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam)
     {
         if (nCode < 0) return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
-        // Only inspect key-down events (keyup would fire callbacks twice).
-        if (wParam != (IntPtr)WM_KEYDOWN && wParam != (IntPtr)WM_SYSKEYDOWN)
-            return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 
         var data = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
         // Skip events we (or another tool) injected via SendInput, otherwise we recurse.
         if ((data.flags & LLKHF_INJECTED) != 0)
+            return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+
+        // Reset the "held down" tracker on keyup so the next genuine press will fire again.
+        // Without this, auto-repeat (Windows fires WM_KEYDOWN repeatedly while the user holds
+        // the combo) would invoke the callback once per repeat — e.g. holding Ctrl+Alt+R would
+        // stack endless region-capture overlays.
+        if (wParam == (IntPtr)WM_KEYUP || wParam == (IntPtr)WM_SYSKEYUP)
+        {
+            lock (_heldKeysLock) _heldKeys.Remove(data.vkCode);
+            return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+        }
+
+        if (wParam != (IntPtr)WM_KEYDOWN && wParam != (IntPtr)WM_SYSKEYDOWN)
             return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 
         var modifiers = ReadModifiers();
@@ -91,13 +106,23 @@ public sealed class KeyboardHook : IDisposable
 
         if (matched is null) return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 
-        // Fire the callback off the hook thread so a slow callback doesn't trip the Windows hook
-        // timeout (which would cause the OS to silently uninstall us).
-        ThreadPool.QueueUserWorkItem(_ =>
+        // De-bounce auto-repeat: if the trigger key was already down (we never saw its keyup),
+        // this is a Windows-driven repeat — suppress the visual side-effects but DON'T fire the
+        // callback. A genuine second press only happens after the user lets go and re-presses,
+        // at which point we'll have cleared _heldKeys via WM_KEYUP above.
+        bool firstPress;
+        lock (_heldKeysLock) firstPress = _heldKeys.Add(data.vkCode);
+
+        if (firstPress)
         {
-            try { matched.Callback(); }
-            catch { /* swallow — host should log inside the callback */ }
-        });
+            // Fire the callback off the hook thread so a slow callback doesn't trip the Windows
+            // hook timeout (which would cause the OS to silently uninstall us).
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try { matched.Callback(); }
+                catch { /* swallow — host should log inside the callback */ }
+            });
+        }
 
         if (!matched.Suppress) return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 
@@ -148,7 +173,9 @@ public sealed class KeyboardHook : IDisposable
 
     private const int WH_KEYBOARD_LL = 13;
     private const int WM_KEYDOWN = 0x0100;
+    private const int WM_KEYUP = 0x0101;
     private const int WM_SYSKEYDOWN = 0x0104;
+    private const int WM_SYSKEYUP = 0x0105;
     private const uint LLKHF_INJECTED = 0x00000010;
 
     private const int VK_SHIFT = 0x10;

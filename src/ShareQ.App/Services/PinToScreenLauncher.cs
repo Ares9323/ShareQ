@@ -21,17 +21,20 @@ public sealed class PinToScreenLauncher
     private readonly ISettingsStore _settings;
     private readonly EditorLauncher _editor;
     private readonly ILogger<PinToScreenLauncher> _logger;
+    private readonly ILogger<PinnedImageWindow> _windowLogger;
 
     public PinToScreenLauncher(
         ICaptureSource captureSource,
         ISettingsStore settings,
         EditorLauncher editor,
-        ILogger<PinToScreenLauncher> logger)
+        ILogger<PinToScreenLauncher> logger,
+        ILogger<PinnedImageWindow> windowLogger)
     {
         _captureSource = captureSource;
         _settings = settings;
         _editor = editor;
         _logger = logger;
+        _windowLogger = windowLogger;
     }
 
     /// <summary>Show the chooser and dispatch to the chosen source. UI-thread only.</summary>
@@ -51,28 +54,37 @@ public sealed class PinToScreenLauncher
 
     private async Task FromScreenAsync(CancellationToken cancellationToken)
     {
-        // Use the same overlay the region-capture workflow uses. Returns null on Esc / empty drag.
+        _logger.LogInformation("Pin from screen: opening region overlay");
         var overlay = new RegionOverlayWindow();
         var region = overlay.PickRegion();
-        if (region is null || region.IsEmpty) return;
+        if (region is null || region.IsEmpty)
+        {
+            _logger.LogInformation("Pin from screen: cancelled (empty region or Esc)");
+            return;
+        }
+        _logger.LogInformation("Pin from screen: region picked at ({X}, {Y}) size {W}×{H} (physical pixels)",
+            region.X, region.Y, region.Width, region.Height);
 
         try
         {
             var captured = await _captureSource.CaptureAsync(region, cancellationToken).ConfigureAwait(true);
             var bitmap = DecodePng(captured.PngBytes);
-            if (bitmap is null) return;
-            // Read sticky border BEFORE construction so the window can place itself synchronously
-            // in the constructor (matches ShareX's flow — Options known up front, Location set
-            // once before Show, no async race).
+            if (bitmap is null)
+            {
+                _logger.LogWarning("Pin from screen: bitmap decode failed");
+                return;
+            }
+            _logger.LogInformation("Pin from screen: bitmap decoded {W}×{H} px", bitmap.PixelWidth, bitmap.PixelHeight);
             var border = await PinnedImageWindow.LoadStickyBorderAsync(_settings, cancellationToken).ConfigureAwait(true);
+            _logger.LogInformation("Pin from screen: sticky border = {Border} DIPs", border);
             var w = new PinnedImageWindow(bitmap, initialScreenPos: (region.X, region.Y),
-                settings: _settings, editor: _editor, initialBorderThickness: border);
-            w.Show();
-            w.Activate();
+                settings: _settings, editor: _editor, initialBorderThickness: border, logger: _windowLogger);
+            w.ShowAtCapturedPixel();
+            _logger.LogInformation("Pin from screen: window shown — Left={Left}, Top={Top} (DIPs)", w.Left, w.Top);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "PinToScreenLauncher: failed to capture region");
+            _logger.LogWarning(ex, "Pin from screen: capture failed");
         }
     }
 
@@ -85,9 +97,8 @@ public sealed class PinToScreenLauncher
             if (bmp is null) return;
             bmp.Freeze();
             var border = await PinnedImageWindow.LoadStickyBorderAsync(_settings, cancellationToken).ConfigureAwait(true);
-            var w = new PinnedImageWindow(bmp, settings: _settings, editor: _editor, initialBorderThickness: border);
-            w.Show();
-            w.Activate();
+            var w = new PinnedImageWindow(bmp, settings: _settings, editor: _editor, initialBorderThickness: border, logger: _windowLogger);
+            w.ShowAtCapturedPixel();
         }
         catch (Exception ex)
         {
@@ -111,9 +122,8 @@ public sealed class PinToScreenLauncher
             var bitmap = DecodePng(bytes);
             if (bitmap is null) return;
             var border = await PinnedImageWindow.LoadStickyBorderAsync(_settings, cancellationToken).ConfigureAwait(true);
-            var w = new PinnedImageWindow(bitmap, settings: _settings, editor: _editor, initialBorderThickness: border);
-            w.Show();
-            w.Activate();
+            var w = new PinnedImageWindow(bitmap, settings: _settings, editor: _editor, initialBorderThickness: border, logger: _windowLogger);
+            w.ShowAtCapturedPixel();
         }
         catch (Exception ex)
         {

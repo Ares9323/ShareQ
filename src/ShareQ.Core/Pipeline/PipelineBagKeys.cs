@@ -31,4 +31,9 @@ public static class PipelineBagKeys
 
     /// <summary>Title of the window that was snap-captured (when applicable). Type: <c>string</c>.</summary>
     public const string WindowTitle = "window_title";
+
+    /// <summary>Top-left of the captured region in physical screen pixels — set by the region/
+    /// monitor/fullscreen capture tasks so downstream tasks (notably <c>shareq.pin-to-screen</c>)
+    /// can reproduce the exact on-screen origin. Type: <c>(int X, int Y)</c>.</summary>
+    public const string CaptureScreenPos = "capture_screen_pos";
 }

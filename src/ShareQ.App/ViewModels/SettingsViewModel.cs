@@ -21,12 +21,14 @@ public sealed partial class SettingsViewModel : ObservableObject
         HotkeysViewModel hotkeys,
         CaptureDefaultsViewModel capture,
         WorkflowsViewModel workflows,
-        ThemeViewModel theme)
+        ThemeViewModel theme,
+        DebugViewModel debug)
     {
         _registry = registry;
         _configFactory = configFactory;
         _autostart = autostart;
         Theme = theme;
+        Debug = debug;
         // Initial state mirrors the registry. Future toggles persist via OnStartWithWindowsChanged.
         _suppressAutostartPersist = true;
         StartWithWindows = autostart.IsEnabled;
@@ -56,6 +58,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public CaptureDefaultsViewModel Capture { get; }
     public WorkflowsViewModel Workflows { get; }
     public ThemeViewModel Theme { get; }
+    public DebugViewModel Debug { get; }
 
     /// <summary>Non-null while the user is in the Plugins → Configure detail view. Drives the
     /// list/detail toggle in the Plugins XAML; cleared by <see cref="BackFromConfigCommand"/>.
@@ -90,6 +93,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool IsHotkeysSelected   => SelectedTab == SettingsTab.Hotkeys;
     public bool IsCaptureSelected   => SelectedTab == SettingsTab.Capture;
     public bool IsThemeSelected     => SelectedTab == SettingsTab.Theme;
+    public bool IsDebugSelected     => SelectedTab == SettingsTab.Debug;
     public bool IsAboutSelected     => SelectedTab == SettingsTab.About;
 
     public string AppVersion { get; }
@@ -102,6 +106,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsHotkeysSelected));
         OnPropertyChanged(nameof(IsCaptureSelected));
         OnPropertyChanged(nameof(IsThemeSelected));
+        OnPropertyChanged(nameof(IsDebugSelected));
         OnPropertyChanged(nameof(IsAboutSelected));
         if (value == SettingsTab.Uploaders) _ = Uploaders.ReloadAsync();
         if (value == SettingsTab.Hotkeys) _ = Hotkeys.ReloadAsync();
@@ -113,6 +118,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand] private void ShowHotkeys()   => SelectedTab = SettingsTab.Hotkeys;
     [RelayCommand] private void ShowCapture()   => SelectedTab = SettingsTab.Capture;
     [RelayCommand] private void ShowTheme()     => SelectedTab = SettingsTab.Theme;
+    [RelayCommand] private void ShowDebug()     => SelectedTab = SettingsTab.Debug;
     [RelayCommand] private void ShowAbout()     => SelectedTab = SettingsTab.About;
 
     /// <summary>Open the inline configure view for a plugin. Called by
@@ -143,4 +149,4 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 }
 
-public enum SettingsTab { Home, Plugins, Uploaders, Hotkeys, Capture, Theme, About }
+public enum SettingsTab { Home, Plugins, Uploaders, Hotkeys, Capture, Theme, Debug, About }

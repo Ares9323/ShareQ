@@ -42,6 +42,7 @@ public sealed class CaptureCoordinator
 
     public async Task CaptureRegionAsync(CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Capture region: opening overlay");
         var region = await Application.Current.Dispatcher.InvokeAsync(() =>
         {
             var overlay = new RegionOverlayWindow();
@@ -50,10 +51,12 @@ public sealed class CaptureCoordinator
 
         if (region is null)
         {
-            _logger.LogDebug("Capture cancelled (no region)");
+            _logger.LogInformation("Capture region: cancelled");
             return;
         }
 
+        _logger.LogInformation("Capture region: picked ({X}, {Y}) {W}×{H} px",
+            region.X, region.Y, region.Width, region.Height);
         await PersistLastRegionAsync(region, cancellationToken).ConfigureAwait(false);
         await RunPipelineAsync(region, ItemSource.CaptureRegion, cancellationToken).ConfigureAwait(false);
     }

@@ -62,6 +62,12 @@ public sealed class CaptureRegionTask : IPipelineTask
 
         context.Bag[PipelineBagKeys.PayloadBytes] = captured.PngBytes;
         context.Bag[PipelineBagKeys.FileExtension] = "png";
+        // Stash the on-screen origin in physical pixels so a later pin-to-screen step in the same
+        // workflow can place the pinned window exactly where the capture came from. Without this
+        // the pin step only sees bytes and centres on the active monitor.
+        context.Bag[PipelineBagKeys.CaptureScreenPos] = (region.X, region.Y);
+        _logger.LogInformation("Capture region: stored screen pos ({X}, {Y}) {W}×{H} px in bag",
+            region.X, region.Y, region.Width, region.Height);
         if (!string.IsNullOrEmpty(region.WindowTitle))
         {
             context.Bag[PipelineBagKeys.WindowTitle] = region.WindowTitle;

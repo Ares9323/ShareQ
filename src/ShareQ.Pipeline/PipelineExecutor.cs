@@ -36,15 +36,35 @@ public sealed class PipelineExecutor
         ArgumentNullException.ThrowIfNull(tasks);
         ArgumentNullException.ThrowIfNull(context);
 
+        _logger.LogInformation("Pipeline starting ({Count} steps)", tasks.Count);
+        var totalSw = System.Diagnostics.Stopwatch.StartNew();
         for (var index = 0; index < tasks.Count; index++)
         {
-            if (context.Aborted) break;
+            if (context.Aborted)
+            {
+                _logger.LogInformation("Pipeline aborted at step {Index} ({Why})", index, context.AbortReason ?? "no reason");
+                break;
+            }
             cancellationToken.ThrowIfCancellationRequested();
 
             var task = tasks[index];
-            _logger.LogDebug("Pipeline task {Index}: {TaskId}", index, task.Id);
-            await task.ExecuteAsync(context, config: null, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("→ Step {Index}/{Total}: {TaskId}", index + 1, tasks.Count, task.Id);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                await task.ExecuteAsync(context, config: null, cancellationToken).ConfigureAwait(false);
+                sw.Stop();
+                _logger.LogInformation("✓ Step {Index} {TaskId} done in {Ms} ms", index + 1, task.Id, sw.ElapsedMilliseconds);
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                _logger.LogError(ex, "✗ Step {Index} {TaskId} threw after {Ms} ms", index + 1, task.Id, sw.ElapsedMilliseconds);
+                throw;
+            }
         }
+        totalSw.Stop();
+        _logger.LogInformation("Pipeline done in {Ms} ms", totalSw.ElapsedMilliseconds);
     }
 
     public async Task RunAsync(
@@ -57,15 +77,23 @@ public sealed class PipelineExecutor
         if (_registry is null)
             throw new InvalidOperationException("Profile-based RunAsync requires a registry; construct PipelineExecutor with one.");
 
+        _logger.LogInformation("Workflow '{Profile}' starting ({Count} steps)", profile.Id, profile.Steps.Count);
+        var totalSw = System.Diagnostics.Stopwatch.StartNew();
+        var ran = 0;
         for (var index = 0; index < profile.Steps.Count; index++)
         {
-            if (context.Aborted) break;
+            if (context.Aborted)
+            {
+                _logger.LogInformation("Workflow '{Profile}' aborted at step {Index}: {Why}",
+                    profile.Id, index, context.AbortReason ?? "no reason");
+                break;
+            }
             cancellationToken.ThrowIfCancellationRequested();
 
             var step = profile.Steps[index];
             if (!step.Enabled)
             {
-                _logger.LogDebug("Pipeline profile {Profile} step {Index} ({TaskId}) skipped (disabled)",
+                _logger.LogDebug("Workflow '{Profile}' step {Index} ({TaskId}) skipped (disabled)",
                     profile.Id, index, step.TaskId);
                 continue;
             }
@@ -73,22 +101,32 @@ public sealed class PipelineExecutor
             var task = _registry.Resolve(step.TaskId);
             if (task is null)
             {
-                _logger.LogWarning("Pipeline profile {Profile} step {Index}: task {TaskId} not registered, skipping",
+                _logger.LogWarning("Workflow '{Profile}' step {Index}: task {TaskId} not registered, skipping",
                     profile.Id, index, step.TaskId);
                 if (step.AbortOnError) context.Abort($"task {step.TaskId} not registered");
                 continue;
             }
 
+            ran++;
+            _logger.LogInformation("→ '{Profile}' step {Index}: {TaskId}", profile.Id, index + 1, task.Id);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             try
             {
-                _logger.LogDebug("Pipeline profile {Profile} step {Index}: {TaskId}", profile.Id, index, task.Id);
                 await task.ExecuteAsync(context, step.Config, cancellationToken).ConfigureAwait(false);
+                sw.Stop();
+                _logger.LogInformation("✓ '{Profile}' step {Index} {TaskId} done in {Ms} ms",
+                    profile.Id, index + 1, task.Id, sw.ElapsedMilliseconds);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Pipeline profile {Profile} step {Index} ({TaskId}) threw", profile.Id, index, task.Id);
+                sw.Stop();
+                _logger.LogError(ex, "✗ '{Profile}' step {Index} ({TaskId}) threw after {Ms} ms",
+                    profile.Id, index + 1, task.Id, sw.ElapsedMilliseconds);
                 if (step.AbortOnError) context.Abort($"task {task.Id} threw: {ex.Message}");
             }
         }
+        totalSw.Stop();
+        _logger.LogInformation("Workflow '{Profile}' done — {Ran} step(s) ran in {Ms} ms",
+            profile.Id, ran, totalSw.ElapsedMilliseconds);
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -31,6 +32,25 @@ public partial class MainWindow : FluentWindow
                 WorkflowNameInline.Focus();
                 WorkflowNameInline.SelectAll();
             }), System.Windows.Threading.DispatcherPriority.Loaded);
+        };
+
+        // Auto-scroll the Debug log to the latest entry. We listen at the collection level so
+        // every Append (ILogger callback → DebugLogService.Append → ObservableCollection.Add)
+        // ends up at the bottom of the visible list. Gated on Debug.AutoScroll so the user can
+        // turn it off and read older entries without the view yanking back.
+        ((INotifyCollectionChanged)viewModel.Debug.Entries).CollectionChanged += (_, e) =>
+        {
+            if (!viewModel.Debug.AutoScroll) return;
+            if (e.Action != NotifyCollectionChangedAction.Add) return;
+            // Skip when the Debug tab isn't currently realised — the ListBox lives inside a
+            // collapsed Grid until the user selects the tab, and a virtualized ListBox throws
+            // when ScrollIntoView is called before its ItemsPanel exists. Once the tab is
+            // visited, IsLoaded + IsVisible become true and auto-scroll kicks in normally.
+            if (DebugLogList is null || !DebugLogList.IsLoaded || !DebugLogList.IsVisible) return;
+            var last = viewModel.Debug.Entries.Count > 0 ? viewModel.Debug.Entries[^1] : null;
+            if (last is null) return;
+            try { DebugLogList.ScrollIntoView(last); }
+            catch { /* virtualization race during heavy log bursts — drop a single tick */ }
         };
     }
 
