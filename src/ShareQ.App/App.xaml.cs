@@ -113,7 +113,16 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, OpenEditorBeforeUploadTask>();
                 services.AddSingleton<IPipelineTask, OpenPopupTask>();
                 services.AddSingleton<IPipelineTask, ToggleIncognitoTask>();
+                services.AddSingleton<IPipelineTask, ColorSamplerTask>();
                 services.AddSingleton<IPipelineTask, ColorPickerTask>();
+                services.AddSingleton<IPipelineTask, CopyColorAsHexTask>();
+                services.AddSingleton<IPipelineTask, CopyColorAsRgbTask>();
+                services.AddSingleton<IPipelineTask, CopyColorAsRgbaTask>();
+                services.AddSingleton<IPipelineTask, CopyColorAsHsbTask>();
+                services.AddSingleton<IPipelineTask, CopyColorAsCmykTask>();
+                services.AddSingleton<IPipelineTask, CopyColorAsDecimalTask>();
+                services.AddSingleton<IPipelineTask, CopyColorAsLinearTask>();
+                services.AddSingleton<IPipelineTask, CopyColorAsBgraTask>();
                 services.AddSingleton<IPipelineTask, CaptureRegionTask>();
                 services.AddSingleton<IPipelineTask, RecordScreenTask>();
                 services.AddSingleton<IPipelineTask, OpenScreenshotFolderTask>();

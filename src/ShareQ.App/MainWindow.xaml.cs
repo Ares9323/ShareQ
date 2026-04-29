@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using ShareQ.App.ViewModels;
 using ShareQ.Editor.Model;
 using ShareQ.Editor.Views;
@@ -17,11 +18,17 @@ public partial class MainWindow : FluentWindow
     private const string StepDragFormat = "ShareQ.WorkflowStep";
     private Point _dragStartPoint;
     private WorkflowStepViewModel? _dragSourceStep;
+    private readonly ShareQ.App.Services.ScreenColorPickerService _screenSampler;
+    private readonly ShareQ.Editor.Persistence.ColorRecentsStore _colorRecents;
 
-    public MainWindow(SettingsViewModel viewModel)
+    public MainWindow(SettingsViewModel viewModel,
+        ShareQ.App.Services.ScreenColorPickerService screenSampler,
+        ShareQ.Editor.Persistence.ColorRecentsStore colorRecents)
     {
         InitializeComponent();
         DataContext = viewModel;
+        _screenSampler = screenSampler;
+        _colorRecents = colorRecents;
         // Newly-added workflow: focus the inline name field and select its text so the user can
         // type the real name straight away. Defer to a low-priority dispatcher tick because the
         // edit-view's TextBox isn't realised until the visibility binding flips.
@@ -297,36 +304,43 @@ public partial class MainWindow : FluentWindow
     private void PickAccentColor(bool isBackground)
     {
         if (DataContext is not SettingsViewModel vm) return;
-        // Snapshot the original so Cancel can restore — live preview keeps mutating the theme as
-        // the user drags around inside the picker.
-        var originalHex = isBackground ? vm.Theme.AccentBackgroundHex : vm.Theme.AccentForegroundHex;
-        var current = TryParseShapeColor(originalHex) ?? (isBackground ? ShapeColor.Black : new ShapeColor(255, 255, 255, 255));
+        var currentHex = isBackground ? vm.Theme.AccentBackgroundHex : vm.Theme.AccentForegroundHex;
+        var current = TryParseShapeColor(currentHex) ?? (isBackground ? ShapeColor.Black : new ShapeColor(255, 255, 255, 255));
         var dialog = new ColorPickerWindow(current) { Owner = this };
 
-        // Live preview: every internal change (SV-square drag, hue strip, sliders, hex commit)
-        // pushes through the existing hex → ThemeService pipeline, so the entire app re-paints
-        // in real time instead of waiting for OK. Hex setter is value-equality-checked, so
-        // setting the same color is a free no-op.
-        EventHandler<ShapeColor> onChanged = (_, c) =>
+        // Wire 🔍 button → screen sampler. SampleAtCursor returns hex (no clipboard side-effect)
+        // which we parse and push into the dialog via ApplySampledColor.
+        dialog.EyedropperRequested += (_, _) =>
         {
-            var hex = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
-            if (isBackground) vm.Theme.AccentBackgroundHex = hex;
-            else               vm.Theme.AccentForegroundHex = hex;
+            var hex = _screenSampler.SampleAtCursor();
+            if (hex is null) return;
+            if (TryParseShapeColor(hex) is { } sampled) dialog.ApplySampledColor(sampled);
         };
-        dialog.ColorChanged += onChanged;
-        var ok = dialog.ShowDialog() == true;
-        dialog.ColorChanged -= onChanged;
 
-        if (!ok)
+        // OK button live preview: as the user picks inside the dialog, override the OK button's
+        // matching channel (Background when picking AccentBg, Foreground when picking AccentFg)
+        // so the user sees the *future* accent landed in a real button shape — without the rest
+        // of the app re-painting until they actually commit with OK.
+        EventHandler<ShapeColor> previewHandler = (_, c) =>
         {
-            // User cancelled — roll the theme back to whatever was active before opening the
-            // picker. The transient mutations from the live preview have already persisted, so
-            // this restoration also persists (one extra write, harmless).
-            if (isBackground) vm.Theme.AccentBackgroundHex = originalHex;
-            else               vm.Theme.AccentForegroundHex = originalHex;
-        }
-        // OK path: the last ColorChanged event already wrote PickedColor's color. Nothing extra
-        // to do — what the user saw during the drag is what they got.
+            var brush = new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B));
+            brush.Freeze();
+            if (isBackground) dialog.OkButton.Background = brush;
+            else               dialog.OkButton.Foreground = brush;
+        };
+        dialog.ColorChanged += previewHandler;
+
+        // Pre-populate the Recent palette inside the picker so the user sees their previous
+        // accent picks. Without this each Theme picker session starts with an empty Recent grid.
+        ColorSwatchButton.CurrentRecents = _colorRecents.LoadAsync(System.Threading.CancellationToken.None).GetAwaiter().GetResult();
+
+        if (dialog.ShowDialog() != true) return;
+        var picked = dialog.PickedColor;
+        var hex2 = $"#{picked.R:X2}{picked.G:X2}{picked.B:X2}";
+        if (isBackground) vm.Theme.AccentBackgroundHex = hex2;
+        else               vm.Theme.AccentForegroundHex = hex2;
+        // Push to recents so the colour shows up next time the user opens any picker.
+        _ = _colorRecents.PushAsync(picked, System.Threading.CancellationToken.None);
     }
 
     private static ShapeColor? TryParseShapeColor(string hex)

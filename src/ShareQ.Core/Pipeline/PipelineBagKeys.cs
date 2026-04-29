@@ -36,4 +36,10 @@ public static class PipelineBagKeys
     /// monitor/fullscreen capture tasks so downstream tasks (notably <c>shareq.pin-to-screen</c>)
     /// can reproduce the exact on-screen origin. Type: <c>(int X, int Y)</c>.</summary>
     public const string CaptureScreenPos = "capture_screen_pos";
+
+    /// <summary>Colour produced by the color-sampler / color-picker steps. Downstream
+    /// <c>shareq.copy-color-*</c> tasks read this and emit the colour in their respective format
+    /// to the clipboard, letting users compose "pick → format" pipelines without per-format
+    /// hardcoding inside the sampler. Type: <c>ShareQ.Editor.Model.ShapeColor</c>.</summary>
+    public const string Color = "color";
 }

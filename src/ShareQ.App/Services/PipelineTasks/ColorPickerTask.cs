@@ -4,27 +4,35 @@ using ShareQ.Core.Pipeline;
 
 namespace ShareQ.App.Services.PipelineTasks;
 
-/// <summary>Opens the on-screen color picker (eye-dropper) at the cursor position. Single-step
-/// workflow that the color picker hotkey runs.</summary>
+/// <summary>Opens the dialog-style HSB/RGB/CMYK colour picker (wheel + numeric inputs) and
+/// stashes the user's pick in <see cref="PipelineBagKeys.Color"/>. Downstream
+/// <c>shareq.copy-color-*</c> steps choose the output format. Cancelling aborts the pipeline.</summary>
 public sealed class ColorPickerTask : IPipelineTask
 {
     public const string TaskId = "shareq.color-picker";
 
-    private readonly ScreenColorPickerService _picker;
+    private readonly ColorWheelLauncher _launcher;
 
-    public ColorPickerTask(ScreenColorPickerService picker)
+    public ColorPickerTask(ColorWheelLauncher launcher)
     {
-        _picker = picker;
+        _launcher = launcher;
     }
 
     public string Id => TaskId;
-    public string DisplayName => "Screen color picker";
+    public string DisplayName => "Color picker";
     public PipelineTaskKind Kind => PipelineTaskKind.Both;
 
-    public Task ExecuteAsync(PipelineContext context, JsonNode? config, CancellationToken cancellationToken)
+    public async Task ExecuteAsync(PipelineContext context, JsonNode? config, CancellationToken cancellationToken)
     {
-        // PickAtCursor opens a UI overlay; must run on the WPF UI thread.
-        Application.Current.Dispatcher.InvokeAsync(() => _picker.PickAtCursor());
-        return Task.CompletedTask;
+        var picked = await Application.Current.Dispatcher
+            .InvokeAsync(() => _launcher.PickAsync()).Task
+            .Unwrap()
+            .ConfigureAwait(false);
+        if (picked is null)
+        {
+            context.Abort("color picker cancelled");
+            return;
+        }
+        context.Bag[PipelineBagKeys.Color] = picked;
     }
 }

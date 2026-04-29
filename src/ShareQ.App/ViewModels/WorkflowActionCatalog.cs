@@ -4,9 +4,12 @@ using ShareQ.Core.Pipeline;
 namespace ShareQ.App.ViewModels;
 
 /// <summary>Declarative description of a single integer-valued config parameter the user can edit
-/// inline on a step row. Today only used for <c>shareq.paste-history-item</c>'s <c>index</c>; the
-/// shape lets us add similar one-knob parameters (delay ms, retry count, …) without bespoke UI.</summary>
+/// inline on a step row.</summary>
 public sealed record IntParameter(string Key, string Label, int DefaultValue, int Min, int Max);
+
+/// <summary>Declarative description of a boolean config parameter — rendered as a checkbox on the
+/// step row, persisted under <see cref="Key"/> in the step's JSON config.</summary>
+public sealed record BoolParameter(string Key, string Label, bool DefaultValue);
 
 /// <summary>One entry in the "+ Add step" picker for workflows. Maps a pipeline task id to
 /// human-readable metadata + a default config to apply when the user adds the action.</summary>
@@ -22,7 +25,10 @@ public sealed record WorkflowActionDescriptor(
     string? DefaultConfigJson = null,
     /// <summary>If set, the editor renders an inline integer input on the step row, bound to the
     /// matching key in <see cref="System.Text.Json.Nodes.JsonNode"/> step config.</summary>
-    IntParameter? IntParameter = null);
+    IntParameter? IntParameter = null,
+    /// <summary>Optional list of boolean toggles rendered as checkboxes on the step row. Each
+    /// entry's <see cref="BoolParameter.Key"/> is the JSON property the checkbox writes to.</summary>
+    IReadOnlyList<BoolParameter>? BoolParameters = null);
 
 public static class WorkflowActionCatalog
 {
@@ -45,10 +51,36 @@ public static class WorkflowActionCatalog
             "Capture",
             DefaultConfigJson: "{\"format\":\"gif\"}"),
 
-        new("shareq.color-picker",
-            "Screen color picker",
-            "Open the magnifier-style picker at the cursor; the chosen color is copied to the clipboard.",
+        new("shareq.color-sampler",
+            "Color sampler",
+            "Open the magnifier-style sampler at the cursor — picks a pixel from anywhere on screen. The sampled color is copied to the clipboard.",
             "Capture"),
+
+        new("shareq.color-picker",
+            "Color picker",
+            "Open the dialog-style HSB/RGB/CMYK colour picker (wheel + numeric inputs). The chosen color is stashed in the bag — pair with a Copy color as … step to write it to the clipboard.",
+            "Capture"),
+
+        // Copy-color-as family: read the bag colour produced by Color sampler / Color picker and
+        // emit it in a specific format. One step per format keeps the workflow editor's "+ Add"
+        // menu friendly — no JSON config dropdowns needed.
+        new("shareq.copy-color-hex",
+            "Copy color as Hex",
+            "Emit the bag colour as RRGGBB (or RRGGBBAA with alpha). Toggles below choose whether to include alpha and whether to prefix with #.",
+            "Color",
+            DefaultConfigJson: "{\"alpha\":false,\"hash\":false}",
+            BoolParameters: new[]
+            {
+                new BoolParameter("alpha", "Include alpha (RRGGBBAA)", false),
+                new BoolParameter("hash",  "Prefix with #",            false),
+            }),
+        new("shareq.copy-color-rgb",     "Copy color as RGB",     "Emit the bag colour as rgb(R, G, B) to the clipboard.",                          "Color"),
+        new("shareq.copy-color-rgba",    "Copy color as RGBA",    "Emit the bag colour as rgba(R, G, B, A) with alpha 0–1 to the clipboard.",       "Color"),
+        new("shareq.copy-color-hsb",     "Copy color as HSB",     "Emit the bag colour as hsb(H°, S%, B%) to the clipboard.",                       "Color"),
+        new("shareq.copy-color-cmyk",    "Copy color as CMYK",    "Emit the bag colour as cmyk(C%, M%, Y%, K%) to the clipboard.",                  "Color"),
+        new("shareq.copy-color-decimal", "Copy color as Decimal", "Emit the bag colour as the packed AARRGGBB integer to the clipboard.",           "Color"),
+        new("shareq.copy-color-linear",  "Copy color as Linear",  "Emit (R=…,G=…,B=…,A=…) — Unreal Engine FLinearColor stringification — to the clipboard.", "Color"),
+        new("shareq.copy-color-bgra",    "Copy color as BGRA",    "Emit (B=…,G=…,R=…,A=…) — Unreal Engine FColor stringification — to the clipboard.", "Color"),
 
         new("shareq.open-editor-before-upload",
             "Open editor",

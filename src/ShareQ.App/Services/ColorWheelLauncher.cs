@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using ShareQ.Editor.Model;
 using ShareQ.Editor.Persistence;
@@ -7,40 +8,84 @@ namespace ShareQ.App.Services;
 
 /// <summary>Tray-launchable companion to <see cref="ScreenColorPickerService"/>: opens the full
 /// HSB/RGB/CMYK colour picker dialog (the "wheel"-style — distinguished from the screen
-/// "eyedropper") so the user can pick a colour numerically and have it land on the clipboard +
-/// the recents list. The eyedropper exists for sampling pixels from arbitrary windows; this one
-/// covers the case where you just want a colour and need to dial it in.</summary>
+/// "eyedropper") and returns the picked colour. Two entry-points:
+/// <list type="bullet">
+/// <item><description><see cref="ShowAsync"/> — the legacy "fire and forget" tray flow that
+/// auto-copies hex to clipboard and pushes the recents list. Used by tray menu items.</description></item>
+/// <item><description><see cref="PickAsync"/> — returns the <see cref="ShapeColor"/> WITHOUT
+/// touching the clipboard, so pipeline steps can stash it in the bag and have a downstream
+/// <c>shareq.copy-color-*</c> task pick the output format.</description></item>
+/// </list></summary>
 public sealed class ColorWheelLauncher
 {
     private readonly ColorRecentsStore _recents;
+    private readonly ScreenColorPickerService _sampler;
     private readonly ILogger<ColorWheelLauncher> _logger;
 
-    public ColorWheelLauncher(ColorRecentsStore recents, ILogger<ColorWheelLauncher> logger)
+    public ColorWheelLauncher(ColorRecentsStore recents, ScreenColorPickerService sampler, ILogger<ColorWheelLauncher> logger)
     {
         _recents = recents;
+        _sampler = sampler;
         _logger = logger;
     }
 
-    public async Task ShowAsync()
+    /// <summary>Open the picker, return the chosen colour (or null on Cancel). Doesn't touch the
+    /// clipboard or recents list — caller decides.</summary>
+    public async Task<ShapeColor?> PickAsync()
     {
         var recents = await _recents.LoadAsync(CancellationToken.None).ConfigureAwait(true);
-        // Hand the dialog the recents list via the static rendezvous point ColorSwatchButton
-        // already uses — same way the editor populates it. Standalone use of the picker would
-        // otherwise see an empty Recent palette.
         ColorSwatchButton.CurrentRecents = recents;
         var initial = recents.Count > 0 ? recents[0] : ShapeColor.Black;
 
         var dlg = new ColorPickerWindow(initial);
-        // No Owner: tray invocation can happen with the main window hidden; setting Owner to
-        // a hidden FluentWindow makes the picker invisible too. Centre on screen instead.
         dlg.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
 
-        if (dlg.ShowDialog() != true) return;
-        var c = dlg.PickedColor;
-        var hex = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+        // Wire the eyedropper button so clicking 🔍 actually opens the screen sampler. The
+        // picker itself has no DI access, hence the bridge here. The hex returned by the
+        // sampler (#RRGGBB or null) is parsed into ShapeColor and pushed into the dialog via
+        // ApplySampledColor — same way the editor wires it up.
+        dlg.EyedropperRequested += (_, _) =>
+        {
+            var hex = _sampler.SampleAtCursor();
+            if (hex is null) return;
+            if (TryParseHex(hex, out var sampled))
+            {
+                dlg.ApplySampledColor(sampled);
+            }
+        };
+
+        if (dlg.ShowDialog() != true) return null;
+        return dlg.PickedColor;
+    }
+
+    /// <summary>Tray flow: opens the picker, copies hex to clipboard, pushes to recents.</summary>
+    public async Task ShowAsync()
+    {
+        var picked = await PickAsync().ConfigureAwait(true);
+        if (picked is null) return;
+        var hex = $"#{picked.R:X2}{picked.G:X2}{picked.B:X2}";
         try { System.Windows.Clipboard.SetText(hex); }
-        catch { /* clipboard locked — the colour still went to recents below */ }
+        catch { /* clipboard locked — recents push below still happens */ }
         _logger.LogInformation("Color wheel: picked {Hex}, copied to clipboard", hex);
-        await _recents.PushAsync(c, CancellationToken.None).ConfigureAwait(false);
+        await _recents.PushAsync(picked, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    private static bool TryParseHex(string hex, out ShapeColor color)
+    {
+        color = ShapeColor.Black;
+        var s = hex.Trim().TrimStart('#');
+        try
+        {
+            if (s.Length == 6)
+            {
+                var r = byte.Parse(s.AsSpan(0, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                var g = byte.Parse(s.AsSpan(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                var b = byte.Parse(s.AsSpan(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                color = new ShapeColor(255, r, g, b);
+                return true;
+            }
+        }
+        catch (FormatException) { }
+        return false;
     }
 }

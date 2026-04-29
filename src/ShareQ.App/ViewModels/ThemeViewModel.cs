@@ -43,17 +43,6 @@ public sealed partial class ThemeViewModel : ObservableObject
     [RelayCommand]
     private async Task ResetAsync() => await _theme.ResetAsync().ConfigureAwait(true);
 
-    /// <summary>Force a re-push of the current colors. Useful when a control snapshotted a brush
-    /// at instantiation time and missed our live override (some WPF-UI controls + arbitrary
-    /// third-party templates do this). Equivalent to "restart and reload settings".</summary>
-    [RelayCommand]
-    private async Task ApplyNowAsync()
-    {
-        var bg = ParseOrNull(AccentBackgroundHex) ?? ThemeService.DefaultBackground;
-        var fg = ParseOrNull(AccentForegroundHex) ?? ThemeService.DefaultForeground;
-        await _theme.SetAsync(bg, fg).ConfigureAwait(true);
-    }
-
     private void SyncFromService()
     {
         _suppressApply = true;

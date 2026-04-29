@@ -531,6 +531,25 @@
                                                                    Command="{Binding IncrementParameterCommand}"
                                                                    ToolTip="Increase" />
                                                     </StackPanel>
+                                                    <!-- Boolean toggles for the step's config flags. Each one persists into
+                                                         step.Config[Key] via the BoolParameterEntry callback. -->
+                                                    <ItemsControl ItemsSource="{Binding BoolParameters}"
+                                                                  Visibility="{Binding HasBoolParameters, Converter={StaticResource BoolToVisibility}}"
+                                                                  Margin="0,6,0,0">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <WrapPanel Orientation="Horizontal" />
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <CheckBox Content="{Binding Label}"
+                                                                          IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                                                          Foreground="#DDD" FontSize="11"
+                                                                          Margin="0,0,16,0" />
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
                                                 </StackPanel>
                                                 <ui:ToggleSwitch Grid.Column="2" IsChecked="{Binding IsEnabled, Mode=TwoWay}"
                                                                  VerticalAlignment="Center" Margin="12,0,0,0" />
@@ -639,21 +658,11 @@
                 <TextBlock Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
                            Text="Foreground is the text/icon color drawn on top of the accent background — pick one with enough contrast (e.g. white on a dark accent, near-black on a light one)." />
 
-                <!-- Live preview block + Apply: the sample shows the chosen pair on accent surfaces;
-                     Apply forces a re-push of the colors through the resource pipeline (handy if
-                     a third-party control templated against a brush before our override took
-                     effect). Both side-by-side keeps the action visually tied to the preview. -->
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                    <Border Background="{DynamicResource AccentBackgroundBrush}"
-                            CornerRadius="4" Padding="12,8" VerticalAlignment="Center">
-                        <TextBlock Text="Sample button label" FontWeight="SemiBold" FontSize="12"
-                                   Foreground="{DynamicResource AccentForegroundBrush}" />
-                    </Border>
-                    <ui:Button Content="Apply" Margin="8,0,0,0" VerticalAlignment="Center"
-                               Command="{Binding Theme.ApplyNowCommand}"
-                               ToolTip="Force a refresh of every themed surface — equivalent to a restart for the accent colors." />
-                </StackPanel>
-
+                <!-- No sample / Apply button: clicking a swatch opens the picker, which previews
+                     the new colour on its own OK button. The accent only commits app-wide when
+                     the picker closes with OK — so editing here doesn't constantly repaint the
+                     whole UI behind the dialog. Reset stays as the one button that DOES apply
+                     immediately because there's no separate preview surface for it. -->
                 <ui:Button Content="Reset to defaults" HorizontalAlignment="Left"
                            Command="{Binding Theme.ResetCommand}"
                            ToolTip="Restore the original ShareQ accent (#0078D4 background, white foreground)." />

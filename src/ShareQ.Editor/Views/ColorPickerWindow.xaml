@@ -1,9 +1,10 @@
 <Window x:Class="ShareQ.Editor.Views.ColorPickerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:local="clr-namespace:ShareQ.Editor.Views"
         Title="Color picker"
-        Width="780" Height="600"
+        Width="780" Height="640"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="#252525"
@@ -41,27 +42,11 @@
             <Setter Property="BorderBrush" Value="#555" />
             <Setter Property="Padding" Value="2" />
         </Style>
-        <Style TargetType="Button">
-            <Setter Property="Background" Value="#333" />
-            <Setter Property="Foreground" Value="White" />
-            <Setter Property="BorderBrush" Value="#555" />
-            <Setter Property="Padding" Value="6,4" />
-        </Style>
-        <Style TargetType="RadioButton">
-            <Setter Property="Foreground" Value="White" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-        </Style>
-        <Style TargetType="CheckBox">
-            <Setter Property="Foreground" Value="White" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-        </Style>
     </Window.Resources>
 
     <Grid Margin="12">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
@@ -69,87 +54,49 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- ╭──────── TOP-LEFT: SV square (Hue is driven by the H slider in the right panel,
-                                  so the previously-redundant vertical Hue strip is gone — that
-                                  also lets the SV square fill the full left column for finer
-                                  saturation/value picking). ────────╮ -->
-        <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="0"
-                BorderBrush="#555" BorderThickness="1"
-                ClipToBounds="True">
-            <Grid x:Name="SvHost"
-                  Background="Black"
-                  MouseLeftButtonDown="OnSvMouseDown"
-                  MouseMove="OnSvMouseMove"
-                  MouseLeftButtonUp="OnSvMouseUp">
-                <Rectangle x:Name="SvHueRect" />
-                <Rectangle>
-                    <Rectangle.Fill>
-                        <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
-                            <GradientStop Color="White" Offset="0" />
-                            <GradientStop Color="#00FFFFFF" Offset="1" />
-                        </LinearGradientBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
-                <Rectangle>
-                    <Rectangle.Fill>
-                        <LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1">
-                            <GradientStop Color="#00000000" Offset="0" />
-                            <GradientStop Color="Black" Offset="1" />
-                        </LinearGradientBrush>
-                    </Rectangle.Fill>
-                </Rectangle>
-                <Canvas IsHitTestVisible="False">
-                    <Ellipse x:Name="SvCursor"
-                             Width="12" Height="12"
-                             Stroke="White" StrokeThickness="2"
-                             Fill="Transparent" />
-                </Canvas>
+        <!-- ╭──────── LEFT: H×S colour wheel ────────╮ -->
+        <local:ColorWheelControl Grid.Row="0" Grid.Column="0" x:Name="ColorWheel" />
+
+        <!-- ╭──────── RIGHT: top → bottom: preview, HSB, RGB/CMYK tab, alpha, hex+dec inline,
+                                  palette ────────╮ -->
+        <StackPanel Grid.Row="0" Grid.Column="1" Margin="12,0,0,0">
+            <!-- Preview + sRGB + Eyedropper -->
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Width="120" Height="60"
+                        BorderBrush="#555" BorderThickness="1"
+                        Background="{StaticResource CheckerBrush}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0">
+                            <Border.Background>
+                                <SolidColorBrush x:Name="OriginalPreviewBrush" />
+                            </Border.Background>
+                        </Border>
+                        <Border Grid.Row="1">
+                            <Border.Background>
+                                <SolidColorBrush x:Name="NewPreviewBrush" />
+                            </Border.Background>
+                        </Border>
+                    </Grid>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Top">
+                    <CheckBox x:Name="SrgbToggle" Content="sRGB Preview" IsChecked="True"
+                              Foreground="White" Margin="0,0,0,6"
+                              ToolTip="Apply sRGB gamma to the preview swatches. Disable to see colors interpreted as linear (closer to how renderers like Unreal treat texture pixels)." />
+                    <ui:Button Content="🔍 Eyedropper" HorizontalAlignment="Left"
+                               Click="OnEyedropperClicked"
+                               ToolTip="Sample a pixel from anywhere on screen" />
+                </StackPanel>
             </Grid>
-        </Border>
 
-        <!-- ╭──────── TOP-RIGHT: Old/New preview + Eyedropper + sRGB ────────╮ -->
-        <Grid Grid.Row="0" Grid.Column="1" Margin="12,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <!-- Two-rect "old over new" preview (Unreal-style). Top = original color the picker
-                 was opened with, bottom = current pick. Side-by-side via row split inside one
-                 frame so you can compare easily. Background uses CheckerBrush so you can see
-                 alpha through partially-transparent picks. -->
-            <Border Grid.Column="0" Width="120" Height="60"
-                    BorderBrush="#555" BorderThickness="1"
-                    Background="{StaticResource CheckerBrush}">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <Border Grid.Row="0">
-                        <Border.Background>
-                            <SolidColorBrush x:Name="OriginalPreviewBrush" />
-                        </Border.Background>
-                    </Border>
-                    <Border Grid.Row="1">
-                        <Border.Background>
-                            <SolidColorBrush x:Name="NewPreviewBrush" />
-                        </Border.Background>
-                    </Border>
-                </Grid>
-            </Border>
-            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Top">
-                <CheckBox x:Name="SrgbToggle" Content="sRGB Preview" IsChecked="True" Margin="0,0,0,8"
-                          ToolTip="Apply sRGB gamma to the preview swatches. Disable to see colors in linear space — closer to how renderers like Unreal interpret texture pixels." />
-                <Button x:Name="EyedropperBtn" Content="🔍 Eyedropper" Padding="6,4" HorizontalAlignment="Left"
-                        Click="OnEyedropperClicked"
-                        ToolTip="Sample a pixel from anywhere on screen" />
-            </StackPanel>
-        </Grid>
-
-        <!-- ╭──────── MID-RIGHT: HSV + RGB/CMYK tab + Alpha + Hex ────────╮ -->
-        <StackPanel Grid.Row="1" Grid.Column="1" Margin="12,0,0,0">
             <!-- HSB always visible -->
-            <TextBlock Text="HSB" FontWeight="SemiBold" Margin="0,4,0,4" />
             <Grid Margin="0,0,0,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="20" />
@@ -181,14 +128,14 @@
                 <TextBox Grid.Column="2" x:Name="VBox" />
             </Grid>
 
-            <!-- Tab switch RGB / CMYK — alternate views, never both visible. -->
+            <!-- Tab switch RGB / CMYK -->
             <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
                 <RadioButton x:Name="RgbTab" Content="RGB" GroupName="ColorMode" IsChecked="True"
-                             Margin="0,0,12,0" Checked="OnTabChanged" />
-                <RadioButton x:Name="CmykTab" Content="CMYK" GroupName="ColorMode" Checked="OnTabChanged" />
+                             Foreground="White" Margin="0,0,12,0" Checked="OnTabChanged" />
+                <RadioButton x:Name="CmykTab" Content="CMYK" GroupName="ColorMode"
+                             Foreground="White" Checked="OnTabChanged" />
             </StackPanel>
 
-            <!-- RGB block -->
             <Grid x:Name="RgbBlock">
                 <StackPanel>
                     <Grid Margin="0,0,0,4">
@@ -224,7 +171,6 @@
                 </StackPanel>
             </Grid>
 
-            <!-- CMYK block (collapsed by default; CMYK tab flips visibility). -->
             <Grid x:Name="CmykBlock" Visibility="Collapsed">
                 <StackPanel>
                     <Grid Margin="0,0,0,4">
@@ -270,8 +216,7 @@
                 </StackPanel>
             </Grid>
 
-            <!-- Alpha — always visible regardless of RGB/CMYK tab. Track shows checker so the user
-                 can see exactly how transparent the colour will render. -->
+            <!-- Alpha -->
             <Grid Margin="0,8,0,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="20" />
@@ -283,82 +228,108 @@
                 <TextBox Grid.Column="2" x:Name="ABox" />
             </Grid>
 
-            <!-- Hex + Decimal: both editable, both update preview live (TextChanged). Decimal
-                 accepts the packed AARRGGBB integer, so users can paste from any tool that
-                 emits decimal colours. -->
+            <!-- Hex + Dec inline. Each pair is "[📋 LABEL button] [editable textbox]" — the
+                 button labels itself with the format name and copies on click; the textbox
+                 stays a plain input so the user can paste / type values. CharacterCasing on
+                 the hex textbox keeps user input uppercase too. -->
             <Grid Margin="0,4,0,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="40" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Hex" />
-                <TextBox Grid.Column="1" x:Name="HexBox" FontFamily="Consolas" />
+                <ui:Button Grid.Column="0" Content="📋 Hex" Click="OnCopyHexClicked"
+                           Padding="8,2" ToolTip="Copy hex value" />
+                <TextBox  Grid.Column="1" x:Name="HexBox" Margin="4,0,0,0"
+                          FontFamily="Consolas" CharacterCasing="Upper" />
+                <ui:Button Grid.Column="3" Content="📋 Dec" Click="OnCopyDecimalClicked"
+                           Padding="8,2" ToolTip="Copy decimal value" />
+                <TextBox  Grid.Column="4" x:Name="DecBox" Margin="4,0,0,0"
+                          FontFamily="Consolas" />
             </Grid>
-            <Grid Margin="0,4,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="40" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Dec" />
-                <TextBox Grid.Column="1" x:Name="DecBox" FontFamily="Consolas" />
-            </Grid>
-        </StackPanel>
 
-        <!-- ╭──────── BOTTOM ROW: palette + copy buttons + OK/Cancel ────────╮ -->
-        <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,16,0,0">
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                <RadioButton x:Name="PaletteRecent"   Content="Recent colors"   GroupName="Palette" IsChecked="True"
-                             Margin="0,0,16,0" Checked="OnPaletteSourceChanged" />
-                <RadioButton x:Name="PaletteStandard" Content="Standard colors" GroupName="Palette"
-                             Checked="OnPaletteSourceChanged" />
+            <!-- Palette: now in the right column, directly below Hex+Dec. -->
+            <StackPanel Margin="0,12,0,0">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                    <RadioButton x:Name="PaletteRecent"   Content="Recent colors"   GroupName="Palette" IsChecked="True"
+                                 Foreground="White" Margin="0,0,16,0" Checked="OnPaletteSourceChanged" />
+                    <RadioButton x:Name="PaletteStandard" Content="Standard colors" GroupName="Palette"
+                                 Foreground="White" Checked="OnPaletteSourceChanged" />
+                </StackPanel>
+                <ItemsControl x:Name="PaletteHost">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="14" Rows="2" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Width="22" Height="22" Margin="1"
+                                    BorderBrush="#555" BorderThickness="1"
+                                    Background="{Binding Brush}"
+                                    Cursor="Hand"
+                                    MouseLeftButtonDown="OnPaletteSwatchClick"
+                                    Tag="{Binding Color}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </StackPanel>
-            <ItemsControl x:Name="PaletteHost">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <UniformGrid Columns="14" Rows="2" />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <!-- Each swatch is a clickable Border. MouseDown commits the colour into
-                             the picker state; double-click also closes with OK (keeps the
-                             one-click-pick UX of standard ColorDialog feel-alikes). -->
-                        <Border Width="22" Height="22" Margin="1"
-                                BorderBrush="#555" BorderThickness="1"
-                                Background="{Binding Brush}"
-                                Cursor="Hand"
-                                MouseLeftButtonDown="OnPaletteSwatchClick"
-                                Tag="{Binding Color}" />
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
         </StackPanel>
 
-        <!-- Action bar -->
-        <Grid Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,12,0,0">
+        <!-- ╭──────── ACTION BAR — full width at the bottom ────────╮ -->
+        <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,12,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <!-- Six dedicated copy buttons, one per format. Avoids the "click dropdown → click
-                 entry" two-click pattern of ShareX's Copy menu. -->
             <WrapPanel Grid.Column="0" Orientation="Horizontal">
-                <Button Content="Copy all"     Margin="0,0,4,4" Click="OnCopyAllClicked"
-                        ToolTip="Copy every format on separate lines (RGB · Hex · CMYK · HSB · Decimal)" />
-                <Button Content="Copy RGB"     Margin="0,0,4,4" Click="OnCopyRgbClicked"
-                        ToolTip="rgb(R, G, B)" />
-                <Button Content="Copy Hex"     Margin="0,0,4,4" Click="OnCopyHexClicked"
-                        ToolTip="#AARRGGBB" />
-                <Button Content="Copy CMYK"    Margin="0,0,4,4" Click="OnCopyCmykClicked"
-                        ToolTip="cmyk(C%, M%, Y%, K%)" />
-                <Button Content="Copy HSB"     Margin="0,0,4,4" Click="OnCopyHsbClicked"
-                        ToolTip="hsb(H°, S%, B%)" />
-                <Button Content="Copy Decimal" Margin="0,0,4,4" Click="OnCopyDecimalClicked"
-                        ToolTip="Decimal integer of the 0xAARRGGBB packed colour" />
+                <ui:Button Content="Copy all"     Margin="0,0,4,4" Click="OnCopyAllClicked"
+                           ToolTip="Copy every format on separate lines — handy for pasting into a bug report or notes." />
+                <ui:Button Content="Copy RGB"     Margin="0,0,4,4" Click="OnCopyRgbClicked"
+                           ToolTip="rgb(R, G, B) — the CSS-style integer triplet." />
+                <ui:Button Content="Copy CMYK"    Margin="0,0,4,4" Click="OnCopyCmykClicked"
+                           ToolTip="cmyk(C%, M%, Y%, K%)" />
+                <ui:Button Content="Copy HSB"     Margin="0,0,4,4" Click="OnCopyHsbClicked"
+                           ToolTip="hsb(H°, S%, B%)" />
+                <ui:Button Content="Copy Linear"  Margin="0,0,4,4" Click="OnCopyLinearClicked"
+                           ToolTip="(R=1.000000,G=0.000000,B=0.000000,A=1.000000) — Unreal Engine FLinearColor." />
+                <ui:Button Content="Copy BGRA"    Margin="0,0,4,4" Click="OnCopyBgraClicked"
+                           ToolTip="(B=109,G=134,R=255,A=255) — Unreal Engine FColor (note BGRA channel order)." />
             </WrapPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="OK"     Width="80" Margin="0,0,4,0" IsDefault="True" Click="OnOkClicked" />
-                <Button Content="Cancel" Width="80" IsCancel="True" Click="OnCancelClicked" />
+                <!-- OK button = real applied accent. Plain WPF Button with a custom template so
+                     hover/pressed don't tint the background grey (which is what ui:Button does
+                     by default — fights with our solid accent fill). Hover/pressed use Opacity
+                     to give subtle feedback while keeping the colour identity. -->
+                <Button x:Name="OkButton" x:FieldModifier="public"
+                        Content="OK" Width="80" Height="32" Margin="0,0,4,0"
+                        IsDefault="True" Click="OnOkClicked"
+                        FontWeight="SemiBold"
+                        Background="{DynamicResource AccentBackgroundBrush}"
+                        Foreground="{DynamicResource AccentForegroundBrush}">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="4">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}"
+                                                  TextElement.FontWeight="{TemplateBinding FontWeight}" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Opacity" Value="0.85" />
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Bd" Property="Opacity" Value="0.7" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+                <ui:Button Content="Cancel" Width="80" IsCancel="True" Click="OnCancelClicked" />
             </StackPanel>
         </Grid>
     </Grid>

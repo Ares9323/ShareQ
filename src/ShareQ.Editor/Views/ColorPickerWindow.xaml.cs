@@ -33,10 +33,21 @@ public partial class ColorPickerWindow : Window
         _a = initial.A;
 
         WireSliderInputs();
+        // Wheel pushes (H, S) back into our HSV state — same path used by the H/S text inputs
+        // and sliders, so it goes through UpdateAllUi which keeps every other channel in sync.
+        ColorWheel.PointPicked += (_, _) =>
+        {
+            if (_suppress) return;
+            _h = ColorWheel.H;
+            _s = ColorWheel.S;
+            UpdateAllUi();
+        };
+        // Hand the wheel our gamma function so its disc bitmap follows the sRGB toggle the same
+        // way the sliders / palette / New-preview do. Identity transform when toggle ON.
+        ColorWheel.PixelGamma = ApplyPreviewGamma;
         SizeChanged += (_, _) => UpdateAllUi();
         Loaded += (_, _) =>
         {
-            // Original swatch is a one-time snapshot — never changes after the window opens.
             OriginalPreviewBrush.Color = Color.FromArgb(initial.A, initial.R, initial.G, initial.B);
             LoadPalette();
             UpdateAllUi();
@@ -97,7 +108,16 @@ public partial class ColorPickerWindow : Window
         HexBox.KeyDown     += (_, ev) => { if (ev.Key == Key.Enter) Keyboard.ClearFocus(); };
         DecBox.TextChanged += (_, _) => { if (!_suppress) OnDecimalCommitted(); };
         DecBox.KeyDown     += (_, ev) => { if (ev.Key == Key.Enter) Keyboard.ClearFocus(); };
-        SrgbToggle.Click += (_, _) => UpdateAllUi();   // gamma-flip the preview brushes immediately
+        // sRGB toggle: re-runs UpdateAllUi (re-paints sliders, swatches, New preview), rebuilds
+        // the palette swatches, and re-rasterises the colour wheel — every visible "colour
+        // value" surface follows the toggle for consistency. The wheel re-render is ~3 ms for
+        // 360² pixels, which is fine on a click event.
+        SrgbToggle.Click += (_, _) =>
+        {
+            UpdateAllUi();
+            RebuildPalette();
+            ColorWheel.PixelGamma = ApplyPreviewGamma;
+        };
 
         foreach (var b in new[] { HBox, SBox, VBox, RBox, GBox, BBox, ABox, CBox, MBox, YBox, KBox })
         {
@@ -154,12 +174,18 @@ public partial class ColorPickerWindow : Window
             byte a = _a, r, g, b;
             if (s.Length == 6)
             {
+                // RRGGBB (fully opaque — alpha keeps its current value, doesn't get reset).
                 r = Convert.ToByte(s[..2], 16); g = Convert.ToByte(s[2..4], 16); b = Convert.ToByte(s[4..6], 16);
             }
             else if (s.Length == 8)
             {
-                a = Convert.ToByte(s[..2], 16); r = Convert.ToByte(s[2..4], 16);
-                g = Convert.ToByte(s[4..6], 16); b = Convert.ToByte(s[6..8], 16);
+                // RRGGBBAA — CSS Color Module Level 4 ordering. Replaces the old AARRGGBB
+                // parser, which was the WPF/Android convention but inconsistent with what
+                // designers paste from Figma / browser DevTools / CSS files.
+                r = Convert.ToByte(s[..2], 16);
+                g = Convert.ToByte(s[2..4], 16);
+                b = Convert.ToByte(s[4..6], 16);
+                a = Convert.ToByte(s[6..8], 16);
             }
             else { return; }
             _a = a;
@@ -242,19 +268,21 @@ public partial class ColorPickerWindow : Window
             MBox.Text = ((int)Math.Round(m)).ToString(CultureInfo.InvariantCulture);
             YBox.Text = ((int)Math.Round(y)).ToString(CultureInfo.InvariantCulture);
             KBox.Text = ((int)Math.Round(k)).ToString(CultureInfo.InvariantCulture);
-            HexBox.Text = $"#{_a:X2}{r:X2}{g:X2}{b:X2}";
+            // Hex display follows CSS Color Module Level 4: RRGGBB when fully opaque, RRGGBBAA
+            // (alpha appended) when there's transparency. Matches what users paste into design
+            // tools / web stylesheets and aligns with CopyColorAsHexTask's output.
+            HexBox.Text = _a == 255
+                ? $"#{r:X2}{g:X2}{b:X2}"
+                : $"#{r:X2}{g:X2}{b:X2}{_a:X2}";
             DecBox.Text = (((uint)_a << 24) | ((uint)r << 16) | ((uint)g << 8) | b)
                 .ToString(CultureInfo.InvariantCulture);
 
-            // SV square hue base = pure hue at S=1, V=1
-            var (hr, hg, hb) = new Hsv(_h, 1, 1).ToRgb();
-            SvHueRect.Fill = new SolidColorBrush(Color.FromRgb(hr, hg, hb));
-
-            if (SvHost.ActualWidth > 0)
-            {
-                Canvas.SetLeft(SvCursor, _s * SvHost.ActualWidth - 6);
-                Canvas.SetTop(SvCursor, (1 - _v) * SvHost.ActualHeight - 6);
-            }
+            // Push HSV into the wheel so its cursor + brightness overlay stay in lockstep with
+            // the rest of the picker. _suppress is already set, so the wheel's PointPicked handler
+            // (which would otherwise loop right back into UpdateAllUi) bails out at its guard.
+            ColorWheel.H = _h;
+            ColorWheel.S = _s;
+            ColorWheel.V = _v;
 
             // Preview swatches respect the sRGB toggle: ON = display the byte values straight (the
             // OS / display already applies sRGB gamma during compositing). OFF = treat the bytes
@@ -262,10 +290,17 @@ public partial class ColorPickerWindow : Window
             // perceptually-different rendering you'd get if you handed those bytes to a renderer
             // that interprets them linearly (e.g. an Unreal material). This is exactly the
             // behaviour the user expects from the Unreal-style "sRGB Preview" checkbox.
+            // sRGB toggle only affects the NEW pick — the Original is the colour the dialog was
+            // opened with and serves as a stable reference (otherwise toggling sRGB would shift
+            // both swatches together, defeating the comparison).
             var (pr, pg, pb) = ApplyPreviewGamma(r, g, b);
             NewPreviewBrush.Color = Color.FromArgb(_a, pr, pg, pb);
-            var (opr, opg, opb) = ApplyPreviewGamma(_originalColor.R, _originalColor.G, _originalColor.B);
-            OriginalPreviewBrush.Color = Color.FromArgb(_originalColor.A, opr, opg, opb);
+            OriginalPreviewBrush.Color = Color.FromArgb(_originalColor.A, _originalColor.R, _originalColor.G, _originalColor.B);
+
+            // OK button: by default bound via XAML DynamicResource to the global accent brushes,
+            // so it always shows the real applied accent. The Theme tab overrides Background /
+            // Foreground (via the public OkButton field) to give the user a live preview of the
+            // pick they're making — see MainWindow.PickAccentColor for the wiring.
 
             RefreshGradients(r, g, b, c, m, y, k);
         }
@@ -279,52 +314,61 @@ public partial class ColorPickerWindow : Window
 
     /// <summary>Recompute every slider's gradient track based on the current state of the OTHER
     /// channels — this is what makes the sliders Unreal-style "see what dragging will produce".
-    /// Cheap to do every UpdateAllUi: just builds 11 LinearGradientBrushes.</summary>
+    /// Cheap to do every UpdateAllUi: just builds 11 LinearGradientBrushes. Endpoints go through
+    /// <see cref="ApplyPreviewGamma"/> so the sliders match Unreal's behaviour: when sRGB Preview
+    /// is OFF, every gradient/swatch reflects the linear→sRGB mapping (the wheel stays put — see
+    /// the explanation in the user-facing docs).</summary>
     private void RefreshGradients(byte r, byte g, byte b, double c, double m, double y, double k)
     {
-        // Hue is rainbow regardless of other channels.
-        HSlider.TrackBrush = HueRainbow();
+        // Hue is rainbow regardless of other channels — but its endpoints still get the gamma
+        // pass so sRGB-OFF darkens the rainbow consistently with everything else.
+        HSlider.TrackBrush = HueRainbow(ApplyPreviewGamma);
 
         // Saturation: from grayscale-at-current-V to full-color-at-current-H+V.
         var (greyR, greyG, greyB) = new Hsv(_h, 0, _v).ToRgb();
         var (fullR, fullG, fullB) = new Hsv(_h, 1, _v).ToRgb();
-        SSlider.TrackBrush = HorizontalGradient(
-            Color.FromRgb(greyR, greyG, greyB),
-            Color.FromRgb(fullR, fullG, fullB));
+        SSlider.TrackBrush = HorizontalGradient(GammaColor(greyR, greyG, greyB), GammaColor(fullR, fullG, fullB));
 
-        // Brightness: from black to full-saturation-color-at-current-H+S.
         var (vTopR, vTopG, vTopB) = new Hsv(_h, _s, 1).ToRgb();
-        VSlider.TrackBrush = HorizontalGradient(
-            Color.FromRgb(0, 0, 0),
-            Color.FromRgb(vTopR, vTopG, vTopB));
+        VSlider.TrackBrush = HorizontalGradient(GammaColor(0, 0, 0), GammaColor(vTopR, vTopG, vTopB));
 
-        // R/G/B: each one shows itself sliding 0→255 with the OTHER two held constant.
-        RSlider.TrackBrush = HorizontalGradient(Color.FromRgb(0,   g, b), Color.FromRgb(255, g, b));
-        GSlider.TrackBrush = HorizontalGradient(Color.FromRgb(r,   0, b), Color.FromRgb(r, 255, b));
-        BSlider.TrackBrush = HorizontalGradient(Color.FromRgb(r,   g, 0), Color.FromRgb(r, g, 255));
+        RSlider.TrackBrush = HorizontalGradient(GammaColor(0, g, b),   GammaColor(255, g, b));
+        GSlider.TrackBrush = HorizontalGradient(GammaColor(r, 0, b),   GammaColor(r, 255, b));
+        BSlider.TrackBrush = HorizontalGradient(GammaColor(r, g, 0),   GammaColor(r, g, 255));
 
         // Alpha: transparent → fully-opaque current colour. The slider shows a checker behind so
-        // you can see the result through the gradient.
+        // you can see the result through the gradient. Alpha endpoint colour goes through gamma
+        // so it matches the New-preview swatch when sRGB toggle changes.
+        var (ar, ag, ab) = ApplyPreviewGamma(r, g, b);
         ASlider.TrackBrush = HorizontalGradient(
-            Color.FromArgb(0,   r, g, b),
-            Color.FromArgb(255, r, g, b));
+            Color.FromArgb(0,   ar, ag, ab),
+            Color.FromArgb(255, ar, ag, ab));
 
         // CMYK: sliding each channel 0→100% with others held.
         var c01 = c / 100.0; var m01 = m / 100.0; var y01 = y / 100.0; var k01 = k / 100.0;
         var (cMin_R, cMin_G, cMin_B) = CmykToRgb(0, m01, y01, k01);
         var (cMax_R, cMax_G, cMax_B) = CmykToRgb(1, m01, y01, k01);
-        CSlider.TrackBrush = HorizontalGradient(Color.FromRgb(cMin_R, cMin_G, cMin_B), Color.FromRgb(cMax_R, cMax_G, cMax_B));
+        CSlider.TrackBrush = HorizontalGradient(GammaColor(cMin_R, cMin_G, cMin_B), GammaColor(cMax_R, cMax_G, cMax_B));
 
         var (mMin_R, mMin_G, mMin_B) = CmykToRgb(c01, 0, y01, k01);
         var (mMax_R, mMax_G, mMax_B) = CmykToRgb(c01, 1, y01, k01);
-        MSlider.TrackBrush = HorizontalGradient(Color.FromRgb(mMin_R, mMin_G, mMin_B), Color.FromRgb(mMax_R, mMax_G, mMax_B));
+        MSlider.TrackBrush = HorizontalGradient(GammaColor(mMin_R, mMin_G, mMin_B), GammaColor(mMax_R, mMax_G, mMax_B));
 
         var (yMin_R, yMin_G, yMin_B) = CmykToRgb(c01, m01, 0, k01);
         var (yMax_R, yMax_G, yMax_B) = CmykToRgb(c01, m01, 1, k01);
-        YSlider.TrackBrush = HorizontalGradient(Color.FromRgb(yMin_R, yMin_G, yMin_B), Color.FromRgb(yMax_R, yMax_G, yMax_B));
+        YSlider.TrackBrush = HorizontalGradient(GammaColor(yMin_R, yMin_G, yMin_B), GammaColor(yMax_R, yMax_G, yMax_B));
 
         var (kMin_R, kMin_G, kMin_B) = CmykToRgb(c01, m01, y01, 0);
-        KSlider.TrackBrush = HorizontalGradient(Color.FromRgb(kMin_R, kMin_G, kMin_B), Color.FromRgb(0, 0, 0));
+        KSlider.TrackBrush = HorizontalGradient(GammaColor(kMin_R, kMin_G, kMin_B), GammaColor(0, 0, 0));
+    }
+
+    /// <summary>RGB byte triple → <see cref="Color"/>, with sRGB-toggle gamma applied. Convenience
+    /// wrapper around <see cref="ApplyPreviewGamma"/> used everywhere we render colours that
+    /// represent picked / pickable values (sliders, palette swatches).</summary>
+    private Color GammaColor(byte r, byte g, byte b)
+    {
+        var (pr, pg, pb) = ApplyPreviewGamma(r, g, b);
+        return Color.FromRgb(pr, pg, pb);
     }
 
     private static Brush HorizontalGradient(Color start, Color end)
@@ -334,21 +378,28 @@ public partial class ColorPickerWindow : Window
         return b;
     }
 
-    private static Brush HueRainbow()
+    /// <summary>Hue-rainbow gradient. <paramref name="gamma"/> is applied to each stop so the
+    /// rainbow consistently darkens / brightens with the picker's sRGB toggle (Unreal-style).</summary>
+    private static Brush HueRainbow(Func<byte, byte, byte, (byte R, byte G, byte B)> gamma)
     {
+        Color G(byte r, byte g, byte bb)
+        {
+            var (pr, pg, pbb) = gamma(r, g, bb);
+            return Color.FromRgb(pr, pg, pbb);
+        }
         var b = new LinearGradientBrush
         {
             StartPoint = new Point(0, 0.5),
             EndPoint = new Point(1, 0.5),
             GradientStops =
             {
-                new GradientStop(Color.FromRgb(0xFF, 0x00, 0x00), 0.000),
-                new GradientStop(Color.FromRgb(0xFF, 0xFF, 0x00), 0.167),
-                new GradientStop(Color.FromRgb(0x00, 0xFF, 0x00), 0.333),
-                new GradientStop(Color.FromRgb(0x00, 0xFF, 0xFF), 0.500),
-                new GradientStop(Color.FromRgb(0x00, 0x00, 0xFF), 0.667),
-                new GradientStop(Color.FromRgb(0xFF, 0x00, 0xFF), 0.833),
-                new GradientStop(Color.FromRgb(0xFF, 0x00, 0x00), 1.000),
+                new GradientStop(G(0xFF, 0x00, 0x00), 0.000),
+                new GradientStop(G(0xFF, 0xFF, 0x00), 0.167),
+                new GradientStop(G(0x00, 0xFF, 0x00), 0.333),
+                new GradientStop(G(0x00, 0xFF, 0xFF), 0.500),
+                new GradientStop(G(0x00, 0x00, 0xFF), 0.667),
+                new GradientStop(G(0xFF, 0x00, 0xFF), 0.833),
+                new GradientStop(G(0xFF, 0x00, 0x00), 1.000),
             }
         };
         b.Freeze();
@@ -356,18 +407,6 @@ public partial class ColorPickerWindow : Window
     }
 
     // ── SV square ─────────────────────────────────────────────────────────────────
-
-    private void OnSvMouseDown(object sender, MouseButtonEventArgs e) { SvHost.CaptureMouse(); UpdateSvFromMouse(e.GetPosition(SvHost)); }
-    private void OnSvMouseMove(object sender, MouseEventArgs e) { if (e.LeftButton == MouseButtonState.Pressed && SvHost.IsMouseCaptured) UpdateSvFromMouse(e.GetPosition(SvHost)); }
-    private void OnSvMouseUp(object sender, MouseButtonEventArgs e) => SvHost.ReleaseMouseCapture();
-    private void UpdateSvFromMouse(Point p)
-    {
-        var w = Math.Max(1, SvHost.ActualWidth);
-        var h = Math.Max(1, SvHost.ActualHeight);
-        _s = Math.Clamp(p.X / w, 0, 1);
-        _v = 1 - Math.Clamp(p.Y / h, 0, 1);
-        UpdateAllUi();
-    }
 
     // ── sRGB / linear preview gamma ─────────────────────────────────────────────────
 
@@ -390,6 +429,7 @@ public partial class ColorPickerWindow : Window
         var s = c <= 0.0031308 ? c * 12.92 : 1.055 * Math.Pow(c, 1.0 / 2.4) - 0.055;
         return (byte)Math.Clamp(Math.Round(s * 255), 0, 255);
     }
+
 
     // ── RGB / CMYK tab ─────────────────────────────────────────────────────────────
 
@@ -421,12 +461,22 @@ public partial class ColorPickerWindow : Window
             ? ColorSwatchButton.CurrentRecents
             : (IReadOnlyList<ShapeColor>)StandardColors.Palette;
         // Pad / truncate to 28 swatches so the grid stays a tidy 14×2 even when recents are sparse.
+        // Each swatch's brush goes through gamma so toggling sRGB Preview shifts the palette in
+        // sync with the New-preview swatch + slider gradients.
         for (var i = 0; i < 28; i++)
         {
             var color = i < source.Count ? source[i] : ShapeColor.Transparent;
-            _paletteItems.Add(new PaletteEntry(color, color.IsTransparent
-                ? (Brush)Application.Current.Resources["CheckerBrush"]
-                : new SolidColorBrush(Color.FromArgb(color.A, color.R, color.G, color.B))));
+            Brush brush;
+            if (color.IsTransparent)
+            {
+                brush = (Brush)Application.Current.Resources["CheckerBrush"];
+            }
+            else
+            {
+                var (pr, pg, pb) = ApplyPreviewGamma(color.R, color.G, color.B);
+                brush = new SolidColorBrush(Color.FromArgb(color.A, pr, pg, pb));
+            }
+            _paletteItems.Add(new PaletteEntry(color, brush));
         }
     }
 
@@ -456,8 +506,13 @@ public partial class ColorPickerWindow : Window
 
     private string FormatHex()
     {
+        // CSS Color Module Level 4 — same convention as the HexBox display: RRGGBB when fully
+        // opaque, RRGGBBAA when there's transparency. The picker's inline 📋 button uses this;
+        // pipeline tasks have their own format with optional toggles.
         var (r, g, b) = CurrentRgb();
-        return $"#{_a:X2}{r:X2}{g:X2}{b:X2}";
+        return _a == 255
+            ? $"#{r:X2}{g:X2}{b:X2}"
+            : $"#{r:X2}{g:X2}{b:X2}{_a:X2}";
     }
 
     private string FormatCmyk()
@@ -479,14 +534,37 @@ public partial class ColorPickerWindow : Window
         return packed.ToString(CultureInfo.InvariantCulture);
     }
 
+    /// <summary>Unreal Engine FLinearColor stringification — normalised 0–1 floats, 6 decimals.
+    /// Format: <c>(R=1.000000,G=0.000000,B=0.000000,A=1.000000)</c>. Pasteable directly into
+    /// UE asset properties / Blueprint defaults.</summary>
+    private string FormatLinearRgb()
+    {
+        var (r, g, b) = CurrentRgb();
+        string F(byte c) => (c / 255.0).ToString("0.000000", CultureInfo.InvariantCulture);
+        return $"(R={F(r)},G={F(g)},B={F(b)},A={F(_a)})";
+    }
+
+    /// <summary>Unreal Engine FColor stringification — integer bytes in <b>B,G,R,A</b> order.
+    /// Format: <c>(B=109,G=134,R=255,A=255)</c>. Note the unusual channel order — that's how
+    /// FColor lays out its members and how its ToString emits them.</summary>
+    private string FormatBgra()
+    {
+        var (r, g, b) = CurrentRgb();
+        return $"(B={b},G={g},R={r},A={_a})";
+    }
+
     private void OnCopyAllClicked(object sender, RoutedEventArgs e)
     {
+        // Dump every format on its own line — pasting this into an issue / commit message
+        // gives whoever reads it the colour in whatever notation their tooling expects.
         var sb = new StringBuilder()
             .AppendLine(FormatRgb())
             .AppendLine(FormatHex())
             .AppendLine(FormatCmyk())
             .AppendLine(FormatHsb())
-            .Append(FormatDecimal());
+            .AppendLine(FormatDecimal())
+            .AppendLine(FormatLinearRgb())
+            .Append(FormatBgra());
         SafeCopy(sb.ToString());
     }
     private void OnCopyRgbClicked(object sender, RoutedEventArgs e)     => SafeCopy(FormatRgb());
@@ -494,6 +572,8 @@ public partial class ColorPickerWindow : Window
     private void OnCopyCmykClicked(object sender, RoutedEventArgs e)    => SafeCopy(FormatCmyk());
     private void OnCopyHsbClicked(object sender, RoutedEventArgs e)     => SafeCopy(FormatHsb());
     private void OnCopyDecimalClicked(object sender, RoutedEventArgs e) => SafeCopy(FormatDecimal());
+    private void OnCopyLinearClicked(object sender, RoutedEventArgs e)  => SafeCopy(FormatLinearRgb());
+    private void OnCopyBgraClicked(object sender, RoutedEventArgs e)    => SafeCopy(FormatBgra());
 
     private static void SafeCopy(string text)
     {

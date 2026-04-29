@@ -11,6 +11,7 @@ public static class DefaultPipelineProfiles
     public const string ManualUploadId      = "manual-upload";
     public const string ShowPopupId         = "show-popup";
     public const string ToggleIncognitoId   = "toggle-incognito";
+    public const string ColorSamplerId      = "color-sampler";
     public const string ColorPickerId       = "color-picker";
     public const string RecordScreenMp4Id   = "record-screen";
     public const string RecordScreenGifId   = "record-screen-gif";
@@ -23,7 +24,9 @@ public static class DefaultPipelineProfiles
     public const string OpenEditorBeforeUploadTaskId = "shareq.open-editor-before-upload";
     public const string OpenPopupTaskId            = "shareq.open-popup";
     public const string ToggleIncognitoTaskId      = "shareq.toggle-incognito";
+    public const string ColorSamplerTaskId         = "shareq.color-sampler";
     public const string ColorPickerTaskId          = "shareq.color-picker";
+    public const string CopyColorAsHexTaskId       = "shareq.copy-color-hex";
     public const string CaptureRegionTaskId        = "shareq.capture-region";
     public const string RecordScreenTaskId         = "shareq.record-screen";
     public const string OpenScreenshotFolderTaskId = "shareq.open-screenshot-folder";
@@ -105,14 +108,30 @@ public static class DefaultPipelineProfiles
             IsBuiltIn: true),
 
         new PipelineProfile(
+            Id: ColorSamplerId,
+            DisplayName: "Color sampler",
+            Trigger: "hotkey:color-sampler",
+            Steps:
+            [
+                // Sample → emit hex. Composable: user can swap CopyColorAsHex for any other
+                // CopyColorAs* (RGB, FLinearColor, CMYK, …) without touching the sampler.
+                new PipelineStep(ColorSamplerTaskId, Id: "color-sampler"),
+                new PipelineStep(CopyColorAsHexTaskId, Id: "copy-as-hex")
+            ],
+            Hotkey: new HotkeyBinding(Ctrl, 0xDC),  // Ctrl+\
+            IsBuiltIn: true),
+
+        new PipelineProfile(
             Id: ColorPickerId,
-            DisplayName: "Screen color picker",
+            DisplayName: "Color picker",
             Trigger: "hotkey:color-picker",
             Steps:
             [
-                new PipelineStep(ColorPickerTaskId, Id: "color-picker")
+                new PipelineStep(ColorPickerTaskId, Id: "color-picker"),
+                new PipelineStep(CopyColorAsHexTaskId, Id: "copy-as-hex")
             ],
-            Hotkey: new HotkeyBinding(Ctrl, 0xDC),  // Ctrl+\
+            // No default hotkey — picker is mostly invoked via tray / workflow UI; the user can
+            // bind one in Settings if they want a one-shot dialog launch.
             IsBuiltIn: true),
 
         new PipelineProfile(

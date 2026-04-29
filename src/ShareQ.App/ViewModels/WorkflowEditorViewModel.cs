@@ -130,6 +130,17 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
             var parameterValue = parameter is null
                 ? 0
                 : (int?)step.Config?[parameter.Key] ?? parameter.DefaultValue;
+            // Build a snapshot of every bool-parameter's current value for this step. Falls back
+            // to the descriptor default when the key isn't yet in step.Config.
+            Dictionary<string, bool>? boolValues = null;
+            if (descriptor?.BoolParameters is { Count: > 0 } bools)
+            {
+                boolValues = new Dictionary<string, bool>(bools.Count);
+                foreach (var bp in bools)
+                {
+                    boolValues[bp.Key] = (bool?)step.Config?[bp.Key] ?? bp.DefaultValue;
+                }
+            }
             Items.Add(new WorkflowStepViewModel(
                 storageIndex: i,
                 taskId: step.TaskId,
@@ -139,10 +150,13 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
                 initiallyEnabled: step.Enabled,
                 parameter: parameter,
                 parameterValue: parameterValue,
+                boolParameters: descriptor?.BoolParameters,
+                boolParameterValues: boolValues,
                 onEnabledChanged: (item, value)   => _ = OnEnabledChangedAsync(item, value),
                 onMove:           (item, delta)   => _ = OnMoveAsync(item, delta),
                 onRemove:         item            => _ = OnRemoveAsync(item),
-                onParameterChanged: (item, value) => _ = OnParameterChangedAsync(item, value)));
+                onParameterChanged: (item, value) => _ = OnParameterChangedAsync(item, value),
+                onBoolParameterChanged: (item, key, value) => _ = OnBoolParameterChangedAsync(item, key, value)));
         }
         UpdateMoveFlags();
     }
@@ -163,6 +177,17 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
         var step = _storage[item.StorageIndex];
         var config = step.Config?.DeepClone() as JsonObject ?? new JsonObject();
         config[item.Parameter.Key] = value;
+        _storage[item.StorageIndex] = step with { Config = config };
+        await PersistAsync().ConfigureAwait(true);
+    }
+
+    private async Task OnBoolParameterChangedAsync(WorkflowStepViewModel item, string key, bool value)
+    {
+        if (_isReloading || _profileId is null) return;
+        if (item.StorageIndex < 0 || item.StorageIndex >= _storage.Count) return;
+        var step = _storage[item.StorageIndex];
+        var config = step.Config?.DeepClone() as JsonObject ?? new JsonObject();
+        config[key] = value;
         _storage[item.StorageIndex] = step with { Config = config };
         await PersistAsync().ConfigureAwait(true);
     }

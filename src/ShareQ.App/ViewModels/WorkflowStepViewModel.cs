@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -9,6 +10,7 @@ public sealed partial class WorkflowStepViewModel : ObservableObject
     private readonly Action<WorkflowStepViewModel, int> _onMove;
     private readonly Action<WorkflowStepViewModel> _onRemove;
     private readonly Action<WorkflowStepViewModel, int>? _onParameterChanged;
+    private readonly Action<WorkflowStepViewModel, string, bool>? _onBoolParameterChanged;
     private bool _suppress;
 
     public WorkflowStepViewModel(
@@ -20,10 +22,13 @@ public sealed partial class WorkflowStepViewModel : ObservableObject
         bool initiallyEnabled,
         IntParameter? parameter,
         int parameterValue,
+        IReadOnlyList<BoolParameter>? boolParameters,
+        IReadOnlyDictionary<string, bool>? boolParameterValues,
         Action<WorkflowStepViewModel, bool> onEnabledChanged,
         Action<WorkflowStepViewModel, int> onMove,
         Action<WorkflowStepViewModel> onRemove,
-        Action<WorkflowStepViewModel, int>? onParameterChanged)
+        Action<WorkflowStepViewModel, int>? onParameterChanged,
+        Action<WorkflowStepViewModel, string, bool>? onBoolParameterChanged = null)
     {
         StorageIndex = storageIndex;
         TaskId = taskId;
@@ -35,9 +40,24 @@ public sealed partial class WorkflowStepViewModel : ObservableObject
         _onMove = onMove;
         _onRemove = onRemove;
         _onParameterChanged = onParameterChanged;
+        _onBoolParameterChanged = onBoolParameterChanged;
         _suppress = true;
         IsEnabled = initiallyEnabled;
         ParameterValue = parameter is null ? 0 : Math.Clamp(parameterValue, parameter.Min, parameter.Max);
+
+        // Build the bool-parameter row VMs once. Each one captures its key + a callback that
+        // forwards changes back to the editor for persistence into step.Config[key].
+        BoolParameters = new ObservableCollection<BoolParameterEntry>();
+        if (boolParameters is not null)
+        {
+            foreach (var bp in boolParameters)
+            {
+                var initial = boolParameterValues is not null && boolParameterValues.TryGetValue(bp.Key, out var v)
+                    ? v : bp.DefaultValue;
+                BoolParameters.Add(new BoolParameterEntry(bp.Key, bp.Label, initial,
+                    (key, value) => _onBoolParameterChanged?.Invoke(this, key, value)));
+            }
+        }
         _suppress = false;
     }
 
@@ -52,6 +72,8 @@ public sealed partial class WorkflowStepViewModel : ObservableObject
     /// <summary>The integer parameter shape for this step (null = no inline input).</summary>
     public IntParameter? Parameter { get; }
     public bool HasParameter => Parameter is not null;
+    public ObservableCollection<BoolParameterEntry> BoolParameters { get; }
+    public bool HasBoolParameters => BoolParameters.Count > 0;
     public string? ParameterLabel => Parameter?.Label;
     public int ParameterMin => Parameter?.Min ?? 0;
     public int ParameterMax => Parameter?.Max ?? 0;
@@ -125,5 +147,36 @@ public sealed partial class WorkflowStepViewModel : ObservableObject
         var next = ParameterValue + 1;
         if (next > Parameter.Max) return;
         ParameterValue = next;
+    }
+}
+
+/// <summary>One row's worth of bool-config state for a step. Two-way bindable so a CheckBox
+/// in the workflow editor commits the change immediately, and the supplied callback persists
+/// the value into step.Config[<see cref="Key"/>].</summary>
+public sealed partial class BoolParameterEntry : ObservableObject
+{
+    private readonly Action<string, bool> _onChanged;
+    private bool _suppress;
+
+    public BoolParameterEntry(string key, string label, bool initialValue, Action<string, bool> onChanged)
+    {
+        Key = key;
+        Label = label;
+        _onChanged = onChanged;
+        _suppress = true;
+        IsChecked = initialValue;
+        _suppress = false;
+    }
+
+    public string Key { get; }
+    public string Label { get; }
+
+    [ObservableProperty]
+    private bool _isChecked;
+
+    partial void OnIsCheckedChanged(bool value)
+    {
+        if (_suppress) return;
+        _onChanged(Key, value);
     }
 }
