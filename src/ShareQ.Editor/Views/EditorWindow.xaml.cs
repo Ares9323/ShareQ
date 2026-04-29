@@ -498,7 +498,17 @@ public partial class EditorWindow : FluentWindow
     private void OnWindowKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape && _eyedropperContinuation is not null) { CancelEyedropper(); e.Handled = true; return; }
+        // Skip when the focus is in any text input (caption editing, font-size NumberBox — its
+        // inner control is a TextBox, the inline text-shape edit, etc.). The user is likely
+        // typing; Enter would otherwise unexpectedly save and Esc would close the editor while
+        // they're editing a single field.
         if (e.OriginalSource is System.Windows.Controls.TextBox) return;
+
+        // Editor-level shortcuts: Enter = Save (matches the Save button), Esc = Cancel (matches
+        // the Cancel button — the OnClosing handler already prompts for unsaved changes, so we
+        // don't need to gate this).
+        if (e.Key == Key.Enter)  { OnSaveClicked(this, new RoutedEventArgs()); e.Handled = true; return; }
+        if (e.Key == Key.Escape) { OnCancelClicked(this, new RoutedEventArgs()); e.Handled = true; return; }
 
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
         if (ctrl && e.Key == Key.Z) { _vm.UndoCommand.Execute(null); e.Handled = true; return; }

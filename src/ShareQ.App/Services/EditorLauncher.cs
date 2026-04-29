@@ -83,7 +83,8 @@ public sealed class EditorLauncher
         if (!window.Saved) return;
 
         var canvasHost = (Grid)window.FindName("CanvasHost")!;
-        var bytes = CanvasPngExporter.Export(canvasHost, canvasHost.ActualWidth, canvasHost.ActualHeight);
+        var (exportW, exportH) = ResolveExportPixels(canvasHost);
+        var bytes = CanvasPngExporter.Export(canvasHost, exportW, exportH);
         await _items.UpdatePayloadAsync(itemId, bytes, bytes.LongLength, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("EditorLauncher: saved {Bytes} bytes back to item {Id}", bytes.Length, itemId);
     }
@@ -136,11 +137,28 @@ public sealed class EditorLauncher
             }
 
             var canvasHost = (Grid)window.FindName("CanvasHost")!;
-            var edited = CanvasPngExporter.Export(canvasHost, canvasHost.ActualWidth, canvasHost.ActualHeight);
-            _logger.LogInformation("EditorLauncher.EditAsync: returning {Bytes} edited bytes", edited.Length);
+            var (exportW, exportH) = ResolveExportPixels(canvasHost);
+            var edited = CanvasPngExporter.Export(canvasHost, exportW, exportH);
+            _logger.LogInformation("EditorLauncher.EditAsync: returning {Bytes} edited bytes ({W}×{H})", edited.Length, exportW, exportH);
             resultTcs.SetResult(edited);
         }).Task.ConfigureAwait(false);
 
         return await resultTcs.Task.ConfigureAwait(false);
+    }
+
+    /// <summary>Find the source bitmap inside the editor's <c>CanvasHost</c> Grid and return its
+    /// pixel dimensions — the canonical export size. Falls back to the host's ActualWidth/Height
+    /// only when the source can't be located (defensive, shouldn't happen in normal flow).</summary>
+    private static (int W, int H) ResolveExportPixels(System.Windows.Controls.Grid canvasHost)
+    {
+        foreach (var child in canvasHost.Children)
+        {
+            if (child is System.Windows.Controls.Image img &&
+                img.Source is System.Windows.Media.Imaging.BitmapSource src)
+            {
+                return (src.PixelWidth, src.PixelHeight);
+            }
+        }
+        return ((int)Math.Round(canvasHost.ActualWidth), (int)Math.Round(canvasHost.ActualHeight));
     }
 }

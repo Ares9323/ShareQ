@@ -61,8 +61,10 @@ public sealed class TrayIconService : IDisposable
         capture.Items.Add(BuildMenuItem("Screen recording (GIF)\tCtrl+Alt+G",
             () => Run<Services.Recording.RecordingCoordinator>(c => _ = c.ToggleAsync(ShareQ.Capture.Recording.RecordingFormat.Gif, CancellationToken.None))));
         capture.Items.Add(new Separator());
-        capture.Items.Add(BuildMenuItem("Color picker\tCtrl+Shift+P",
+        capture.Items.Add(BuildMenuItem("Color picker (eyedropper)\tCtrl+Shift+P",
             () => Run<ScreenColorPickerService>(s => s.PickAtCursor())));
+        capture.Items.Add(BuildMenuItem("Color picker (wheel)…",
+            () => Run<ColorWheelLauncher>(l => _ = l.ShowAsync())));
         menu.Items.Add(capture);
 
         // Upload submenu — kicks off the manual-upload pipeline from arbitrary sources.
@@ -74,7 +76,10 @@ public sealed class TrayIconService : IDisposable
 
         // Tools submenu — placeholder; we'll grow this with QR / hash / ruler / etc.
         var tools = new MenuItem { Header = "Tools" };
-        tools.Items.Add(BuildMenuItem("Color picker", () => Run<ScreenColorPickerService>(s => s.PickAtCursor())));
+        tools.Items.Add(BuildMenuItem("Color picker (eyedropper)",
+            () => Run<ScreenColorPickerService>(s => s.PickAtCursor())));
+        tools.Items.Add(BuildMenuItem("Color picker (wheel)…",
+            () => Run<ColorWheelLauncher>(l => _ = l.ShowAsync())));
         tools.Items.Add(BuildMenuItem("Pin to screen…",
             () => Run<PinToScreenLauncher>(p => _ = p.ShowAsync(CancellationToken.None))));
         menu.Items.Add(tools);

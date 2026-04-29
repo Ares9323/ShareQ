@@ -140,6 +140,7 @@ public partial class App : Application
                 services.AddSingleton<PinToScreenLauncher>();
                 services.AddSingleton<EditorLauncher>();
                 services.AddSingleton<ScreenColorPickerService>();
+                services.AddSingleton<ColorWheelLauncher>();
                 services.AddSingleton<Services.Recording.FfmpegLocator>();
                 services.AddSingleton<Services.Recording.FfmpegDownloader>();
                 services.AddSingleton<Services.Recording.ScreenRecordingService>();

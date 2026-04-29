@@ -18,13 +18,18 @@ public class ShapeGripLayoutTests
     }
 
     [Fact]
-    public void Line_has_two_endpoint_grips()
+    public void Line_has_two_endpoints_plus_bend_grip()
     {
+        // LineShape gained a Bend grip alongside its endpoints when we shipped the curved-line
+        // feature: dragging the Bend handle pulls the line into a quadratic-Bézier curve via
+        // ControlOffsetX/Y. The grip is rendered for every line so users can discover the
+        // curve gesture without first selecting a "make curved" toggle.
         var l = new LineShape(0, 0, 100, 100, ShapeColor.Red, 2);
         var grips = ShapeGripLayout.GripsFor(l);
-        Assert.Equal(2, grips.Count);
+        Assert.Equal(3, grips.Count);
         Assert.Equal(GripKind.From, grips[0].Kind);
         Assert.Equal(GripKind.To, grips[1].Kind);
+        Assert.Equal(GripKind.Bend, grips[2].Kind);
     }
 
     [Fact]
