@@ -18,8 +18,10 @@ public static class ShapeGripLayout
     {
         RectangleShape r => RectGrips(r.X, r.Y, r.Width, r.Height, rotateGripOffset),
         EllipseShape e => RectGrips(e.X, e.Y, e.Width, e.Height, rotateGripOffset),
-        ArrowShape a => [new(GripKind.From, a.FromX, a.FromY), new(GripKind.To, a.ToX, a.ToY)],
-        LineShape l => [new(GripKind.From, l.FromX, l.FromY), new(GripKind.To, l.ToX, l.ToY)],
+        // The Bend grip sits at the bezier control point — for straight arrows that's the segment
+        // midpoint, dragging it bends the line into a quadratic curve. ShareX uses the same UX.
+        ArrowShape a => [new(GripKind.From, a.FromX, a.FromY), new(GripKind.To, a.ToX, a.ToY), new(GripKind.Bend, a.ControlPoint.X, a.ControlPoint.Y)],
+        LineShape l => [new(GripKind.From, l.FromX, l.FromY), new(GripKind.To, l.ToX, l.ToY), new(GripKind.Bend, l.ControlPoint.X, l.ControlPoint.Y)],
         TextShape t => TextGrip(t, rotateGripOffset),
         StepCounterShape c => [new(GripKind.Resize, c.CenterX + c.Radius * 0.707, c.CenterY + c.Radius * 0.707)],
         BlurShape b => RectGrips(b.X, b.Y, b.Width, b.Height, 0),
@@ -58,6 +60,10 @@ public static class ShapeGripLayout
         SpotlightShape s => (s.X + s.Width / 2, s.Y + s.Height / 2),
         ImageShape i => (i.X + i.Width / 2, i.Y + i.Height / 2),
         SmartEraserShape se => (se.X + se.Width / 2, se.Y + se.Height / 2),
+        // Arrow / Line rotate around the segment midpoint — the bezier shape spins as a whole.
+        ArrowShape a => a.Midpoint,
+        LineShape l => l.Midpoint,
+        FreehandShape f => f.Pivot,
         _ => (0, 0)
     };
 
@@ -67,6 +73,9 @@ public static class ShapeGripLayout
         EllipseShape e => e.Rotation,
         TextShape t => t.Rotation,
         ImageShape i => i.Rotation,
+        ArrowShape a => a.Rotation,
+        LineShape l => l.Rotation,
+        FreehandShape f => f.Rotation,
         _ => 0
     };
 

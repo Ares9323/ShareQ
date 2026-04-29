@@ -69,8 +69,10 @@ public sealed class ResizeCommand : IEditorCommand
     {
         RectangleShape r => r with { X = r.X * sx, Y = r.Y * sy, Width = r.Width * sx, Height = r.Height * sy, StrokeWidth = r.StrokeWidth * AvgScale(sx, sy) },
         EllipseShape e => e with { X = e.X * sx, Y = e.Y * sy, Width = e.Width * sx, Height = e.Height * sy, StrokeWidth = e.StrokeWidth * AvgScale(sx, sy) },
-        ArrowShape a => a with { FromX = a.FromX * sx, FromY = a.FromY * sy, ToX = a.ToX * sx, ToY = a.ToY * sy, StrokeWidth = a.StrokeWidth * AvgScale(sx, sy) },
-        LineShape l => l with { FromX = l.FromX * sx, FromY = l.FromY * sy, ToX = l.ToX * sx, ToY = l.ToY * sy, StrokeWidth = l.StrokeWidth * AvgScale(sx, sy) },
+        // Scale the bend offset alongside the endpoints so a curved arrow keeps the same visual
+        // curvature relative to its segment after a resize.
+        ArrowShape a => a with { FromX = a.FromX * sx, FromY = a.FromY * sy, ToX = a.ToX * sx, ToY = a.ToY * sy, ControlOffsetX = a.ControlOffsetX * sx, ControlOffsetY = a.ControlOffsetY * sy, StrokeWidth = a.StrokeWidth * AvgScale(sx, sy) },
+        LineShape l => l with { FromX = l.FromX * sx, FromY = l.FromY * sy, ToX = l.ToX * sx, ToY = l.ToY * sy, ControlOffsetX = l.ControlOffsetX * sx, ControlOffsetY = l.ControlOffsetY * sy, StrokeWidth = l.StrokeWidth * AvgScale(sx, sy) },
         FreehandShape f => f with { Points = f.Points.Select(p => (p.X * sx, p.Y * sy)).ToList(), StrokeWidth = f.StrokeWidth * AvgScale(sx, sy) },
         TextShape t => t with { X = t.X * sx, Y = t.Y * sy, Style = t.Style with { FontSize = t.Style.FontSize * AvgScale(sx, sy) } },
         StepCounterShape c => c with { CenterX = c.CenterX * sx, CenterY = c.CenterY * sy, Radius = c.Radius * AvgScale(sx, sy), StrokeWidth = c.StrokeWidth * AvgScale(sx, sy) },

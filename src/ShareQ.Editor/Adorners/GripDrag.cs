@@ -45,6 +45,9 @@ public static class GripDrag
             GripKind.To => SnapEndpoint(l.FromX, l.FromY, px, py, shiftHeld) is var (tx, ty)
                 ? l with { ToX = tx, ToY = ty }
                 : null,
+            // Drag the Bend grip → set ControlOffset relative to the From-To midpoint. Shift snaps
+            // to the perpendicular bisector so the bend stays symmetric.
+            GripKind.Bend => l with { ControlOffsetX = px - (l.FromX + l.ToX) / 2, ControlOffsetY = py - (l.FromY + l.ToY) / 2 },
             _ => null
         },
         ArrowShape a => grip switch
@@ -55,6 +58,7 @@ public static class GripDrag
             GripKind.To => SnapEndpoint(a.FromX, a.FromY, px, py, shiftHeld) is var (tx, ty)
                 ? a with { ToX = tx, ToY = ty }
                 : null,
+            GripKind.Bend => a with { ControlOffsetX = px - (a.FromX + a.ToX) / 2, ControlOffsetY = py - (a.FromY + a.ToY) / 2 },
             _ => null
         },
         TextShape t => grip == GripKind.Resize ? ResizeText(t, px, py) : null,

@@ -315,11 +315,118 @@ public partial class EditorWindow : FluentWindow
 
     private void OnCanvasMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control) return;
-        var factor = e.Delta > 0 ? 1.15 : (1.0 / 1.15);
-        SetZoom(_zoom * factor);
-        e.Handled = true;
+        var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+        var alt = (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt;
+
+        if (ctrl)
+        {
+            var factor = e.Delta > 0 ? 1.15 : (1.0 / 1.15);
+            SetZoom(_zoom * factor);
+            e.Handled = true;
+            return;
+        }
+
+        // Wheel (no modifier) over a selection adjusts stroke width on each selected shape;
+        // Alt+wheel rotates them. Falls through to scrollviewer scroll when nothing is selected.
+        // Live-edit pattern: each notch live-replaces the shape; the existing
+        // CommitPendingLiveEdit machinery wraps the whole gesture into one undo step when the
+        // selection changes / window closes / Esc is pressed.
+        if (_vm.SelectedShapes.Count == 0) return;
+        var direction = e.Delta > 0 ? 1 : -1;
+
+        if (alt)
+        {
+            // 5° per notch — Shift could later quantize to 1° / 15° etc.
+            ApplyRotationDelta(direction * 5.0);
+            e.Handled = true;
+        }
+        else
+        {
+            ApplyStrokeDelta(direction); // ±1 px per notch
+            e.Handled = true;
+        }
     }
+
+    private void ApplyStrokeDelta(int delta)
+    {
+        foreach (var s in _vm.SelectedShapes.ToList())
+        {
+            // Text shapes have no meaningful stroke; the analogous "thickness" knob is the font
+            // size. We adjust by 2pt per notch so each scroll feels tactile, clamped 6..200pt.
+            if (s is ShareQ.Editor.Model.TextShape t)
+            {
+                var nextSize = Math.Clamp(t.Style.FontSize + delta * 2.0, 6.0, 200.0);
+                if (Math.Abs(nextSize - t.Style.FontSize) < 0.001) continue;
+                var replacedText = t with { Style = t.Style with { FontSize = nextSize } };
+                _vm.LiveReplaceShape(s, replacedText);
+                continue;
+            }
+            var newStroke = Math.Clamp(s.StrokeWidth + delta, 1.0, 32.0);
+            if (Math.Abs(newStroke - s.StrokeWidth) < 0.001) continue;
+            var replaced = WithStrokeWidth(s, newStroke);
+            if (replaced is null) continue;
+            _vm.LiveReplaceShape(s, replaced);
+        }
+        RefreshPropertyPanel();
+    }
+
+    private void ApplyRotationDelta(double degrees)
+    {
+        foreach (var s in _vm.SelectedShapes.ToList())
+        {
+            var current = GetRotation(s);
+            if (current is null) continue; // shape type doesn't support rotation
+            var next = Normalize360(current.Value + degrees);
+            var replaced = WithRotation(s, next);
+            if (replaced is null) continue;
+            _vm.LiveReplaceShape(s, replaced);
+        }
+        RefreshPropertyPanel();
+    }
+
+    private static double Normalize360(double deg)
+    {
+        var n = deg % 360.0;
+        if (n < 0) n += 360.0;
+        return n;
+    }
+
+    private static Shape? WithStrokeWidth(Shape s, double w) => s switch
+    {
+        ShareQ.Editor.Model.RectangleShape r  => r  with { StrokeWidth = w },
+        ShareQ.Editor.Model.EllipseShape e    => e  with { StrokeWidth = w },
+        ShareQ.Editor.Model.TextShape t       => t  with { StrokeWidth = w },
+        ShareQ.Editor.Model.ArrowShape a      => a  with { StrokeWidth = w },
+        ShareQ.Editor.Model.LineShape l       => l  with { StrokeWidth = w },
+        ShareQ.Editor.Model.FreehandShape f   => f  with { StrokeWidth = w },
+        ShareQ.Editor.Model.StepCounterShape sc => sc with { StrokeWidth = w },
+        // ImageShape / Blur / Pixelate / Spotlight / SmartEraser have no meaningful stroke.
+        _ => null,
+    };
+
+    private static double? GetRotation(Shape s) => s switch
+    {
+        ShareQ.Editor.Model.RectangleShape r => r.Rotation,
+        ShareQ.Editor.Model.EllipseShape e   => e.Rotation,
+        ShareQ.Editor.Model.TextShape t      => t.Rotation,
+        ShareQ.Editor.Model.ImageShape img   => img.Rotation,
+        ShareQ.Editor.Model.ArrowShape a     => a.Rotation,
+        ShareQ.Editor.Model.LineShape l      => l.Rotation,
+        ShareQ.Editor.Model.FreehandShape f  => f.Rotation,
+        _ => null,
+    };
+
+    private static Shape? WithRotation(Shape s, double r) => s switch
+    {
+        ShareQ.Editor.Model.RectangleShape rect => rect with { Rotation = r },
+        ShareQ.Editor.Model.EllipseShape e      => e with { Rotation = r },
+        ShareQ.Editor.Model.TextShape t         => t with { Rotation = r },
+        ShareQ.Editor.Model.ImageShape img      => img with { Rotation = r },
+        ShareQ.Editor.Model.ArrowShape a        => a with { Rotation = r },
+        ShareQ.Editor.Model.LineShape l         => l with { Rotation = r },
+        ShareQ.Editor.Model.FreehandShape f     => f with { Rotation = r },
+        _ => null,
+    };
 
     private void SetZoom(double newZoom)
     {
@@ -610,6 +717,7 @@ public partial class EditorWindow : FluentWindow
             GripKind.Left or GripKind.Right => Cursors.SizeWE,
             GripKind.From or GripKind.To => Cursors.Hand,
             GripKind.Rotate => Cursors.Cross,
+            GripKind.Bend => Cursors.Hand,
             _ => null
         };
         if (DrawingCanvas.Cursor != c) DrawingCanvas.Cursor = c;
@@ -1503,14 +1611,20 @@ public partial class EditorWindow : FluentWindow
             foreach (var g in ShapeGripLayout.GripsFor(sel, rotateOffset))
             {
                 var isRotateGrip = g.Kind == GripKind.Rotate;
+                var isBendGrip = g.Kind == GripKind.Bend;
+                // Rotate grip: filled blue circle. Bend grip: filled yellow circle (drag-to-curve
+                // visual hint, distinct from the resize / rotate handles). Other grips: white square.
+                var fillBrush = isRotateGrip ? new SolidColorBrush(Color.FromArgb(255, 80, 200, 255))
+                              : isBendGrip   ? new SolidColorBrush(Color.FromArgb(255, 255, 208, 0))
+                              : (Brush)Brushes.White;
                 var grip = new System.Windows.Shapes.Rectangle
                 {
                     Width = 8, Height = 8,
                     Stroke = new SolidColorBrush(Color.FromArgb(255, 80, 200, 255)),
                     StrokeThickness = 1.5,
-                    Fill = isRotateGrip ? new SolidColorBrush(Color.FromArgb(255, 80, 200, 255)) : Brushes.White,
-                    RadiusX = isRotateGrip ? 4 : 0,
-                    RadiusY = isRotateGrip ? 4 : 0,
+                    Fill = fillBrush,
+                    RadiusX = (isRotateGrip || isBendGrip) ? 4 : 0,
+                    RadiusY = (isRotateGrip || isBendGrip) ? 4 : 0,
                     Tag = "adorner",
                     IsHitTestVisible = false
                 };
@@ -1632,22 +1746,42 @@ public partial class EditorWindow : FluentWindow
 
     private static UIElement CreateLine(LineShape l)
     {
-        return new System.Windows.Shapes.Line
+        // Quadratic bezier through the optional control point. When ControlOffsetX/Y are zero
+        // the control coincides with the midpoint and the bezier degenerates to a straight line —
+        // visually identical to the previous Line element.
+        var (cx, cy) = l.ControlPoint;
+        var geom = new PathGeometry();
+        var fig = new PathFigure { StartPoint = new Point(l.FromX, l.FromY) };
+        fig.Segments.Add(new QuadraticBezierSegment(new Point(cx, cy), new Point(l.ToX, l.ToY), true));
+        geom.Figures.Add(fig);
+        var path = new System.Windows.Shapes.Path
         {
-            X1 = l.FromX, Y1 = l.FromY, X2 = l.ToX, Y2 = l.ToY,
+            Data = geom,
             Stroke = ToBrush(l.Outline),
             StrokeThickness = l.StrokeWidth,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round
         };
+        if (l.Rotation != 0)
+        {
+            // Path geometry uses absolute canvas coords (no Canvas.SetLeft/Top), so the rotate
+            // pivot is also expressed in canvas coords — the segment midpoint.
+            var (mx, my) = l.Midpoint;
+            path.RenderTransform = new RotateTransform(l.Rotation, mx, my);
+        }
+        return path;
     }
 
     private static UIElement CreateArrow(ArrowShape a)
     {
-        var dx = a.ToX - a.FromX;
-        var dy = a.ToY - a.FromY;
-        var len = Math.Max(Math.Sqrt(dx * dx + dy * dy), 1);
-        var ux = dx / len; var uy = dy / len;
+        // Quadratic bezier from From → ControlPoint → To. The arrowhead is anchored to the
+        // tangent at the END of the curve (= ToPoint − ControlPoint), not the straight-line
+        // direction, so the head still points "out of" the curve when bent.
+        var (cx, cy) = a.ControlPoint;
+        var tdx = a.ToX - cx;
+        var tdy = a.ToY - cy;
+        var tlen = Math.Max(Math.Sqrt(tdx * tdx + tdy * tdy), 1);
+        var ux = tdx / tlen; var uy = tdy / tlen;
         var headSize = Math.Max(8, a.StrokeWidth * 4);
         var leftX = a.ToX - ux * headSize - uy * (headSize / 2);
         var leftY = a.ToY - uy * headSize + ux * (headSize / 2);
@@ -1656,13 +1790,13 @@ public partial class EditorWindow : FluentWindow
 
         var geom = new PathGeometry();
         var fig = new PathFigure { StartPoint = new Point(a.FromX, a.FromY) };
-        fig.Segments.Add(new LineSegment(new Point(a.ToX, a.ToY), true));
+        fig.Segments.Add(new QuadraticBezierSegment(new Point(cx, cy), new Point(a.ToX, a.ToY), true));
         fig.Segments.Add(new LineSegment(new Point(leftX, leftY), true));
         fig.Segments.Add(new LineSegment(new Point(a.ToX, a.ToY), true));
         fig.Segments.Add(new LineSegment(new Point(rightX, rightY), true));
         geom.Figures.Add(fig);
 
-        return new System.Windows.Shapes.Path
+        var path = new System.Windows.Shapes.Path
         {
             Data = geom,
             Stroke = ToBrush(a.Outline),
@@ -1671,6 +1805,12 @@ public partial class EditorWindow : FluentWindow
             StrokeEndLineCap = PenLineCap.Round,
             StrokeLineJoin = PenLineJoin.Round
         };
+        if (a.Rotation != 0)
+        {
+            var (mx, my) = a.Midpoint;
+            path.RenderTransform = new RotateTransform(a.Rotation, mx, my);
+        }
+        return path;
     }
 
     private static UIElement CreateFreehand(FreehandShape f)
@@ -1684,6 +1824,11 @@ public partial class EditorWindow : FluentWindow
             StrokeLineJoin = PenLineJoin.Round
         };
         foreach (var (x, y) in f.Points) poly.Points.Add(new Point(x, y));
+        if (f.Rotation != 0)
+        {
+            var (px, py) = f.Pivot;
+            poly.RenderTransform = new RotateTransform(f.Rotation, px, py);
+        }
         return poly;
     }
 

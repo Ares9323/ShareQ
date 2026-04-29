@@ -20,9 +20,9 @@ public static class ShapeHitTester
     {
         RectangleShape r => HitRect(r, UnrotateAroundCenter(px, py, r.X + r.Width / 2, r.Y + r.Height / 2, r.Rotation)),
         EllipseShape e => HitEllipse(e, UnrotateAroundCenter(px, py, e.X + e.Width / 2, e.Y + e.Height / 2, e.Rotation)),
-        ArrowShape a => HitSegment(a.FromX, a.FromY, a.ToX, a.ToY, a.StrokeWidth, px, py),
-        LineShape l => HitSegment(l.FromX, l.FromY, l.ToX, l.ToY, l.StrokeWidth, px, py),
-        FreehandShape f => HitFreehand(f, px, py),
+        ArrowShape a => HitArrowOrLineRotated(a.FromX, a.FromY, a.ControlPoint.X, a.ControlPoint.Y, a.ToX, a.ToY, a.StrokeWidth, a.Rotation, a.Midpoint, px, py),
+        LineShape l => HitArrowOrLineRotated(l.FromX, l.FromY, l.ControlPoint.X, l.ControlPoint.Y, l.ToX, l.ToY, l.StrokeWidth, l.Rotation, l.Midpoint, px, py),
+        FreehandShape f => HitFreehandRotated(f, px, py),
         TextShape t => HitTextRotated(t, px, py),
         StepCounterShape c => HitStepCounter(c, px, py),
         BlurShape b => HitRectRegion(b.X, b.Y, b.Width, b.Height, px, py),
@@ -154,6 +154,30 @@ public static class ShapeHitTester
         return distSq <= tol * tol;
     }
 
+    /// <summary>Hit a quadratic bezier From → Control → To by sampling 32 line segments along
+    /// the curve and reusing <see cref="HitSegment"/>. 32 samples is plenty for the curvature
+    /// arrows/lines reach in practice and stays cheap (called per shape on every mouse move).
+    /// When Control coincides with the midpoint the bezier reduces to the straight line, so the
+    /// uncurved case still matches the previous segment-based behaviour.</summary>
+    private static bool HitBezier(double x0, double y0, double cx, double cy, double x2, double y2, double strokeWidth, double px, double py)
+    {
+        const int Samples = 32;
+        var prevX = x0;
+        var prevY = y0;
+        for (var i = 1; i <= Samples; i++)
+        {
+            var t = i / (double)Samples;
+            var omt = 1.0 - t;
+            // B(t) = (1-t)^2 * P0 + 2(1-t)t * P1 + t^2 * P2
+            var nextX = omt * omt * x0 + 2 * omt * t * cx + t * t * x2;
+            var nextY = omt * omt * y0 + 2 * omt * t * cy + t * t * y2;
+            if (HitSegment(prevX, prevY, nextX, nextY, strokeWidth, px, py)) return true;
+            prevX = nextX;
+            prevY = nextY;
+        }
+        return false;
+    }
+
     private static bool HitFreehand(FreehandShape f, double x, double y)
     {
         for (var i = 0; i < f.Points.Count - 1; i++)
@@ -163,5 +187,23 @@ public static class ShapeHitTester
             if (HitSegment(x1, y1, x2, y2, f.StrokeWidth, x, y)) return true;
         }
         return false;
+    }
+
+    /// <summary>Hit-test a rotated arrow/line by unrotating the click around the segment midpoint
+    /// before sampling the bezier. Bezier coords are stored in unrotated space; the rotation is a
+    /// pure render transform.</summary>
+    private static bool HitArrowOrLineRotated(double x0, double y0, double cx, double cy, double x2, double y2,
+        double strokeWidth, double rotation, (double X, double Y) midpoint, double px, double py)
+    {
+        var (qx, qy) = UnrotateAroundCenter(px, py, midpoint.X, midpoint.Y, rotation);
+        return HitBezier(x0, y0, cx, cy, x2, y2, strokeWidth, qx, qy);
+    }
+
+    private static bool HitFreehandRotated(FreehandShape f, double px, double py)
+    {
+        if (f.Rotation == 0) return HitFreehand(f, px, py);
+        var (cx, cy) = f.Pivot;
+        var (qx, qy) = UnrotateAroundCenter(px, py, cx, cy, f.Rotation);
+        return HitFreehand(f, qx, qy);
     }
 }
