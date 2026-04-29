@@ -16,12 +16,14 @@ public sealed class PasteHistoryItemTask : IPipelineTask
 
     private readonly IItemStore _items;
     private readonly AutoPaster _paster;
+    private readonly TargetWindowTracker _target;
     private readonly ILogger<PasteHistoryItemTask> _logger;
 
-    public PasteHistoryItemTask(IItemStore items, AutoPaster paster, ILogger<PasteHistoryItemTask> logger)
+    public PasteHistoryItemTask(IItemStore items, AutoPaster paster, TargetWindowTracker target, ILogger<PasteHistoryItemTask> logger)
     {
         _items = items;
         _paster = paster;
+        _target = target;
         _logger = logger;
     }
 
@@ -40,6 +42,13 @@ public sealed class PasteHistoryItemTask : IPipelineTask
         var index = (int?)config?["index"] ?? 1;
         if (index < 1) index = 1;
 
+        // The popup's quick-paste flow primes TargetWindowTracker before showing — workflows
+        // triggered by hotkey / tray don't, so AutoPaster.TryRestoreCaptured would return false.
+        // At this point the foreground window is the user's intended paste target (the hotkey
+        // hook doesn't change focus), so capturing here covers both first and subsequent paste
+        // steps in the same workflow run.
+        _target.CaptureCurrentForeground();
+
         var snapshot = await GetOrLoadSnapshotAsync(context, cancellationToken).ConfigureAwait(false);
         if (snapshot.Length < index)
         {
@@ -49,13 +58,6 @@ public sealed class PasteHistoryItemTask : IPipelineTask
 
         var itemId = snapshot[index - 1];
         await _paster.PasteAsync(itemId, cancellationToken).ConfigureAwait(false);
-
-        // AutoPaster sends Ctrl+V then returns immediately — Win32 doesn't surface a "paste
-        // consumed" signal. If we let the next step run right away it can overwrite the clipboard
-        // before the target window has processed our Ctrl+V, so the first paste actually inserts
-        // the second step's content. ~250ms is enough for the target's message pump to drain on
-        // every editor tested (VS Code, Word, browser inputs) without feeling sluggish.
-        await Task.Delay(250, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<long[]> GetOrLoadSnapshotAsync(PipelineContext context, CancellationToken cancellationToken)

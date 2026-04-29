@@ -65,3 +65,12 @@ public sealed class ZeroToVisibilityConverter : IValueConverter
         => value is int i && i == 0 ? Visibility.Visible : Visibility.Collapsed;
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => Binding.DoNothing;
 }
+
+/// <summary>True → Collapsed, false → Visible. Used to hide a region when a flag is on
+/// (e.g. show the list view only when *not* editing).</summary>
+public sealed class InverseBoolToVisibilityConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => value is true ? Visibility.Collapsed : Visibility.Visible;
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => Binding.DoNothing;
+}

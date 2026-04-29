@@ -22,24 +22,15 @@ public sealed partial class SettingsViewModel : ObservableObject
         _registry = registry;
         _configFactory = configFactory;
         Uploaders = uploaders;
-        // Hotkeys "Edit workflow" link → switch to the Workflows tab and select the matching row.
-        hotkeys.OpenWorkflowRequested += (_, id) =>
-        {
-            SelectedTab = SettingsTab.Workflows;
-            var match = workflows.Workflows.FirstOrDefault(w => w.Id == id);
-            if (match is not null) workflows.SelectedWorkflow = match;
-        };
-        // Hotkeys "Add custom workflow" button → jump to Workflows tab and run the Add flow.
-        // The Add command opens the name dialog and selects the new row on success, so the user
-        // lands on Workflows ready to configure the new workflow's steps.
+        // Hotkeys "Add custom workflow" button → run the Add flow (no modal — auto-default name)
+        // then drop straight into the edit view with the inline name field focused + selected
+        // so the user can type the real name immediately.
         hotkeys.AddCustomWorkflowRequested += async (_, _) =>
         {
-            SelectedTab = SettingsTab.Workflows;
-            // Reload first so the dropdown is fresh, then trigger Add. The order matters because
-            // ReloadWorkflowsAsync may reset SelectedWorkflow; running Add after the reload means
-            // the new entry's selection sticks.
             await workflows.ReloadWorkflowsAsync().ConfigureAwait(true);
-            workflows.AddWorkflowCommand.Execute(null);
+            await workflows.AddWorkflowCommand.ExecuteAsync(null).ConfigureAwait(true);
+            if (workflows.SelectedWorkflow is { } added)
+                await hotkeys.BeginEditAsync(added.Id, focusName: true).ConfigureAwait(true);
         };
         Hotkeys = hotkeys;
         Capture = capture;
@@ -63,7 +54,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool IsUploadersSelected => SelectedTab == SettingsTab.Uploaders;
     public bool IsHotkeysSelected   => SelectedTab == SettingsTab.Hotkeys;
     public bool IsCaptureSelected   => SelectedTab == SettingsTab.Capture;
-    public bool IsWorkflowsSelected => SelectedTab == SettingsTab.Workflows;
     public bool IsAboutSelected     => SelectedTab == SettingsTab.About;
 
     public string AppVersion { get; }
@@ -75,11 +65,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsUploadersSelected));
         OnPropertyChanged(nameof(IsHotkeysSelected));
         OnPropertyChanged(nameof(IsCaptureSelected));
-        OnPropertyChanged(nameof(IsWorkflowsSelected));
         OnPropertyChanged(nameof(IsAboutSelected));
         if (value == SettingsTab.Uploaders) _ = Uploaders.ReloadAsync();
         if (value == SettingsTab.Hotkeys) _ = Hotkeys.ReloadAsync();
-        if (value == SettingsTab.Workflows) _ = Workflows.ReloadWorkflowsAsync();
     }
 
     [RelayCommand] private void ShowHome()      => SelectedTab = SettingsTab.Home;
@@ -87,7 +75,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand] private void ShowUploaders() => SelectedTab = SettingsTab.Uploaders;
     [RelayCommand] private void ShowHotkeys()   => SelectedTab = SettingsTab.Hotkeys;
     [RelayCommand] private void ShowCapture()   => SelectedTab = SettingsTab.Capture;
-    [RelayCommand] private void ShowWorkflows() => SelectedTab = SettingsTab.Workflows;
     [RelayCommand] private void ShowAbout()     => SelectedTab = SettingsTab.About;
 
     private async Task LoadPluginsAsync()
@@ -102,4 +89,4 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 }
 
-public enum SettingsTab { Home, Plugins, Uploaders, Hotkeys, Capture, Workflows, About }
+public enum SettingsTab { Home, Plugins, Uploaders, Hotkeys, Capture, About }

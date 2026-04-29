@@ -17,9 +17,13 @@ public partial class HotkeyCaptureWindow : Window
     private IntPtr _hookHandle = IntPtr.Zero;
     private LowLevelKeyboardProc? _hookProc;
 
-    public HotkeyCaptureWindow()
+    public HotkeyCaptureWindow(bool canReset = false)
     {
         InitializeComponent();
+        // Reset is meaningful only for built-in workflows (which have a seeded default to
+        // restore); for custom workflows there's no default so we hide the button.
+        if (!canReset) ResetButton.Visibility = System.Windows.Visibility.Collapsed;
+
         // Install a low-level keyboard hook while recording so we see (and suppress) every key,
         // including OS-reserved combos like Win+Shift+S. WPF's PreviewKeyDown alone wouldn't
         // catch those — the shell handles them at a layer below WPF's input system, so by the
@@ -29,12 +33,17 @@ public partial class HotkeyCaptureWindow : Window
         CancelButton.Click += (_, _) => { DialogResult = false; Close(); };
         ClearButton.Click += (_, _) =>
         {
-            // Distinct from Cancel: caller checks ClearRequested and runs ClearAsync instead of
-            // UpdateAsync. DialogResult is still true (the user gave us an answer), but the
-            // captured combo is left at the default (None, 0) sentinel.
             ClearRequested = true;
             CapturedModifiers = HotkeyModifiers.None;
             CapturedVirtualKey = 0;
+            DialogResult = true;
+            Close();
+        };
+        ResetButton.Click += (_, _) =>
+        {
+            ResetRequested = true;
+            // We don't have the default values here — caller is the source of truth and runs
+            // ResetAsync against the seeded profile data. We just signal "reset" via the flag.
             DialogResult = true;
             Close();
         };
@@ -46,6 +55,9 @@ public partial class HotkeyCaptureWindow : Window
     /// <summary>True when the user clicked "Clear binding". Caller treats this as
     /// <c>ClearAsync</c> rather than <c>UpdateAsync</c>.</summary>
     public bool ClearRequested { get; private set; }
+
+    /// <summary>True when the user clicked "Reset to default". Caller runs <c>ResetAsync</c>.</summary>
+    public bool ResetRequested { get; private set; }
 
     private void InstallHook()
     {

@@ -51,16 +51,59 @@ public sealed partial class WorkflowsViewModel : ObservableObject
     public ObservableCollection<WorkflowOption> Workflows { get; }
     public WorkflowEditorViewModel Editor { get; }
 
+    /// <summary>Raised after a workflow is successfully deleted (only fires for custom — built-ins
+    /// can't be removed). HotkeysViewModel subscribes to drop the user back to the list view if
+    /// they were editing the just-deleted workflow.</summary>
+    public event EventHandler<string>? WorkflowDeleted;
+
+    /// <summary>Raised after a workflow's DisplayName is successfully renamed via the inline
+    /// editor. HotkeysViewModel subscribes to refresh its row list so the new name appears
+    /// without needing the user to click Back first.</summary>
+    public event EventHandler<string>? WorkflowDisplayNameChanged;
+
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(RenameWorkflowCommand))]
     [NotifyCanExecuteChangedFor(nameof(DuplicateWorkflowCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveWorkflowCommand))]
     private WorkflowOption? _selectedWorkflow;
 
+    /// <summary>Mirror of <see cref="SelectedWorkflow"/>'s DisplayName, bound 2-way to the inline
+    /// rename TextBox in the Hotkeys edit view. Persisted on commit via
+    /// <see cref="SaveDisplayNameAsync"/> (LostFocus / Enter).</summary>
+    [ObservableProperty]
+    private string _editingDisplayName = string.Empty;
+
+    private bool _suppressEditingDisplayNameSync;
+
     partial void OnSelectedWorkflowChanged(WorkflowOption? value)
     {
         if (value is null) return;
+        _suppressEditingDisplayNameSync = true;
+        EditingDisplayName = value.DisplayName;
+        _suppressEditingDisplayNameSync = false;
         _ = Editor.LoadAsync(value.Id);
+    }
+
+    /// <summary>Persist the inline-edited name. Called from the TextBox's LostFocus binding —
+    /// once per edit session, no debounce needed. No-ops when nothing changed.</summary>
+    public async Task SaveDisplayNameAsync()
+    {
+        if (_suppressEditingDisplayNameSync) return;
+        if (SelectedWorkflow is not { } current) return;
+        var trimmed = (EditingDisplayName ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(trimmed) || string.Equals(trimmed, current.DisplayName, StringComparison.Ordinal))
+        {
+            // Reject empty / unchanged. Snap the textbox back to the current name when empty.
+            _suppressEditingDisplayNameSync = true;
+            EditingDisplayName = current.DisplayName;
+            _suppressEditingDisplayNameSync = false;
+            return;
+        }
+        var profile = await _profiles.GetAsync(current.Id, CancellationToken.None).ConfigureAwait(true);
+        if (profile is null) return;
+        var updated = profile with { DisplayName = trimmed };
+        await _profiles.UpsertAsync(updated, CancellationToken.None).ConfigureAwait(true);
+        await ReloadWorkflowsAsync().ConfigureAwait(true);
+        WorkflowDisplayNameChanged?.Invoke(this, current.Id);
     }
 
     /// <summary>(Re)load the workflow list from the store. Tries to keep the current selection by
@@ -97,42 +140,27 @@ public sealed partial class WorkflowsViewModel : ObservableObject
     [RelayCommand]
     private async Task AddWorkflowAsync()
     {
-        var dialog = new WorkflowNameDialog("Add workflow", "New workflow")
-        {
-            Owner = Application.Current.MainWindow,
-        };
-        if (dialog.ShowDialog() != true) return;
+        // No modal — create with a default name and let the caller drop the user straight into
+        // edit view with the inline name field selected for immediate typing. If "New workflow"
+        // already exists we suffix with the next free number so the picker isn't ambiguous.
+        var baseName = "New workflow";
+        var existing = new HashSet<string>(Workflows.Select(w => w.DisplayName), StringComparer.OrdinalIgnoreCase);
+        var name = baseName;
+        var n = 2;
+        while (existing.Contains(name)) name = $"{baseName} {n++}";
 
         // Generate a stable, collision-free id. "custom-" prefix lets debug logs distinguish
         // user-created profiles at a glance from the kebab-case built-in ids.
         var id = $"custom-{Guid.NewGuid():N}";
         var profile = new PipelineProfile(
             Id: id,
-            DisplayName: dialog.ResultName,
+            DisplayName: name,
             Trigger: $"hotkey:{id}",
             Steps: [],
             IsBuiltIn: false);
         await _profiles.UpsertAsync(profile, CancellationToken.None).ConfigureAwait(true);
         await ReloadWorkflowsAsync().ConfigureAwait(true);
         SelectedWorkflow = Workflows.FirstOrDefault(w => w.Id == id);
-    }
-
-    [RelayCommand(CanExecute = nameof(HasSelection))]
-    private async Task RenameWorkflowAsync()
-    {
-        if (SelectedWorkflow is not { } current) return;
-        var dialog = new WorkflowNameDialog("Rename workflow", current.DisplayName)
-        {
-            Owner = Application.Current.MainWindow,
-        };
-        if (dialog.ShowDialog() != true) return;
-        if (string.Equals(dialog.ResultName, current.DisplayName, StringComparison.Ordinal)) return;
-
-        var profile = await _profiles.GetAsync(current.Id, CancellationToken.None).ConfigureAwait(true);
-        if (profile is null) return;
-        var updated = profile with { DisplayName = dialog.ResultName };
-        await _profiles.UpsertAsync(updated, CancellationToken.None).ConfigureAwait(true);
-        await ReloadWorkflowsAsync().ConfigureAwait(true);
     }
 
     [RelayCommand(CanExecute = nameof(HasSelection))]
@@ -177,6 +205,7 @@ public sealed partial class WorkflowsViewModel : ObservableObject
         _hotkeys.NotifyHotkeyRemoved(current.Id);
         await _profiles.DeleteAsync(current.Id, CancellationToken.None).ConfigureAwait(true);
         await ReloadWorkflowsAsync().ConfigureAwait(true);
+        WorkflowDeleted?.Invoke(this, current.Id);
     }
 
     [RelayCommand]

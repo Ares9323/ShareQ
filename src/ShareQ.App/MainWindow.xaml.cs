@@ -19,6 +19,17 @@ public partial class MainWindow : FluentWindow
     {
         InitializeComponent();
         DataContext = viewModel;
+        // Newly-added workflow: focus the inline name field and select its text so the user can
+        // type the real name straight away. Defer to a low-priority dispatcher tick because the
+        // edit-view's TextBox isn't realised until the visibility binding flips.
+        viewModel.Hotkeys.EditNameFocusRequested += (_, _) =>
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                WorkflowNameInline.Focus();
+                WorkflowNameInline.SelectAll();
+            }), System.Windows.Threading.DispatcherPriority.Loaded);
+        };
     }
 
     /// <summary>Builds the "+ Add step" categorized context menu on demand. Doing this in
@@ -198,6 +209,52 @@ public partial class MainWindow : FluentWindow
         if (e.Data.GetData(StepDragFormat) is not WorkflowStepViewModel source) return;
         e.Handled = true;
         DispatchDrop(vm, source);
+    }
+
+    // ── Inline workflow rename ──────────────────────────────────────────────────────────────
+    // The TextBox in edit-view is bound TwoWay to WorkflowsViewModel.EditingDisplayName with
+    // UpdateSourceTrigger=LostFocus, so the property mirrors what the user typed when focus
+    // leaves the box. We then call SaveDisplayNameAsync to persist (or Enter from the keyboard
+    // shortcut handler — also commits the focused TextBox first by moving focus to the parent).
+
+    private void OnWorkflowNameLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsViewModel vm) return;
+        _ = vm.Hotkeys.Workflows.SaveDisplayNameAsync();
+    }
+
+    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        // Esc while in workflow-edit view → Back to the hotkey list. Lives on the Window so it
+        // works regardless of which descendant has focus (clicking Edit on a row leaves focus
+        // on the now-hidden button, so a tighter scope wouldn't see the key).
+        if (e.Key != Key.Escape || e.Handled) return;
+        if (DataContext is not SettingsViewModel vm) return;
+        if (!vm.Hotkeys.IsEditingWorkflow) return;
+        // Move focus off the inline name TextBox (or whatever has it) so any pending edit is
+        // committed via LostFocus before BackToList awaits the save.
+        if (Keyboard.FocusedElement is FrameworkElement focused)
+        {
+            var scope = FocusManager.GetFocusScope(focused);
+            FocusManager.SetFocusedElement(scope, this);
+            Keyboard.ClearFocus();
+        }
+        vm.Hotkeys.BackToListCommand.Execute(null);
+        e.Handled = true;
+    }
+
+    private void OnWorkflowNameKeyDown(object sender, KeyEventArgs e)
+    {
+        // Enter on the inline name TextBox commits via LostFocus + stays in edit view. Only
+        // Esc bails back to the list — keeps the keystroke meaning consistent across forms.
+        if (e.Key != Key.Enter) return;
+        if (sender is FrameworkElement fe)
+        {
+            var scope = FocusManager.GetFocusScope(fe);
+            FocusManager.SetFocusedElement(scope, this);
+            Keyboard.ClearFocus();
+        }
+        e.Handled = true;
     }
 
     /// <summary>Common drop dispatcher: reads the indicator state set by the most recent DragOver

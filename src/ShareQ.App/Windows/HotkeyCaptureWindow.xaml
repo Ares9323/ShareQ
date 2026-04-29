@@ -29,14 +29,18 @@
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <!-- Clear lives on the left so it reads as a destructive/separate action — Cancel
-                 dismisses without changes, Clear actively removes the binding. -->
-            <Button Grid.Column="0" x:Name="ClearButton" Content="Clear binding" Width="120"
+            <!-- Left side: distinct/separate actions on the binding itself. Reset only shows for
+                 built-in workflows (which have a seeded default to restore). Cancel on the right
+                 dismisses without changes. -->
+            <Button Grid.Column="0" x:Name="ResetButton" Content="Reset to default" Width="130"
+                    HorizontalAlignment="Left" Margin="0,0,8,0" />
+            <Button Grid.Column="1" x:Name="ClearButton" Content="Clear binding" Width="120"
                     HorizontalAlignment="Left" />
-            <Button Grid.Column="2" x:Name="CancelButton" Content="Cancel" Width="80" />
+            <Button Grid.Column="3" x:Name="CancelButton" Content="Cancel" Width="80" />
         </Grid>
     </Grid>
 </Window>

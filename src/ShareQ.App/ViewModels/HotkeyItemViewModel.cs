@@ -47,30 +47,28 @@ public sealed partial class HotkeyItemViewModel : ObservableObject
     [RelayCommand]
     private async Task Rebind()
     {
-        var dialog = new HotkeyCaptureWindow { Owner = System.Windows.Application.Current.MainWindow };
+        var dialog = new HotkeyCaptureWindow(canReset: IsBuiltIn)
+        {
+            Owner = System.Windows.Application.Current.MainWindow,
+        };
         var ok = dialog.ShowDialog();
         if (ok != true) return;
 
-        // Clear-binding path: dialog returns success but with the (None, 0) sentinel and
-        // ClearRequested set. We route that to ClearAsync so the keyboard hook unregisters and
-        // the persisted Hotkey on the profile becomes null.
-        if (dialog.ClearRequested)
+        // Three exit paths from the dialog: a captured combo (Update), Clear, or Reset (built-ins
+        // only). Branch here so each one routes to the matching service call.
+        if (dialog.ResetRequested)
+        {
+            await _config.ResetAsync(Id, CancellationToken.None).ConfigureAwait(true);
+        }
+        else if (dialog.ClearRequested)
         {
             await _config.ClearAsync(Id, CancellationToken.None).ConfigureAwait(true);
-            UpdateBindingDisplay(new HotkeyDefinition(Id, HotkeyModifiers.None, 0));
         }
         else
         {
             await _config.UpdateAsync(Id, dialog.CapturedModifiers, dialog.CapturedVirtualKey, CancellationToken.None).ConfigureAwait(true);
-            UpdateBindingDisplay(new HotkeyDefinition(Id, dialog.CapturedModifiers, dialog.CapturedVirtualKey));
         }
-        _refreshList();
-    }
-
-    [RelayCommand]
-    private async Task ResetToDefault()
-    {
-        await _config.ResetAsync(Id, CancellationToken.None).ConfigureAwait(true);
+        // Re-read whatever ended up persisted so the row's BindingDisplay matches reality.
         var current = await _config.GetEffectiveAsync(Id, CancellationToken.None).ConfigureAwait(true);
         UpdateBindingDisplay(current);
         _refreshList();
