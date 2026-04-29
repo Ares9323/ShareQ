@@ -67,6 +67,17 @@ public sealed partial class EditorViewModel : ObservableObject
     [ObservableProperty]
     private TextStyle _currentTextStyle = TextStyle.Default;
 
+    /// <summary>Sticky default for the freehand tool's Smooth flag. New strokes inherit this;
+    /// the per-shape Smooth toggle in the properties panel also writes back here so the next
+    /// stroke gets whatever the user just chose. Persisted across sessions via EditorDefaults.</summary>
+    [ObservableProperty]
+    private bool _freehandSmoothDefault = true;
+
+    partial void OnFreehandSmoothDefaultChanged(bool value)
+    {
+        if (_tools.TryGetValue(EditorTool.Freehand, out var t) && t is FreehandTool fh) fh.SmoothStrokes = value;
+    }
+
     [ObservableProperty]
     private Shape? _selectedShape;
 

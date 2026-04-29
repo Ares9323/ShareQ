@@ -104,6 +104,8 @@ public partial class EditorWindow : FluentWindow
         SelEffectSecondaryBox.KeyDown += (_, ev) => { if (ev.Key == Key.Enter) OnSelEffectSecondaryBoxCommitted(); };
         SelRotationBox.LostFocus += (_, _) => OnSelRotationBoxCommitted();
         SelRotationBox.KeyDown += (_, ev) => { if (ev.Key == Key.Enter) OnSelRotationBoxCommitted(); };
+        SelFreehandSmoothCheck.Checked += (_, _) => OnSelFreehandSmoothChanged();
+        SelFreehandSmoothCheck.Unchecked += (_, _) => OnSelFreehandSmoothChanged();
 
         WireFontPicker();
         SelFontSizeSlider.ValueChanged += (_, _) => OnSelFontSizeSliderChanged();
@@ -902,6 +904,20 @@ public partial class EditorWindow : FluentWindow
         {
             _vm.LiveReplaceShape(s, ApplyStrokeWidth(s, width));
         }
+    }
+
+    private void OnSelFreehandSmoothChanged()
+    {
+        if (_suppressLiveUpdates) return;
+        var smooth = SelFreehandSmoothCheck.IsChecked == true;
+        foreach (var s in _vm.SelectedShapes.ToList())
+        {
+            if (s is FreehandShape f && f.Smooth != smooth)
+                _vm.LiveReplaceShape(s, f with { Smooth = smooth });
+        }
+        // Sticky: the next freshly-drawn freehand stroke inherits the user's last choice.
+        // The VM persists FreehandSmoothDefault to EditorDefaults on close.
+        _vm.FreehandSmoothDefault = smooth;
     }
 
     private void OnSelRotationSliderChanged()
@@ -1815,21 +1831,83 @@ public partial class EditorWindow : FluentWindow
 
     private static UIElement CreateFreehand(FreehandShape f)
     {
-        var poly = new System.Windows.Shapes.Polyline
+        UIElement element;
+        if (f.Smooth && f.Points.Count >= 3)
         {
-            Stroke = ToBrush(f.Outline),
-            StrokeThickness = f.StrokeWidth,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
-            StrokeLineJoin = PenLineJoin.Round
-        };
-        foreach (var (x, y) in f.Points) poly.Points.Add(new Point(x, y));
-        if (f.Rotation != 0)
+            // Smoothing pipeline:
+            //   1. Moving-average denoise (window 7, applied twice). Each point becomes the mean
+            //      of its 7-point neighbourhood — actively removes hand jitter, unlike Chaikin
+            //      which only rounds corners (and on dense mouse-captured points there are no
+            //      real corners to round). Two passes give a visible smoothing without flattening
+            //      the gesture entirely. Endpoints are preserved by the windowed clamp.
+            //   2. Catmull-Rom → cubic Bezier rendering through the denoised points so the
+            //      stroke looks like a continuous ink curve, not micro-segments.
+            var pts = MovingAverage(MovingAverage(f.Points, 7), 7);
+            var geom = new PathGeometry();
+            var fig = new PathFigure { StartPoint = new Point(pts[0].X, pts[0].Y) };
+            for (var i = 0; i < pts.Count - 1; i++)
+            {
+                var p0 = pts[Math.Max(0, i - 1)];
+                var p1 = pts[i];
+                var p2 = pts[i + 1];
+                var p3 = pts[Math.Min(pts.Count - 1, i + 2)];
+                var c1x = p1.X + (p2.X - p0.X) / 6.0;
+                var c1y = p1.Y + (p2.Y - p0.Y) / 6.0;
+                var c2x = p2.X - (p3.X - p1.X) / 6.0;
+                var c2y = p2.Y - (p3.Y - p1.Y) / 6.0;
+                fig.Segments.Add(new BezierSegment(new Point(c1x, c1y), new Point(c2x, c2y), new Point(p2.X, p2.Y), true));
+            }
+            geom.Figures.Add(fig);
+            element = new System.Windows.Shapes.Path
+            {
+                Data = geom,
+                Stroke = ToBrush(f.Outline),
+                StrokeThickness = f.StrokeWidth,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                StrokeLineJoin = PenLineJoin.Round
+            };
+        }
+        else
+        {
+            var poly = new System.Windows.Shapes.Polyline
+            {
+                Stroke = ToBrush(f.Outline),
+                StrokeThickness = f.StrokeWidth,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                StrokeLineJoin = PenLineJoin.Round
+            };
+            foreach (var (x, y) in f.Points) poly.Points.Add(new Point(x, y));
+            element = poly;
+        }
+        if (f.Rotation != 0 && element is FrameworkElement fe)
         {
             var (px, py) = f.Pivot;
-            poly.RenderTransform = new RotateTransform(f.Rotation, px, py);
+            fe.RenderTransform = new RotateTransform(f.Rotation, px, py);
         }
-        return poly;
+        return element;
+    }
+
+    /// <summary>Moving-average denoising. Each output point is the mean of its window-sized
+    /// neighbourhood in the input — a low-pass filter that removes hand jitter without changing
+    /// the overall direction of the stroke. The window clamps at the endpoints so the stroke
+    /// still starts where the user pressed and ends where they released.</summary>
+    private static IReadOnlyList<(double X, double Y)> MovingAverage(IReadOnlyList<(double X, double Y)> pts, int window)
+    {
+        if (pts.Count < 3 || window < 3) return pts;
+        var result = new List<(double X, double Y)>(pts.Count);
+        var half = window / 2;
+        for (var i = 0; i < pts.Count; i++)
+        {
+            var lo = Math.Max(0, i - half);
+            var hi = Math.Min(pts.Count - 1, i + half);
+            double sx = 0, sy = 0;
+            for (var j = lo; j <= hi; j++) { sx += pts[j].X; sy += pts[j].Y; }
+            var n = hi - lo + 1;
+            result.Add((sx / n, sy / n));
+        }
+        return result;
     }
 
     private static UIElement CreateText(TextShape t)
@@ -2169,6 +2247,16 @@ public partial class EditorWindow : FluentWindow
         // Rotation section: only single-selection of a rotatable shape (rect/ellipse/text/image).
         var rotatable = sels.Count == 1 && sels[0] is RectangleShape or EllipseShape or TextShape or ImageShape;
         SelRotationSection.Visibility = rotatable ? Visibility.Visible : Visibility.Collapsed;
+
+        // Freehand-specific: smooth toggle. Visible only on a single FreehandShape selection.
+        var singleFreehand = sels.Count == 1 ? sels[0] as FreehandShape : null;
+        SelFreehandSection.Visibility = singleFreehand is not null ? Visibility.Visible : Visibility.Collapsed;
+        if (singleFreehand is not null)
+        {
+            _suppressLiveUpdates = true;
+            SelFreehandSmoothCheck.IsChecked = singleFreehand.Smooth;
+            _suppressLiveUpdates = false;
+        }
 
         // Effect section: single-selection of an effect shape (blur/pixelate/spotlight).
         var isEffect = sels.Count == 1 && sels[0] is BlurShape or PixelateShape or SpotlightShape;

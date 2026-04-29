@@ -10,14 +10,15 @@ public sealed record EditorDefaults(
     ShapeColor Fill,
     double StrokeWidth,
     EditorTool Tool,
-    TextStyle TextStyle);
+    TextStyle TextStyle,
+    bool FreehandSmooth = true);
 
 public sealed class EditorDefaultsStore
 {
     private const string SettingsKey = "editor.defaults";
 
     public static readonly EditorDefaults Initial =
-        new(ShapeColor.Red, ShapeColor.Transparent, 2, EditorTool.Rectangle, TextStyle.Default);
+        new(ShapeColor.Red, ShapeColor.Transparent, 2, EditorTool.Rectangle, TextStyle.Default, FreehandSmooth: true);
 
     private readonly ISettingsStore _settings;
 
@@ -47,7 +48,8 @@ public sealed class EditorDefaultsStore
                 new ShapeColor(dto.FillA, dto.FillR, dto.FillG, dto.FillB),
                 dto.StrokeWidth,
                 Enum.IsDefined(typeof(EditorTool), dto.Tool) ? (EditorTool)dto.Tool : Initial.Tool,
-                new TextStyle(family, size, dto.Bold, dto.Italic, textColor, align));
+                new TextStyle(family, size, dto.Bold, dto.Italic, textColor, align),
+                FreehandSmooth: dto.FreehandSmooth);
         }
         catch (JsonException)
         {
@@ -67,7 +69,8 @@ public sealed class EditorDefaultsStore
             defaults.TextStyle.Bold,
             defaults.TextStyle.Italic,
             defaults.TextStyle.Color.A, defaults.TextStyle.Color.R, defaults.TextStyle.Color.G, defaults.TextStyle.Color.B,
-            (int)defaults.TextStyle.Align);
+            (int)defaults.TextStyle.Align,
+            defaults.FreehandSmooth);
         var json = JsonSerializer.Serialize(dto);
         await _settings.SetAsync(SettingsKey, json, sensitive: false, cancellationToken).ConfigureAwait(false);
     }
@@ -82,5 +85,8 @@ public sealed class EditorDefaultsStore
         bool Bold,
         bool Italic,
         byte TextColorA = 0, byte TextColorR = 0, byte TextColorG = 0, byte TextColorB = 0,
-        int Align = 0);
+        int Align = 0,
+        // Defaults to true so older payloads (pre-Smooth field) load with smoothing enabled —
+        // matches the new "smooth on by default" UX.
+        bool FreehandSmooth = true);
 }

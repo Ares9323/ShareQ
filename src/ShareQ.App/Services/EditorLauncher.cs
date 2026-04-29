@@ -71,12 +71,13 @@ public sealed class EditorLauncher
         vm.StrokeWidth = defaults.StrokeWidth;
         vm.CurrentTool = defaults.Tool;
         vm.CurrentTextStyle = defaults.TextStyle;
+        vm.FreehandSmoothDefault = defaults.FreehandSmooth;
         vm.ResetStepCounter();
         window.Owner = System.Windows.Application.Current.MainWindow;
         window.ShowDialog();
 
         await _defaultsStore.SaveAsync(
-            new EditorDefaults(vm.OutlineColor, vm.FillColor, vm.StrokeWidth, vm.CurrentTool, vm.CurrentTextStyle),
+            new EditorDefaults(vm.OutlineColor, vm.FillColor, vm.StrokeWidth, vm.CurrentTool, vm.CurrentTextStyle, vm.FreehandSmoothDefault),
             CancellationToken.None).ConfigureAwait(false);
 
         if (!window.Saved) return;
@@ -125,7 +126,7 @@ public sealed class EditorLauncher
             window.ShowDialog();
 
             _ = _defaultsStore.SaveAsync(
-                new EditorDefaults(vm.OutlineColor, vm.FillColor, vm.StrokeWidth, vm.CurrentTool, vm.CurrentTextStyle),
+                new EditorDefaults(vm.OutlineColor, vm.FillColor, vm.StrokeWidth, vm.CurrentTool, vm.CurrentTextStyle, vm.FreehandSmoothDefault),
                 CancellationToken.None);
 
             if (!window.Saved)
