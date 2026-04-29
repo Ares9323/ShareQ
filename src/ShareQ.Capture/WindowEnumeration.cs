@@ -1,41 +1,127 @@
+using System.Drawing;
 using System.Runtime.InteropServices;
 
 namespace ShareQ.Capture;
 
 public sealed record WindowSnapshot(string Title, int X, int Y, int Width, int Height);
 
-/// <summary>Enumerates top-level visible windows (filtered like ShareX: skip cloaked, skip pure
-/// tool windows). Used by the region picker to snap the selection to a real app window.</summary>
+/// <summary>
+/// Window + child-control enumeration used by the region picker, ported 1:1 from ShareX's
+/// <c>WindowsRectangleList</c> (ShareX.ScreenCaptureLib). The semantics:
+///   - top-level windows enumerated z-order topmost first;
+///   - for each top-level we recurse into its descendants (every child control), clipped to
+///     the top-level's rect — these come BEFORE the parent in the list so the picker's
+///     <c>FirstOrDefault</c> hits the most specific child first;
+///   - for each top-level we also add its client rect (the inner area without title bar /
+///     borders) when it's different from the window rect — same as ShareX;
+///   - top-level windows use DWM's <c>DWMWA_EXTENDED_FRAME_BOUNDS</c> (when available) instead
+///     of <c>GetWindowRect</c> so the resizing border on Win10/11 is excluded;
+///   - de-dup pass: a child rect that's fully contained by an already-added result entry is
+///     skipped (avoids inner controls of a window behind the topmost cluttering the list).
+/// </summary>
 public static class WindowEnumeration
 {
+    /// <summary>Internal record carrying the IsWindow flag we need for the ShareX-style dedup.
+    /// Kept private so the public surface stays a flat list of <see cref="WindowSnapshot"/>.</summary>
+    private sealed record WindowEntry(IntPtr Handle, Rectangle Rectangle, bool IsWindow, string Title);
+
     public static IReadOnlyList<WindowSnapshot> EnumerateVisibleWindows()
     {
-        var list = new List<WindowSnapshot>();
+        var raw = new List<WindowEntry>();
+        var visited = new HashSet<IntPtr>();
+
         EnumWindows((hWnd, _) =>
         {
-            try
-            {
-                if (!IsWindowVisible(hWnd)) return true;
-                if (IsCloaked(hWnd)) return true;
-                if (IsToolNoActivate(hWnd)) return true;
-                if (!GetWindowRect(hWnd, out var r)) return true;
-                var w = r.Right - r.Left;
-                var h = r.Bottom - r.Top;
-                if (w <= 1 || h <= 1) return true;
-
-                var title = GetWindowTitle(hWnd);
-                if (string.IsNullOrEmpty(title)) return true;
-
-                list.Add(new WindowSnapshot(title, r.Left, r.Top, w, h));
-            }
-            catch { /* keep enumerating regardless of one bad window */ }
+            try { CheckHandle(hWnd, parentClip: null, parentTitle: null, raw, visited); }
+            catch { /* one bad window doesn't kill the rest */ }
             return true;
         }, IntPtr.Zero);
-        return list;
+
+        // Dedup pass — same as ShareX: skip child rects that are fully contained by an entry
+        // already in the result. Keeps top-levels always (IsWindow), drops redundant inner
+        // children of windows behind the topmost.
+        var result = new List<WindowEntry>(raw.Count);
+        foreach (var w in raw)
+        {
+            var visible = true;
+            if (!w.IsWindow)
+            {
+                foreach (var seen in result)
+                {
+                    if (seen.Rectangle.Contains(w.Rectangle))
+                    {
+                        visible = false;
+                        break;
+                    }
+                }
+            }
+            if (visible) result.Add(w);
+        }
+
+        return result.Select(e => new WindowSnapshot(
+            e.Title,
+            e.Rectangle.X,
+            e.Rectangle.Y,
+            e.Rectangle.Width,
+            e.Rectangle.Height)).ToList();
     }
 
-    /// <summary>Find the topmost window that contains the given screen-pixel point. Topmost = first
-    /// in EnumWindows z-order that contains the point. Returns null if none.</summary>
+    private static void CheckHandle(IntPtr handle, Rectangle? parentClip, string? parentTitle, List<WindowEntry> windows, HashSet<IntPtr> visited)
+    {
+        var isWindow = parentClip is null;
+
+        if (!IsWindowVisible(handle)) return;
+        if (isWindow && IsWindowCloaked(handle)) return;
+        if (isWindow && IsToolNoActivate(handle)) return;
+
+        // Resolve the rect: top-levels go through DWM extended-frame-bounds (excludes the
+        // invisible resize border on Win10/11); children just use GetWindowRect clipped to
+        // parent. ShareX doesn't filter by title — empty-titled top-levels still get added so
+        // we match. The IsWindowVisible / cloaked / tool filters above are enough to keep the
+        // list clean.
+        Rectangle rect;
+        string title;
+        if (isWindow)
+        {
+            rect = GetWindowRectangle(handle);
+            title = GetWindowTitle(handle);
+        }
+        else
+        {
+            if (!GetWindowRectRaw(handle, out var r)) return;
+            rect = Rectangle.Intersect(new Rectangle(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top), parentClip!.Value);
+            title = parentTitle ?? string.Empty;
+        }
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+
+        // Recurse into children FIRST so they appear before the parent in the final list →
+        // FirstOrDefault picks the deepest matching child before falling back to the parent.
+        if (visited.Add(handle))
+        {
+            EnumChildWindows(handle, (childHwnd, _) =>
+            {
+                try { CheckHandle(childHwnd, rect, title, windows, visited); }
+                catch { }
+                return true;
+            }, IntPtr.Zero);
+        }
+
+        // For top-levels also add the client rect (inside title bar / borders) when it differs
+        // from the window rect — gives users a "client-area only" snap target the same way
+        // ShareX does.
+        if (isWindow)
+        {
+            var clientRect = GetClientAreaRect(handle);
+            if (clientRect.Width > 0 && clientRect.Height > 0 && clientRect != rect)
+                windows.Add(new WindowEntry(handle, clientRect, IsWindow: false, title));
+        }
+
+        windows.Add(new WindowEntry(handle, rect, isWindow, title));
+    }
+
+    /// <summary>Find the visible window/child rect at the given screen-pixel point. FirstOrDefault
+    /// matching honours the build order: deepest children first within the topmost window, then
+    /// down through z-order — so a child of an occluded window never beats the foreground app.</summary>
     public static WindowSnapshot? FindWindowAt(int x, int y, IReadOnlyList<WindowSnapshot> windows)
     {
         foreach (var w in windows)
@@ -43,6 +129,65 @@ public static class WindowEnumeration
             if (x >= w.X && x < w.X + w.Width && y >= w.Y && y < w.Y + w.Height) return w;
         }
         return null;
+    }
+
+    // ── Win32 helpers ────────────────────────────────────────────────────────────────────
+
+    /// <summary>Same as ShareX's <c>CaptureHelpers.GetWindowRectangle</c>: prefer DWM extended
+    /// frame bounds (excludes the invisible resize border on Win10/11); fall back to GetWindowRect.</summary>
+    private static Rectangle GetWindowRectangle(IntPtr handle)
+    {
+        if (IsDwmEnabled() && GetExtendedFrameBounds(handle, out var dwmRect))
+            return dwmRect;
+        if (GetWindowRectRaw(handle, out var r))
+            return new Rectangle(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
+        return Rectangle.Empty;
+    }
+
+    private static bool GetExtendedFrameBounds(IntPtr handle, out Rectangle rect)
+    {
+        // DWMWA_EXTENDED_FRAME_BOUNDS = 9
+        var hr = DwmGetWindowAttribute(handle, 9, out RECT raw, Marshal.SizeOf<RECT>());
+        if (hr == 0)
+        {
+            rect = new Rectangle(raw.Left, raw.Top, raw.Right - raw.Left, raw.Bottom - raw.Top);
+            return true;
+        }
+        rect = Rectangle.Empty;
+        return false;
+    }
+
+    private static Rectangle GetClientAreaRect(IntPtr handle)
+    {
+        if (!GetClientRect(handle, out var r)) return Rectangle.Empty;
+        var pt = new POINT { X = 0, Y = 0 };
+        ClientToScreen(handle, ref pt);
+        return new Rectangle(pt.X, pt.Y, r.Right - r.Left, r.Bottom - r.Top);
+    }
+
+    private static bool GetWindowRectRaw(IntPtr handle, out RECT rect) => GetWindowRectNative(handle, out rect);
+
+    private static bool IsDwmEnabled()
+    {
+        var hr = DwmIsCompositionEnabled(out var enabled);
+        return hr == 0 && enabled;
+    }
+
+    private static bool IsWindowCloaked(IntPtr hWnd)
+    {
+        // DWMWA_CLOAKED = 14
+        if (!IsDwmEnabled()) return false;
+        if (DwmGetWindowAttribute(hWnd, 14, out int cloaked, sizeof(int)) == 0)
+            return cloaked != 0;
+        return false;
+    }
+
+    private static bool IsToolNoActivate(IntPtr hWnd)
+    {
+        const long WS_EX_TOOLWINDOW = 0x00000080L;
+        const long WS_EX_NOACTIVATE = 0x08000000L;
+        var ex = GetWindowLongPtr(hWnd, -20).ToInt64(); // GWL_EXSTYLE
+        return (ex & WS_EX_TOOLWINDOW) != 0 && (ex & WS_EX_NOACTIVATE) != 0;
     }
 
     private static string GetWindowTitle(IntPtr hWnd)
@@ -58,26 +203,11 @@ public static class WindowEnumeration
         return copied <= 0 ? string.Empty : new string(buf, 0, copied);
     }
 
-    private static bool IsCloaked(IntPtr hWnd)
-    {
-        // DWMWA_CLOAKED = 14
-        if (DwmGetWindowAttribute(hWnd, 14, out var cloaked, sizeof(int)) == 0)
-        {
-            return cloaked != 0;
-        }
-        return false;
-    }
-
-    private static bool IsToolNoActivate(IntPtr hWnd)
-    {
-        const long WS_EX_TOOLWINDOW = 0x00000080L;
-        const long WS_EX_NOACTIVATE = 0x08000000L;
-        var ex = GetWindowLongPtr(hWnd, -20).ToInt64(); // GWL_EXSTYLE
-        return (ex & WS_EX_TOOLWINDOW) != 0 && (ex & WS_EX_NOACTIVATE) != 0;
-    }
-
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT { public int Left, Top, Right, Bottom; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X, Y; }
 
     private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
@@ -87,11 +217,23 @@ public static class WindowEnumeration
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsWindowVisible(IntPtr hWnd);
+    private static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowRect")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRectNative(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetWindowTextLength(IntPtr hWnd);
@@ -104,4 +246,10 @@ public static class WindowEnumeration
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
+
+    [DllImport("dwmapi.dll", PreserveSig = false)]
+    private static extern int DwmIsCompositionEnabled(out bool pfEnabled);
 }

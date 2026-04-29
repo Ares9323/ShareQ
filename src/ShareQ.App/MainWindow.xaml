@@ -9,8 +9,16 @@
                  MinWidth="640" MinHeight="420"
                  WindowStartupLocation="CenterScreen"
                  WindowBackdropType="Mica"
-                 ExtendsContentIntoTitleBar="True"
-                 PreviewKeyDown="OnWindowPreviewKeyDown">
+                 ExtendsContentIntoTitleBar="True">
+    <ui:FluentWindow.InputBindings>
+        <!-- Esc anywhere in the app routes to BackToList. The command's CanExecute is gated on
+             IsEditingWorkflow, so this is a no-op when not in edit view. KeyBindings sit on the
+             Window's command routing layer and fire regardless of which descendant has focus —
+             unlike KeyDown handlers which require focus to be inside the listening element. The
+             inline rename TextBox swallows Esc (e.Handled=true) so it doesn't bubble out and
+             trigger this binding while the user is still typing the name. -->
+        <KeyBinding Key="Escape" Command="{Binding Hotkeys.BackToListCommand}" />
+    </ui:FluentWindow.InputBindings>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />

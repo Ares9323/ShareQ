@@ -20,12 +20,14 @@
                        StrokeThickness="1"
                        Fill="Transparent"
                        Visibility="Collapsed" />
-            <!-- Snap-preview rectangle highlighting the window under the cursor (visible only while idle). -->
+            <!-- Snap-preview rectangle highlighting the window under the cursor (visible only
+                 while idle). Outline only — no fill — same look ShareX uses; a tinted fill makes
+                 the preview feel intrusive when the user is just hovering. -->
             <Rectangle x:Name="SnapRect"
                        Stroke="#FFD000"
                        StrokeThickness="2"
                        StrokeDashArray="4,3"
-                       Fill="#1AFFD000"
+                       Fill="Transparent"
                        Visibility="Collapsed"
                        IsHitTestVisible="False" />
             <Border x:Name="SizeLabelBorder"

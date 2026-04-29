@@ -219,41 +219,29 @@ public partial class MainWindow : FluentWindow
 
     private void OnWorkflowNameLostFocus(object sender, RoutedEventArgs e)
     {
+        // Single point where the inline rename gets persisted. Forces the binding to push the
+        // typed text into EditingDisplayName right now (UpdateSource is a no-op when the binding
+        // already committed via UpdateSourceTrigger=LostFocus, but we run it explicitly so the
+        // ordering doesn't matter), then kicks off the save.
+        if (sender is System.Windows.Controls.TextBox tb)
+        {
+            var be = tb.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty);
+            be?.UpdateSource();
+        }
         if (DataContext is not SettingsViewModel vm) return;
         _ = vm.Hotkeys.Workflows.SaveDisplayNameAsync();
     }
 
-    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        // Esc while in workflow-edit view → Back to the hotkey list. Lives on the Window so it
-        // works regardless of which descendant has focus (clicking Edit on a row leaves focus
-        // on the now-hidden button, so a tighter scope wouldn't see the key).
-        if (e.Key != Key.Escape || e.Handled) return;
-        if (DataContext is not SettingsViewModel vm) return;
-        if (!vm.Hotkeys.IsEditingWorkflow) return;
-        // Move focus off the inline name TextBox (or whatever has it) so any pending edit is
-        // committed via LostFocus before BackToList awaits the save.
-        if (Keyboard.FocusedElement is FrameworkElement focused)
-        {
-            var scope = FocusManager.GetFocusScope(focused);
-            FocusManager.SetFocusedElement(scope, this);
-            Keyboard.ClearFocus();
-        }
-        vm.Hotkeys.BackToListCommand.Execute(null);
-        e.Handled = true;
-    }
-
     private void OnWorkflowNameKeyDown(object sender, KeyEventArgs e)
     {
-        // Enter on the inline name TextBox commits via LostFocus + stays in edit view. Only
-        // Esc bails back to the list — keeps the keystroke meaning consistent across forms.
-        if (e.Key != Key.Enter) return;
-        if (sender is FrameworkElement fe)
-        {
-            var scope = FocusManager.GetFocusScope(fe);
-            FocusManager.SetFocusedElement(scope, this);
-            Keyboard.ClearFocus();
-        }
+        // Enter or first Esc on the inline rename: shift focus to the next focusable element.
+        // That triggers the TextBox's natural LostFocus → OnWorkflowNameLostFocus runs and
+        // commits the rename. After the focus move there's a real focused element receiving
+        // keystrokes, so a subsequent Esc bubbles to the Window's KeyBinding and navigates back.
+        // Marking e.Handled is what stops THIS Esc from also triggering the Window KeyBinding.
+        if (e.Key is not (Key.Enter or Key.Escape)) return;
+        if (sender is not System.Windows.Controls.TextBox tb) return;
+        tb.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
         e.Handled = true;
     }
 

@@ -50,6 +50,7 @@ public sealed partial class HotkeysViewModel : ObservableObject
     /// <summary>True when the user has clicked Edit on a row → the list view is hidden and the
     /// edit view replaces it. Back returns to false.</summary>
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(BackToListCommand))]
     private bool _isEditingWorkflow;
 
     /// <summary>Raised by the "+ Add custom workflow" button. Caller (Settings VM) runs the
@@ -102,7 +103,9 @@ public sealed partial class HotkeysViewModel : ObservableObject
         if (focusName) EditNameFocusRequested?.Invoke(this, EventArgs.Empty);
     }
 
-    [RelayCommand]
+    private bool CanGoBack() => IsEditingWorkflow;
+
+    [RelayCommand(CanExecute = nameof(CanGoBack))]
     private async Task BackToList()
     {
         // Commit any pending inline rename FIRST. The TextBox's LostFocus fires when the user
