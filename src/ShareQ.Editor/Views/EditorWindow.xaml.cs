@@ -131,16 +131,45 @@ public partial class EditorWindow : FluentWindow
                 return null;
             };
         };
-        Closing += (_, _) =>
-        {
-            CommitInlineTextEdit();
-            CommitPendingLiveEdit();
-            ColorSwatchButton.EyedropperHandler = null;
-            CancelEyedropper();
-        };
+        Closing += OnClosing;
     }
 
     public bool Saved { get; private set; }
+
+    private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        // Cleanup that runs whichever path closes the window.
+        CommitInlineTextEdit();
+        CommitPendingLiveEdit();
+
+        // Skip the prompt when the user explicitly clicked Save (Saved=true) or when nothing was
+        // changed. Cancel button + the X button + Alt+F4 all land here with Saved=false; if there
+        // are unsaved changes we ask for confirmation. Yes saves and closes, No discards and
+        // closes, Cancel keeps the editor open.
+        if (!Saved && _vm.HasUnsavedChanges)
+        {
+            var result = System.Windows.MessageBox.Show(
+                "The image has unsaved changes. Save before closing?",
+                "ShareQ editor",
+                System.Windows.MessageBoxButton.YesNoCancel,
+                System.Windows.MessageBoxImage.Warning,
+                System.Windows.MessageBoxResult.Yes);
+            if (result == System.Windows.MessageBoxResult.Cancel)
+            {
+                e.Cancel = true;
+                return;
+            }
+            if (result == System.Windows.MessageBoxResult.Yes)
+            {
+                Saved = true;
+                _vm.MarkSaved();
+            }
+            // No → fall through and close without saving.
+        }
+
+        ColorSwatchButton.EyedropperHandler = null;
+        CancelEyedropper();
+    }
 
     private void LoadSourceImage()
     {
@@ -272,7 +301,12 @@ public partial class EditorWindow : FluentWindow
         }
     }
 
-    private void OnSaveClicked(object sender, RoutedEventArgs e) { Saved = true; Close(); }
+    private void OnSaveClicked(object sender, RoutedEventArgs e)
+    {
+        Saved = true;
+        _vm.MarkSaved(); // belt-and-braces: the Closing handler also bypasses the prompt when Saved=true
+        Close();
+    }
     private void OnCancelClicked(object sender, RoutedEventArgs e) { Saved = false; Close(); }
 
     private void OnZoomInClicked(object sender, RoutedEventArgs e) => SetZoom(_zoom * 1.25);

@@ -92,20 +92,13 @@
                 <TextBlock Grid.Row="0" Text="Plugins" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
                 <TextBlock Grid.Row="1" Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
                            Text="Toggle plugins on or off. Built-in plugins ship with ShareQ. External plugins live under %LOCALAPPDATA%\ShareQ\plugins\." />
-                <ListBox Grid.Row="2"
-                         ItemsSource="{Binding Plugins}"
-                         Background="Transparent"
-                         BorderThickness="0"
-                         FocusVisualStyle="{x:Null}">
-                    <ListBox.ItemContainerStyle>
-                        <Style TargetType="ListBoxItem">
-                            <Setter Property="Padding" Value="0" />
-                            <Setter Property="Margin" Value="0" />
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                            <Setter Property="BorderThickness" Value="0" />
-                        </Style>
-                    </ListBox.ItemContainerStyle>
-                    <ListBox.ItemTemplate>
+                <!-- ItemsControl (not ListBox) — there's no selection state to render here, each
+                     row is its own self-styled Border. ListBox would wrap items in ListBoxItems
+                     and paint its own #202020 chrome around the list (visible as a sharp-cornered
+                     area below the last row). ItemsControl renders just the items, period. -->
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding Plugins}">
+                    <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:PluginItemViewModel}">
                             <Border Margin="0,0,0,8" Padding="14,10" Background="#1A1A1A"
                                     BorderBrush="#333" BorderThickness="1" CornerRadius="6">
@@ -142,8 +135,9 @@
                                 </Grid>
                             </Border>
                         </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                    </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
             </Grid>
 
             <!-- Uploaders -->

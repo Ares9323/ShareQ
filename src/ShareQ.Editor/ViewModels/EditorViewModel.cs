@@ -38,6 +38,14 @@ public sealed partial class EditorViewModel : ObservableObject
 
     public ObservableCollection<Shape> Shapes { get; }
 
+    /// <summary>True when the document has been modified since the last save / reset. Drives
+    /// the close-confirmation prompt in <see cref="Views.EditorWindow"/>.</summary>
+    public bool HasUnsavedChanges => _commands.IsDirty;
+
+    /// <summary>Clear the dirty flag — called by the editor window after a successful Save so
+    /// the close prompt doesn't fire on the way out.</summary>
+    public void MarkSaved() => _commands.MarkSaved();
+
     [ObservableProperty]
     private byte[] _sourcePngBytes = [];
 
