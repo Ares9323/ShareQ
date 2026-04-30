@@ -17,7 +17,13 @@ public partial class PopupWindow : Window
     private const string SizeWidthKey = "popup.size.width";
     private const string SizeHeightKey = "popup.size.height";
     private const string PreviewWidthKey = "popup.preview.width";
+    private const string PositionLeftKey = "popup.position.left";
+    private const string PositionTopKey  = "popup.position.top";
     private bool _sizeRestored;
+    /// <summary>True when the previous session saved a position. Read by
+    /// <see cref="PopupWindowController"/> so it can skip its cursor-repositioning logic and
+    /// honor the user's last placement instead.</summary>
+    public bool HasPersistedPosition { get; private set; }
 
     public PopupWindow(PopupWindowViewModel viewModel, ISettingsStore settings)
     {
@@ -25,13 +31,20 @@ public partial class PopupWindow : Window
         DataContext = viewModel;
         ViewModel = viewModel;
         _settings = settings;
+        ShareQ.App.Services.DarkTitleBar.ApplyRoundedCorners(this);
 
         Loaded += OnLoaded;
-        Deactivated += (_, _) => Hide();
+        // No "hide on deactivate" — the popup now persists until the user explicitly closes it
+        // (X button, Esc, or pasting an item via the AutoPaster path). Lets the user click into
+        // other apps without losing the popup, e.g. to drag-drop content out.
         // PreviewKeyDown (tunneling) so the Window sees Ctrl+digits before the SearchBox swallows them.
         PreviewKeyDown += OnKeyDown;
         ResultsList.MouseDoubleClick += OnResultsListDoubleClick;
         SizeChanged += OnSizeChanged;
+        // Save the user's position on every move so the next open lands at the same spot.
+        // The popup is hidden (not destroyed) so LocationChanged fires only on real drags
+        // initiated via DragHandle — exactly what we want to persist.
+        LocationChanged += OnLocationChanged;
         // GridSplitter drags don't trigger the window's SizeChanged — listen on the preview pane
         // itself so we capture both window resizes and splitter drags.
         PreviewPane.SizeChanged += OnPreviewPaneSizeChanged;
@@ -74,9 +87,42 @@ public partial class PopupWindow : Window
             {
                 PreviewColumn.Width = new GridLength(Math.Max(PreviewColumn.MinWidth, previewWidth), GridUnitType.Pixel);
             }
+
+            // Restore last position if we saved one. Validate against the virtual screen so a
+            // disconnected monitor between sessions doesn't open the window off-screen — fall
+            // back to the controller's cursor-positioning logic in that case.
+            var lx = await _settings.GetAsync(PositionLeftKey, CancellationToken.None).ConfigureAwait(true);
+            var ly = await _settings.GetAsync(PositionTopKey,  CancellationToken.None).ConfigureAwait(true);
+            if (lx is not null && double.TryParse(lx, NumberStyles.Float, CultureInfo.InvariantCulture, out var savedLeft)
+                && ly is not null && double.TryParse(ly, NumberStyles.Float, CultureInfo.InvariantCulture, out var savedTop)
+                && IsOnVirtualScreen(savedLeft, savedTop))
+            {
+                Left = savedLeft;
+                Top  = savedTop;
+                HasPersistedPosition = true;
+            }
         }
         catch { /* settings unavailable — keep defaults */ }
         _sizeRestored = true;
+    }
+
+    private static bool IsOnVirtualScreen(double left, double top)
+    {
+        var rect = new Rect(left, top, 40, 40);
+        var virt = new Rect(
+            SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop,
+            SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
+        return virt.IntersectsWith(rect);
+    }
+
+    private void OnLocationChanged(object? sender, EventArgs e)
+    {
+        if (!_sizeRestored) return;
+        var l = Left.ToString(CultureInfo.InvariantCulture);
+        var t = Top.ToString(CultureInfo.InvariantCulture);
+        _ = _settings.SetAsync(PositionLeftKey, l, sensitive: false, CancellationToken.None);
+        _ = _settings.SetAsync(PositionTopKey,  t, sensitive: false, CancellationToken.None);
+        HasPersistedPosition = true;
     }
 
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)

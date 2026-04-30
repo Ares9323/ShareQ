@@ -16,7 +16,7 @@
         <!-- Magnifier panel: zoomed 11×11 region + crosshair + color readout. -->
         <Border x:Name="MagnifierBorder"
                 Width="160" Height="200"
-                Background="#1F1F1F"
+                Background="{DynamicResource Surface2Brush}"
                 BorderBrush="#80FFFFFF"
                 BorderThickness="1"
                 CornerRadius="4">

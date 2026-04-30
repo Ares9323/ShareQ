@@ -32,4 +32,24 @@ public static partial class DarkTitleBar
             }
         };
     }
+
+    /// <summary>Request rounded corners from the desktop window manager. Win11 (build 22000+)
+    /// honours DWMWA_WINDOW_CORNER_PREFERENCE = ROUND; older Windows ignore the call. Lets us
+    /// have rounded chrome without giving up <c>AllowsTransparency=False</c> (which is what a
+    /// pure WPF Border CornerRadius would require). Safe to call on any Window.</summary>
+    public static void ApplyRoundedCorners(Window window)
+    {
+        window.SourceInitialized += (_, _) =>
+        {
+            var hwnd = new WindowInteropHelper(window).Handle;
+            if (hwnd == IntPtr.Zero) return;
+            int rounded = DWMWCP_ROUND;
+            // Return value < 0 means the attribute isn't supported on this Windows version —
+            // ignore (no rounded corners on Win10, but the window still works).
+            _ = DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref rounded, sizeof(int));
+        };
+    }
+
+    private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;   // Win11 build 22000+
+    private const int DWMWCP_ROUND = 2;                      // round on a small radius
 }

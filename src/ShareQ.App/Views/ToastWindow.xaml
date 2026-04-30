@@ -11,7 +11,7 @@
         Width="340" SizeToContent="Height"
         ResizeMode="NoResize">
     <Border x:Name="Root"
-            Background="#2A2A2A"
+            Background="{DynamicResource Surface3Brush}"
             BorderBrush="#404040"
             BorderThickness="1"
             CornerRadius="6"

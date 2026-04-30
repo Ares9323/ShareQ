@@ -57,7 +57,7 @@
 
             <!-- Magnifier panel near the cursor: zoomed preview + cursor coords underneath -->
             <Border x:Name="MagnifierBorder"
-                    Background="#1F1F1F"
+                    Background="{DynamicResource Surface2Brush}"
                     BorderBrush="#80FFFFFF"
                     BorderThickness="1"
                     CornerRadius="4"

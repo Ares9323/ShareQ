@@ -298,7 +298,7 @@ public partial class MainWindow : FluentWindow
     /// code-behind (rather than the VM) so we don't drag <see cref="ColorPickerWindow"/> — a UI
     /// type — into the view-model layer. The hex assignment fires the existing TryApply path
     /// which propagates colors live across the app.</summary>
-    private enum AccentChannel { Background, Foreground, Dark }
+    private enum AccentChannel { Background, Foreground, Dark, Surface1, Surface2, Surface3 }
 
     private void OnAccentBgSwatchClick(object sender, MouseButtonEventArgs e)
         => PickAccentColor(AccentChannel.Background);
@@ -309,6 +309,15 @@ public partial class MainWindow : FluentWindow
     private void OnAccentDarkSwatchClick(object sender, MouseButtonEventArgs e)
         => PickAccentColor(AccentChannel.Dark);
 
+    private void OnSurface1SwatchClick(object sender, MouseButtonEventArgs e)
+        => PickAccentColor(AccentChannel.Surface1);
+
+    private void OnSurface2SwatchClick(object sender, MouseButtonEventArgs e)
+        => PickAccentColor(AccentChannel.Surface2);
+
+    private void OnSurface3SwatchClick(object sender, MouseButtonEventArgs e)
+        => PickAccentColor(AccentChannel.Surface3);
+
     private void PickAccentColor(AccentChannel channel)
     {
         if (DataContext is not SettingsViewModel vm) return;
@@ -317,6 +326,9 @@ public partial class MainWindow : FluentWindow
             AccentChannel.Background => vm.Theme.AccentBackgroundHex,
             AccentChannel.Foreground => vm.Theme.AccentForegroundHex,
             AccentChannel.Dark       => vm.Theme.AccentBackgroundDarkHex,
+            AccentChannel.Surface1   => vm.Theme.Surface1Hex,
+            AccentChannel.Surface2   => vm.Theme.Surface2Hex,
+            AccentChannel.Surface3   => vm.Theme.Surface3Hex,
             _ => vm.Theme.AccentBackgroundHex,
         };
         var fallback = channel == AccentChannel.Foreground
@@ -359,6 +371,9 @@ public partial class MainWindow : FluentWindow
             case AccentChannel.Background: vm.Theme.AccentBackgroundHex = hex2; break;
             case AccentChannel.Foreground: vm.Theme.AccentForegroundHex = hex2; break;
             case AccentChannel.Dark:       vm.Theme.AccentBackgroundDarkHex = hex2; break;
+            case AccentChannel.Surface1:   vm.Theme.Surface1Hex = hex2; break;
+            case AccentChannel.Surface2:   vm.Theme.Surface2Hex = hex2; break;
+            case AccentChannel.Surface3:   vm.Theme.Surface3Hex = hex2; break;
         }
         // Push to recents so the colour shows up next time the user opens any picker.
         _ = _colorRecents.PushAsync(picked, System.Threading.CancellationToken.None);

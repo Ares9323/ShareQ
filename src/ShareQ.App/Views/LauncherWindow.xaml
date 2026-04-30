@@ -32,7 +32,7 @@
             <MenuItem Header="Delete"             Click="OnMenuDelete" />
         </ContextMenu>
     </Window.Resources>
-    <Border Background="#F0181818" CornerRadius="8"
+    <Border Background="{DynamicResource Surface2Brush}" CornerRadius="8"
             BorderBrush="#404040" BorderThickness="1">
         <!-- Outer wrapper grid: holds the main content + the resize thumb. The thumb sits on the
              outer card's bottom-right corner (not buried inside the inner padding) and only
@@ -59,22 +59,41 @@
                   Background="#01000000"
                   MouseLeftButtonDown="OnChromeMouseDown">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="220" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="220" />
                 </Grid.ColumnDefinitions>
-                <TextBlock x:Name="DragModeBanner" Grid.Column="0"
+                <!-- ShareQ brand: small icon + name on the left of the header. Vector source
+                     reused from the Home tab so it stays sharp at the 24px chrome size. -->
+                <Viewbox Grid.Column="0" Width="24" Height="24" Margin="0,0,8,0" VerticalAlignment="Center">
+                    <Canvas Width="1024" Height="1024">
+                        <Path Fill="#231f20" Data="M446.99,701.31l-2.4-2.08c-33.6-29.05-61.01-64.42-81.47-105.12-21.84-43.44-35.24-92.04-39.82-144.46l-.28-3.18,2.1-2.4c29.09-33.37,64.44-60.58,105.08-80.88,43.36-21.66,91.84-34.93,144.1-39.44l3.17-.27,2.4,2.09c33.48,29.17,60.76,64.63,81.08,105.4,21.7,43.52,34.95,92.18,39.38,144.64l.27,3.17-2.1,2.4c-29.05,33.2-64.31,60.29-104.81,80.5-43.2,21.56-91.5,34.8-143.55,39.35l-3.16.28ZM338.54,451.54c9.08,95.87,48.26,176.75,113.48,234.26,95.17-9,175.63-47.71,233.09-112.11-8.81-95.94-47.72-176.96-112.7-234.71-95.57,8.95-176.3,47.8-233.87,112.55Z" />
+                        <Path Fill="#7fc99a" Data="M179.8,319.76c30.38-24.76,63.9-42.45,98.84-53.39,100.3-34.16,214.75-19.6,297.56,64.75-.42.04-.84.08-1.26.12,63.28,55.14,108.88,138.11,117.92,245.02,69.06-78.94,94.67-185.56,69.22-283.11-12.52-42.92-33.91-83.68-62.6-118.84-37.14-43.16-89.06-79.51-156.87-103.83.38-.16.75-.3,1.13-.46C293.55-30.89-45.1,203.09,69.26,480.9c.09-.21.17-.43.25-.64,18.86-65.53,59.02-120.59,110.29-160.51Z" />
+                        <Path Fill="#7fc99a" Data="M954.49,544.58c-60.98,211.84-344.51,314.36-506.7,149.14.57-.05,1.13-.11,1.7-.16-63.51-54.92-109.38-137.74-118.72-244.56-70.49,80.86-95.51,190.62-66.87,289.93,13.54,42.36,35.76,82.37,65.07,116.66,36.8,40.93,87.27,75.4,152.41,98.76-.11.04-.21.08-.32.13,249.77,99.47,586.53-133.48,473.61-410.38-.06.15-.12.31-.18.46Z" />
+                        <Path Fill="#e6e7e7" Data="M328.98,855.6c-31.55-35.1-53.04-74.96-65.07-116.66-28.64-99.31-3.62-209.07,66.87-289.93,55-63.09,137.68-108.58,244.16-117.78.42-.04.84-.08,1.26-.12-82.81-84.36-197.26-98.91-297.56-64.75-35.38,12.05-68.99,30.15-98.84,53.39-51.27,39.92-91.43,94.98-110.29,160.51-.09.21-.17.43-.25.64-100.35,250.34,133.93,588.68,411.81,473.59.11-.04.21-.08.32-.13-65.14-23.36-115.61-57.83-152.41-98.76Z" />
+                        <Path Fill="#e6e7e7" Data="M699.48,174.31c30.9,35.9,51.55,76.51,62.6,118.84,25.45,97.55-.16,204.16-69.22,283.11-54.92,62.78-137.32,108.05-243.36,117.32-.57.05-1.13.11-1.7.16,162.19,165.22,445.72,62.7,506.7-149.14.06-.15.12-.31.18-.46,100.44-250.12-133.34-588.22-410.93-474.09-.38.16-.75.3-1.13.46,67.81,24.32,119.73,60.67,156.87,103.83Z" />
+                    </Canvas>
+                </Viewbox>
+                <TextBlock Grid.Column="1" Text="ShareQ Launcher"
+                           Foreground="#FFF" FontWeight="SemiBold" FontSize="13"
+                           VerticalAlignment="Center" Margin="0,0,16,0" />
+                <TextBlock x:Name="DragModeBanner" Grid.Column="2"
                            Text="🎯 Drag-and-drop mode — drop files / folders / shortcuts onto cells to map them. Esc or click toggle to exit."
                            Foreground="#F4B400" FontSize="11" VerticalAlignment="Center"
                            Visibility="Collapsed" />
-                <ui:TextBox Grid.Column="1" x:Name="SearchBox"
+                <!-- Drag toggle sits left of the search box now: search lives at the extreme
+                     right (consistent placement with the popup's search) and the toggle
+                     button is the secondary action that bumps inward. -->
+                <ui:Button Grid.Column="3" x:Name="DragToggle" Content="📥 Drag mode"
+                           Padding="10,4" FontSize="11" Margin="0,0,8,0" Click="OnDragToggleClick"
+                           ToolTip="Toggle drag-and-drop mode — the launcher stays open and cells accept dropped files / folders / shortcuts." />
+                <ui:TextBox Grid.Column="4" x:Name="SearchBox"
                             PlaceholderText="🔍 Search…"
-                            FontSize="11" Margin="0,0,8,0"
+                            FontSize="11"
                             TextChanged="OnSearchTextChanged"
                             ToolTip="Filter cells by label or path. Empty cells and the F-row are unaffected; tabs without matches lose their title." />
-                <ui:Button Grid.Column="2" x:Name="DragToggle" Content="📥 Drag mode"
-                           Padding="10,4" FontSize="11" Click="OnDragToggleClick"
-                           ToolTip="Toggle drag-and-drop mode — the launcher stays open and cells accept dropped files / folders / shortcuts." />
             </Grid>
 
             <!-- ── Function-key strip — global, visible regardless of selected tab ──────────── -->
@@ -103,11 +122,22 @@
                                 DragLeave="OnCellDragLeave"
                                 Drop="OnCellDrop">
                             <Grid Margin="6">
+                                <!-- F-row: same layout shape as the QWERTY rows below — corner
+                                     badge + centred icon (same 40px size) + label underneath.
+                                     Function-key glyphs (F1, F2…) get Bold to read more like
+                                     keycap labels and stand out from the QWERTY corner badges. -->
                                 <TextBlock Text="{Binding DisplayKeyChar}" Foreground="#DDD"
-                                           FontSize="12" FontWeight="SemiBold"
-                                           HorizontalAlignment="Left" VerticalAlignment="Top" />
-                                <Image Source="{Binding Icon}" Width="32" Height="32"
-                                       VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                           FontSize="12" FontWeight="Bold"
+                                           HorizontalAlignment="Left" VerticalAlignment="Top"
+                                           Panel.ZIndex="1" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <Image Source="{Binding Icon}" Width="40" Height="40"
+                                           HorizontalAlignment="Center" />
+                                    <TextBlock Text="{Binding Label}" Foreground="#DDD"
+                                               FontSize="11" TextAlignment="Center"
+                                               TextWrapping="Wrap"
+                                               Margin="0,4,0,0" />
+                                </StackPanel>
                             </Grid>
                         </Border>
                     </DataTemplate>
@@ -140,7 +170,7 @@
                                            HorizontalAlignment="Left" VerticalAlignment="Top" />
                                 <TextBlock Text="{Binding Title}" Foreground="#FFF"
                                            FontSize="13" FontWeight="Bold"
-                                           HorizontalAlignment="Center" VerticalAlignment="Bottom" />
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Grid>
                         </Border>
                     </DataTemplate>

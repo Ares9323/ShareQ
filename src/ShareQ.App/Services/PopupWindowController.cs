@@ -28,7 +28,9 @@ public sealed partial class PopupWindowController
         // Show first (so layout runs and ActualWidth/Height are real), then reposition.
         _window!.Show();
         _window!.Activate();
-        RepositionAtCursor();
+        // Honor the user's last saved position when present — only fall back to cursor
+        // placement on the very first open (or if the saved position was off-screen).
+        if (!_window!.HasPersistedPosition) RepositionAtCursor();
     }
 
     private void RepositionAtCursor()

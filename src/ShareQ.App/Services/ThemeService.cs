@@ -25,6 +25,9 @@ public sealed class ThemeService
     private const string BgKey = "theme.accent_bg";
     private const string FgKey = "theme.accent_fg";
     private const string DarkKey = "theme.accent_dark";
+    private const string Surface1Key = "theme.surface_1";
+    private const string Surface2Key = "theme.surface_2";
+    private const string Surface3Key = "theme.surface_3";
     public static readonly Color DefaultBackground = (Color)ColorConverter.ConvertFromString("#751C8B")!;
     public static readonly Color DefaultForeground = Colors.White;
     /// <summary>Default for the "dark accent" — used as the canvas / inactive surface in the
@@ -33,18 +36,32 @@ public sealed class ThemeService
     /// default purple accent so the launcher's "active vs ambient" tabs read as the same hue
     /// family out of the box.</summary>
     public static readonly Color DefaultAccentDark = (Color)ColorConverter.ConvertFromString("#371242")!;
+    /// <summary>Three neutral surface colours, ordered darkest → lightest. Surface1 is for the
+    /// deepest backgrounds (input backgrounds, list rows), Surface2 for the standard window
+    /// chrome (popup body, launcher card), Surface3 for elevated panels (drag handles, group
+    /// containers). Centralising them lets the user retune the entire greyscale palette from
+    /// one place instead of editing dozens of hex literals across XAML.</summary>
+    public static readonly Color DefaultSurface1 = (Color)ColorConverter.ConvertFromString("#1A1A1A")!;
+    public static readonly Color DefaultSurface2 = (Color)ColorConverter.ConvertFromString("#1F1F1F")!;
+    public static readonly Color DefaultSurface3 = (Color)ColorConverter.ConvertFromString("#2D2D2D")!;
 
     private readonly ISettingsStore _settings;
 
     private Color _bg = DefaultBackground;
     private Color _fg = DefaultForeground;
     private Color _dark = DefaultAccentDark;
+    private Color _surface1 = DefaultSurface1;
+    private Color _surface2 = DefaultSurface2;
+    private Color _surface3 = DefaultSurface3;
 
     public ThemeService(ISettingsStore settings) => _settings = settings;
 
     public Color AccentBackground => _bg;
     public Color AccentForeground => _fg;
     public Color AccentBackgroundDark => _dark;
+    public Color Surface1 => _surface1;
+    public Color Surface2 => _surface2;
+    public Color Surface3 => _surface3;
 
     /// <summary>Fires after either color changes (via <see cref="SetAsync"/> or
     /// <see cref="LoadAsync"/>). The Theme view-model uses this to re-sync its hex inputs when the
@@ -54,30 +71,44 @@ public sealed class ThemeService
 
     public async Task LoadAsync(CancellationToken ct = default)
     {
-        var bgRaw = await _settings.GetAsync(BgKey, ct).ConfigureAwait(false);
-        var fgRaw = await _settings.GetAsync(FgKey, ct).ConfigureAwait(false);
+        var bgRaw   = await _settings.GetAsync(BgKey, ct).ConfigureAwait(false);
+        var fgRaw   = await _settings.GetAsync(FgKey, ct).ConfigureAwait(false);
         var darkRaw = await _settings.GetAsync(DarkKey, ct).ConfigureAwait(false);
-        _bg = TryParseHex(bgRaw) ?? DefaultBackground;
-        _fg = TryParseHex(fgRaw) ?? DefaultForeground;
-        _dark = TryParseHex(darkRaw) ?? DefaultAccentDark;
+        var s1Raw   = await _settings.GetAsync(Surface1Key, ct).ConfigureAwait(false);
+        var s2Raw   = await _settings.GetAsync(Surface2Key, ct).ConfigureAwait(false);
+        var s3Raw   = await _settings.GetAsync(Surface3Key, ct).ConfigureAwait(false);
+        _bg       = TryParseHex(bgRaw)   ?? DefaultBackground;
+        _fg       = TryParseHex(fgRaw)   ?? DefaultForeground;
+        _dark     = TryParseHex(darkRaw) ?? DefaultAccentDark;
+        _surface1 = TryParseHex(s1Raw)   ?? DefaultSurface1;
+        _surface2 = TryParseHex(s2Raw)   ?? DefaultSurface2;
+        _surface3 = TryParseHex(s3Raw)   ?? DefaultSurface3;
         Apply();
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    public async Task SetAsync(Color background, Color foreground, Color dark, CancellationToken ct = default)
+    public async Task SetAsync(Color background, Color foreground, Color dark,
+        Color surface1, Color surface2, Color surface3, CancellationToken ct = default)
     {
         _bg = background;
         _fg = foreground;
         _dark = dark;
+        _surface1 = surface1;
+        _surface2 = surface2;
+        _surface3 = surface3;
         Apply();
-        await _settings.SetAsync(BgKey, ToHex(background), sensitive: false, ct).ConfigureAwait(false);
-        await _settings.SetAsync(FgKey, ToHex(foreground), sensitive: false, ct).ConfigureAwait(false);
-        await _settings.SetAsync(DarkKey, ToHex(dark), sensitive: false, ct).ConfigureAwait(false);
+        await _settings.SetAsync(BgKey,       ToHex(background), sensitive: false, ct).ConfigureAwait(false);
+        await _settings.SetAsync(FgKey,       ToHex(foreground), sensitive: false, ct).ConfigureAwait(false);
+        await _settings.SetAsync(DarkKey,     ToHex(dark),       sensitive: false, ct).ConfigureAwait(false);
+        await _settings.SetAsync(Surface1Key, ToHex(surface1),   sensitive: false, ct).ConfigureAwait(false);
+        await _settings.SetAsync(Surface2Key, ToHex(surface2),   sensitive: false, ct).ConfigureAwait(false);
+        await _settings.SetAsync(Surface3Key, ToHex(surface3),   sensitive: false, ct).ConfigureAwait(false);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
     public Task ResetAsync(CancellationToken ct = default) =>
-        SetAsync(DefaultBackground, DefaultForeground, DefaultAccentDark, ct);
+        SetAsync(DefaultBackground, DefaultForeground, DefaultAccentDark,
+            DefaultSurface1, DefaultSurface2, DefaultSurface3, ct);
 
     /// <summary>Pushes the current colors into Application.Resources and the WPF-UI accent
     /// manager. Called on Load and on every Set; safe to call from any thread (marshals to the UI
@@ -126,6 +157,19 @@ public sealed class ThemeService
         app.Resources["AccentBackgroundDarkColor"] = _dark;
         app.Resources["AccentBackgroundDarkBrush"] = darkBrush;
         app.Resources["AccentBackgroundDarkBorderBrush"] = darkBorderBrush;
+
+        // Three neutral surface tones — Surface1 darkest (input bg / list rows), Surface2 the
+        // standard window body, Surface3 elevated panels. XAML consumes via DynamicResource so
+        // the user's theme tweaks apply live everywhere without re-instantiating templates.
+        var surface1Brush = new SolidColorBrush(_surface1); surface1Brush.Freeze();
+        var surface2Brush = new SolidColorBrush(_surface2); surface2Brush.Freeze();
+        var surface3Brush = new SolidColorBrush(_surface3); surface3Brush.Freeze();
+        app.Resources["Surface1Color"] = _surface1;
+        app.Resources["Surface2Color"] = _surface2;
+        app.Resources["Surface3Color"] = _surface3;
+        app.Resources["Surface1Brush"] = surface1Brush;
+        app.Resources["Surface2Brush"] = surface2Brush;
+        app.Resources["Surface3Brush"] = surface3Brush;
 
         // WPF-UI v4 declares BOTH naming conventions in resources/accent.baml — the legacy
         // SystemAccentColor* family AND the Fluent-v2 AccentFillColor* family. Different
