@@ -22,7 +22,7 @@
         <KeyBinding Key="Escape" Command="{Binding BackFromConfigCommand}" />
         <KeyBinding Key="Escape" Command="{Binding Hotkeys.BackToListCommand}" />
     </ui:FluentWindow.InputBindings>
-    <Grid>
+    <Grid Background="{DynamicResource Surface2Brush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -157,7 +157,7 @@
                               HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="24,16,24,16">
                         <TextBlock Text="Plugins" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
-                        <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                        <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
                                    Text="Toggle plugins on or off. Built-in plugins ship with ShareQ. External plugins live under %LOCALAPPDATA%\ShareQ\plugins\." />
                         <ItemsControl ItemsSource="{Binding Plugins}">
                             <ItemsControl.ItemTemplate>
@@ -178,7 +178,7 @@
                                                         <TextBlock Text="{Binding Badge}" Foreground="#BBB" FontSize="10" />
                                                     </Border>
                                                 </StackPanel>
-                                                <TextBlock Text="{Binding Subtitle}" Foreground="#888" FontSize="11"
+                                                <TextBlock Text="{Binding Subtitle}" Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11"
                                                            TextWrapping="Wrap" Margin="0,2,0,0" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
@@ -260,7 +260,7 @@
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="12" />
-                                                <TextBlock Text="{Binding Description}" Foreground="#888" FontSize="11"
+                                                <TextBlock Text="{Binding Description}" Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11"
                                                            TextWrapping="Wrap" Margin="0,2,0,0" />
                                             </StackPanel>
                                             <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Value, Mode=TwoWay}"
@@ -273,7 +273,7 @@
                                             BorderBrush="#333" BorderThickness="1" CornerRadius="4">
                                         <StackPanel>
                                             <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="12" />
-                                            <TextBlock Text="{Binding Description}" Foreground="#888" FontSize="11"
+                                            <TextBlock Text="{Binding Description}" Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11"
                                                        TextWrapping="Wrap" Margin="0,2,0,6" />
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -305,7 +305,7 @@
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="24,16,24,16">
                     <TextBlock Text="Uploaders" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
-                    <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                    <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
                                Text="Pick which uploaders to use per content type. Multiple selections upload the same file to all of them; the resulting URLs end up on the clipboard, one per line." />
 
                     <TextBlock Text="Image uploaders" FontWeight="SemiBold" Margin="0,4,0,4" />
@@ -384,7 +384,7 @@
                                        Command="{Binding Hotkeys.Workflows.ResetAllToDefaultsCommand}"
                                        ToolTip="Reset every built-in workflow to its default steps and hotkey. Asks for confirmation; custom workflows are not touched." />
                         </Grid>
-                        <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                        <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
                                    Text="Click Rebind on a row to set a new key combo (Reset / Clear are inside the rebind dialog). Click Edit to open the workflow's step list." />
 
                         <TextBlock Text="Built-in workflows" FontSize="13" FontWeight="SemiBold" Foreground="#BBB"
@@ -513,7 +513,7 @@
                             <TextBlock Grid.Column="0" Text="Pipeline steps" FontWeight="SemiBold" FontSize="14"
                                        VerticalAlignment="Center" />
                         </Grid>
-                        <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"
+                        <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"
                                    Text="Add actions with the picker below; drag the ⋮⋮ handle to reorder; toggle to mute without removing; × removes. Plumbing steps run automatically and aren't shown." />
                         <ItemsControl x:Name="StepsItemsControl" ItemsSource="{Binding Hotkeys.Workflows.Editor.Items}">
                             <ItemsControl.ItemTemplate>
@@ -557,10 +557,10 @@
                                                         <Border Margin="8,0,0,0" Padding="6,1" Background="{DynamicResource Surface3Brush}" CornerRadius="3"
                                                                 VerticalAlignment="Center"
                                                                 Visibility="{Binding Category, Converter={StaticResource NonEmptyToVisibility}}">
-                                                            <TextBlock Text="{Binding Category}" Foreground="#888" FontSize="10" />
+                                                            <TextBlock Text="{Binding Category}" Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="10" />
                                                         </Border>
                                                     </StackPanel>
-                                                    <TextBlock Text="{Binding Description}" Foreground="#888" FontSize="11"
+                                                    <TextBlock Text="{Binding Description}" Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11"
                                                                TextWrapping="Wrap" Margin="0,2,0,0" />
                                                     <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
                                                                 Visibility="{Binding HasParameter, Converter={StaticResource BoolToVisibility}}">
@@ -671,7 +671,7 @@
             <StackPanel Visibility="{Binding IsCaptureSelected, Converter={StaticResource BoolToVisibility}}"
                         Margin="24,16,24,16">
                 <TextBlock Text="Capture" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
-                <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
                            Text="Defaults applied when triggering captures from the tray menu or hotkeys. The pipeline that runs after each capture is configured under Workflows." />
 
                 <TextBlock Text="Save folder" FontWeight="SemiBold" Margin="0,4,0,4" />
@@ -689,7 +689,7 @@
                 <ui:TextBox Text="{Binding Capture.SubFolderPattern, UpdateSourceTrigger=PropertyChanged}"
                             PlaceholderText="e.g. %y-%mo  →  2026-04 sub-folder under the save folder"
                             Margin="0,0,0,4" />
-                <TextBlock Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16"
+                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16"
                            Text="Tokens: %y / %yy 4-digit / 2-digit year, %mo month (01–12), %mon month name, %d day, %h hour, %mi minute, %s second, %pm AM/PM. Leave empty for no sub-folder." />
 
                 <TextBlock Text="Screenshot delay (seconds)" FontWeight="SemiBold" Margin="0,4,0,4" />
@@ -705,13 +705,13 @@
                           HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="24,16,24,16">
                 <TextBlock Text="Theme" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
-                <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
                            Text="Two colors that flow everywhere ShareQ uses an accent: primary buttons, toggle switches, the pinned-image border, drag-to-reorder indicators, and selected sidebar entries. Edit the hex values to see the changes apply live." />
 
-                <!-- Foreground row first — paired with "Accent background light" below since the
-                     foreground is what gets drawn on top of it; reading top-to-bottom the user
-                     sees fg → light → dark, which matches the visual stacking inside the app. -->
-                <TextBlock Text="Accent foreground" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <!-- Foreground rows come first — these drive both the on-accent text colour and
+                     the dim subtext used across captions / metadata; visually the most "global"
+                     of the seven controls so reading top-to-bottom matches their reach. -->
+                <TextBlock Text="Foreground light" FontWeight="SemiBold" Margin="0,4,0,4" />
                 <Grid Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -729,8 +729,29 @@
                                 FontFamily="Consolas" />
                 </Grid>
 
-                <TextBlock Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
-                           Text="Foreground is the text/icon color drawn on top of the accent background — pick one with enough contrast (e.g. white on a dark accent, near-black on a light one)." />
+                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
+                           Text="Text / icon colour drawn on top of the accent background — pick one with enough contrast (e.g. white on a dark accent, near-black on a light one)." />
+
+                <TextBlock Text="Foreground dark" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
+                            Background="{Binding Theme.AccentForegroundDarkPreview}"
+                            BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
+                            Cursor="Hand"
+                            ToolTip="Click to open the color picker"
+                            MouseLeftButtonDown="OnAccentForegroundDarkSwatchClick" />
+                    <ui:TextBox Grid.Column="1"
+                                Text="{Binding Theme.AccentForegroundDarkHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                PlaceholderText="#878787"
+                                FontFamily="Consolas" />
+                </Grid>
+
+                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
+                           Text="Subtext colour — captions, age / kind / source on clipboard rows, descriptions on this page. Tweak it to soften or sharpen secondary text across the whole app." />
 
                 <!-- Background row — renamed "light" so it pairs visually with "Accent background
                      dark" below. Both tint surfaces inside the app: light is the bright primary
@@ -774,7 +795,7 @@
                                 FontFamily="Consolas" />
                 </Grid>
 
-                <TextBlock Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
+                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
                            Text="Used by the launcher overlay (cell backgrounds, inactive tab headers). Pick a low-luminance shade so the main accent reads on top of it." />
 
                 <!-- Three neutral surface tones — darkest → lightest. The XAML across the app
@@ -833,7 +854,7 @@
                                 FontFamily="Consolas" />
                 </Grid>
 
-                <TextBlock Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
+                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
                            Text="Surface 1 → input fields and list rows. Surface 2 → main window body. Surface 3 → elevated panels and drag handles." />
 
                 <!-- No sample / Apply button: clicking a swatch opens the picker, which previews
@@ -855,11 +876,11 @@
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="24,16,24,16">
                     <TextBlock Text="Categories" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
-                    <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                    <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
                                Text="Categories are buckets for clipboard items. Right-click any item in the popup → Move to → … to file it. Items in deleted categories return to the default 'Clipboard' bucket; pinned items keep their pin." />
 
                     <!-- Add row -->
-                    <Border Background="{DynamicResource Surface3Brush}" CornerRadius="4"
+                    <Border Background="{DynamicResource Surface1Brush}" CornerRadius="4"
                             Padding="14" Margin="0,0,0,16">
                         <StackPanel>
                             <TextBlock Text="Add a new category" FontWeight="SemiBold" Margin="0,0,0,8" />
@@ -949,7 +970,7 @@
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="24,16,24,16">
                     <TextBlock Text="Settings" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
-                    <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                    <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
                                Text="App-level preferences. Toggle behaviours that don't belong on a specific feature page." />
 
                     <CheckBox IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
@@ -961,10 +982,10 @@
                     <!-- Portable JSON dump of every non-sensitive setting. Skips OAuth tokens /
                          credentials / DPAPI-protected payloads — those are bound to the local
                          user account and wouldn't decrypt on another machine anyway. -->
-                    <Border Background="{DynamicResource Surface3Brush}" CornerRadius="4" Padding="14" Margin="0,8,0,0">
+                    <Border Background="{DynamicResource Surface1Brush}" CornerRadius="4" Padding="14" Margin="0,8,0,0">
                         <StackPanel>
                             <TextBlock Text="Backup &amp; restore" FontWeight="SemiBold" Margin="0,0,0,4" />
-                            <TextBlock Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
+                            <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
                                        Text="Export every non-sensitive ShareQ setting (theme, hotkeys, launcher cells, workflow steps, capture defaults, plugin selection) to a single JSON file you can sync between machines. Sensitive values (OAuth tokens, credentials) are not included — they'd be unusable on another box anyway." />
                             <StackPanel Orientation="Horizontal">
                                 <ui:Button Content="Export…" Margin="0,0,8,0" Padding="14,4"
@@ -1006,7 +1027,7 @@
                 </Grid>
                 <CheckBox Grid.Row="1" Content="Auto-scroll to latest"
                           IsChecked="{Binding Debug.AutoScroll, Mode=TwoWay}"
-                          Foreground="#888" FontSize="11" Margin="0,8,0,8"
+                          Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" Margin="0,8,0,8"
                           ToolTip="Locks the view to the most recent entry. Uncheck while scrolling up to read older lines." />
                 <Border Grid.Row="2" Background="#0F0F0F" BorderBrush="#333" BorderThickness="1" CornerRadius="4">
                     <ListBox x:Name="DebugLogList"
@@ -1032,7 +1053,7 @@
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{Binding TimestampDisplay}" Foreground="#888" Margin="0,0,8,0" />
+                                    <TextBlock Grid.Column="0" Text="{Binding TimestampDisplay}" Foreground="{DynamicResource AccentForegroundDarkBrush}" Margin="0,0,8,0" />
                                     <TextBlock Grid.Column="1" Text="{Binding LevelDisplay}" Margin="0,0,8,0"
                                                FontWeight="SemiBold"
                                                Foreground="{Binding LevelBrush}" />
@@ -1049,10 +1070,10 @@
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
                         Visibility="{Binding IsAboutSelected, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock Text="ShareQ" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                <TextBlock Foreground="#888" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0">
+                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0">
                     <Run Text="Version " /><Run Text="{Binding AppVersion, Mode=OneWay}" />
                 </TextBlock>
-                <TextBlock Foreground="#888" FontSize="11" HorizontalAlignment="Center" Margin="0,16,0,0"
+                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" HorizontalAlignment="Center" Margin="0,16,0,0"
                            Text="Clipboard manager · screenshot &amp; share tool" />
             </StackPanel>
         </Grid>

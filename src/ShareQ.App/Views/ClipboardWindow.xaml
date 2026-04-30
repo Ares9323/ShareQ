@@ -232,11 +232,11 @@
                                                                MaxHeight="60"
                                                                TextTrimming="CharacterEllipsis" />
                                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                        <TextBlock Foreground="#888" FontSize="11" Text="{Binding Age}" />
+                                                        <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" Text="{Binding Age}" />
                                                         <TextBlock Foreground="#666" FontSize="11" Text=" · " />
-                                                        <TextBlock Foreground="#888" FontSize="11" Text="{Binding KindLabel}" />
+                                                        <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" Text="{Binding KindLabel}" />
                                                         <TextBlock Foreground="#666" FontSize="11" Text=" · " />
-                                                        <TextBlock Foreground="#888" FontSize="11" Text="{Binding SourceProcess}"
+                                                        <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" Text="{Binding SourceProcess}"
                                                                    TextTrimming="CharacterEllipsis" MaxWidth="200" />
                                                     </StackPanel>
                                                 </StackPanel>
@@ -270,7 +270,7 @@
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0"
                                        Margin="8,6"
-                                       Foreground="#888"
+                                       Foreground="{DynamicResource AccentForegroundDarkBrush}"
                                        FontSize="11"
                                        TextTrimming="CharacterEllipsis"
                                        Text="{Binding PreviewMeta}" />

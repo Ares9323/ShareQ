@@ -22,7 +22,7 @@
                 <TextBlock x:Name="ComboPreview" Text="(waiting for keys…)"
                            FontFamily="Consolas" FontSize="14" Foreground="#DDD"
                            HorizontalAlignment="Center" />
-                <TextBlock Foreground="#888" FontSize="11" Margin="0,8,0,0" HorizontalAlignment="Center"
+                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" Margin="0,8,0,0" HorizontalAlignment="Center"
                            Text="Hold modifiers (Ctrl / Alt / Shift / Win) then press a key. Esc cancels." />
             </StackPanel>
         </Border>

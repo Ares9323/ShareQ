@@ -25,11 +25,16 @@ public sealed class ThemeService
     private const string BgKey = "theme.accent_bg";
     private const string FgKey = "theme.accent_fg";
     private const string DarkKey = "theme.accent_dark";
+    private const string FgDarkKey = "theme.accent_fg_dark";
     private const string Surface1Key = "theme.surface_1";
     private const string Surface2Key = "theme.surface_2";
     private const string Surface3Key = "theme.surface_3";
     public static readonly Color DefaultBackground = (Color)ColorConverter.ConvertFromString("#751C8B")!;
     public static readonly Color DefaultForeground = Colors.White;
+    /// <summary>Default for the dim subtext colour — captions, age labels, kind/source rows in
+    /// the clipboard list, swatch descriptions in the theme tab. One global control over how
+    /// muted the secondary text reads against the surface tones.</summary>
+    public static readonly Color DefaultAccentForegroundDark = (Color)ColorConverter.ConvertFromString("#878787")!;
     /// <summary>Default for the "dark accent" — used as the canvas / inactive surface in the
     /// launcher overlay (cell background, inactive tab headers). Sits low on the value axis so
     /// the brighter accent reads on top of it without contrast issues. Picked to pair with the
@@ -50,6 +55,7 @@ public sealed class ThemeService
     private Color _bg = DefaultBackground;
     private Color _fg = DefaultForeground;
     private Color _dark = DefaultAccentDark;
+    private Color _fgDark = DefaultAccentForegroundDark;
     private Color _surface1 = DefaultSurface1;
     private Color _surface2 = DefaultSurface2;
     private Color _surface3 = DefaultSurface3;
@@ -59,6 +65,7 @@ public sealed class ThemeService
     public Color AccentBackground => _bg;
     public Color AccentForeground => _fg;
     public Color AccentBackgroundDark => _dark;
+    public Color AccentForegroundDark => _fgDark;
     public Color Surface1 => _surface1;
     public Color Surface2 => _surface2;
     public Color Surface3 => _surface3;
@@ -71,43 +78,47 @@ public sealed class ThemeService
 
     public async Task LoadAsync(CancellationToken ct = default)
     {
-        var bgRaw   = await _settings.GetAsync(BgKey, ct).ConfigureAwait(false);
-        var fgRaw   = await _settings.GetAsync(FgKey, ct).ConfigureAwait(false);
-        var darkRaw = await _settings.GetAsync(DarkKey, ct).ConfigureAwait(false);
-        var s1Raw   = await _settings.GetAsync(Surface1Key, ct).ConfigureAwait(false);
-        var s2Raw   = await _settings.GetAsync(Surface2Key, ct).ConfigureAwait(false);
-        var s3Raw   = await _settings.GetAsync(Surface3Key, ct).ConfigureAwait(false);
-        _bg       = TryParseHex(bgRaw)   ?? DefaultBackground;
-        _fg       = TryParseHex(fgRaw)   ?? DefaultForeground;
-        _dark     = TryParseHex(darkRaw) ?? DefaultAccentDark;
-        _surface1 = TryParseHex(s1Raw)   ?? DefaultSurface1;
-        _surface2 = TryParseHex(s2Raw)   ?? DefaultSurface2;
-        _surface3 = TryParseHex(s3Raw)   ?? DefaultSurface3;
+        var bgRaw     = await _settings.GetAsync(BgKey, ct).ConfigureAwait(false);
+        var fgRaw     = await _settings.GetAsync(FgKey, ct).ConfigureAwait(false);
+        var darkRaw   = await _settings.GetAsync(DarkKey, ct).ConfigureAwait(false);
+        var fgDarkRaw = await _settings.GetAsync(FgDarkKey, ct).ConfigureAwait(false);
+        var s1Raw     = await _settings.GetAsync(Surface1Key, ct).ConfigureAwait(false);
+        var s2Raw     = await _settings.GetAsync(Surface2Key, ct).ConfigureAwait(false);
+        var s3Raw     = await _settings.GetAsync(Surface3Key, ct).ConfigureAwait(false);
+        _bg       = TryParseHex(bgRaw)     ?? DefaultBackground;
+        _fg       = TryParseHex(fgRaw)     ?? DefaultForeground;
+        _dark     = TryParseHex(darkRaw)   ?? DefaultAccentDark;
+        _fgDark   = TryParseHex(fgDarkRaw) ?? DefaultAccentForegroundDark;
+        _surface1 = TryParseHex(s1Raw)     ?? DefaultSurface1;
+        _surface2 = TryParseHex(s2Raw)     ?? DefaultSurface2;
+        _surface3 = TryParseHex(s3Raw)     ?? DefaultSurface3;
         Apply();
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    public async Task SetAsync(Color background, Color foreground, Color dark,
+    public async Task SetAsync(Color background, Color foreground, Color dark, Color foregroundDark,
         Color surface1, Color surface2, Color surface3, CancellationToken ct = default)
     {
         _bg = background;
         _fg = foreground;
         _dark = dark;
+        _fgDark = foregroundDark;
         _surface1 = surface1;
         _surface2 = surface2;
         _surface3 = surface3;
         Apply();
-        await _settings.SetAsync(BgKey,       ToHex(background), sensitive: false, ct).ConfigureAwait(false);
-        await _settings.SetAsync(FgKey,       ToHex(foreground), sensitive: false, ct).ConfigureAwait(false);
-        await _settings.SetAsync(DarkKey,     ToHex(dark),       sensitive: false, ct).ConfigureAwait(false);
-        await _settings.SetAsync(Surface1Key, ToHex(surface1),   sensitive: false, ct).ConfigureAwait(false);
-        await _settings.SetAsync(Surface2Key, ToHex(surface2),   sensitive: false, ct).ConfigureAwait(false);
-        await _settings.SetAsync(Surface3Key, ToHex(surface3),   sensitive: false, ct).ConfigureAwait(false);
+        await _settings.SetAsync(BgKey,       ToHex(background),     sensitive: false, ct).ConfigureAwait(false);
+        await _settings.SetAsync(FgKey,       ToHex(foreground),     sensitive: false, ct).ConfigureAwait(false);
+        await _settings.SetAsync(DarkKey,     ToHex(dark),           sensitive: false, ct).ConfigureAwait(false);
+        await _settings.SetAsync(FgDarkKey,   ToHex(foregroundDark), sensitive: false, ct).ConfigureAwait(false);
+        await _settings.SetAsync(Surface1Key, ToHex(surface1),       sensitive: false, ct).ConfigureAwait(false);
+        await _settings.SetAsync(Surface2Key, ToHex(surface2),       sensitive: false, ct).ConfigureAwait(false);
+        await _settings.SetAsync(Surface3Key, ToHex(surface3),       sensitive: false, ct).ConfigureAwait(false);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
     public Task ResetAsync(CancellationToken ct = default) =>
-        SetAsync(DefaultBackground, DefaultForeground, DefaultAccentDark,
+        SetAsync(DefaultBackground, DefaultForeground, DefaultAccentDark, DefaultAccentForegroundDark,
             DefaultSurface1, DefaultSurface2, DefaultSurface3, ct);
 
     /// <summary>Pushes the current colors into Application.Resources and the WPF-UI accent
@@ -170,6 +181,40 @@ public sealed class ThemeService
         app.Resources["Surface1Brush"] = surface1Brush;
         app.Resources["Surface2Brush"] = surface2Brush;
         app.Resources["Surface3Brush"] = surface3Brush;
+
+        // Override WPF-UI v4's chrome brushes so the dark.baml defaults (#202020 window body,
+        // #2D2D2D control fills) track our surface palette. WPF-UI's FluentWindow template
+        // resolves Background via {DynamicResource WindowBackground}, NOT the FluentWindow's
+        // own Background property — setting it inline in XAML is silently overridden by the
+        // theme dictionary. ApplicationBackgroundBrush is also pinned in case some control
+        // template still binds to the legacy v3 name.
+        app.Resources["WindowBackground"] = surface2Brush;
+        app.Resources["ApplicationBackgroundBrush"] = surface2Brush;
+        // TextBox / RichTextBox / PasswordBox surfaces — the visible default-state fill is
+        // TextControlBackground; the hover / focus / disabled variants share the same row
+        // semantically so they all map onto Surface3 too (otherwise the row would flash a
+        // different shade on pointer-over).
+        app.Resources["TextControlBackground"] = surface3Brush;
+        app.Resources["TextControlBackgroundPointerOver"] = surface3Brush;
+        app.Resources["TextControlBackgroundFocused"] = surface3Brush;
+        app.Resources["TextControlBackgroundDisabled"] = surface3Brush;
+
+        // Default-appearance ui:Button surfaces — anything NOT marked Appearance=Primary/Danger
+        // resolves Background through ButtonBackground. ComboBox / TimePicker / DatePicker
+        // pickers reuse the same key family so they all track Surface3 in sync.
+        app.Resources["ButtonBackground"] = surface3Brush;
+        app.Resources["ButtonBackgroundPointerOver"] = surface3Brush;
+        app.Resources["ButtonBackgroundPressed"] = surface3Brush;
+        app.Resources["ButtonBackgroundDisabled"] = surface3Brush;
+        app.Resources["ComboBoxBackground"] = surface3Brush;
+        app.Resources["ComboBoxBackgroundPointerOver"] = surface3Brush;
+        app.Resources["ComboBoxBackgroundFocused"] = surface3Brush;
+
+        // Dim subtext tone — captions, age / kind / source on clipboard rows, swatch
+        // descriptions, etc. One global handle for "secondary text on dark surfaces".
+        var fgDarkBrush = new SolidColorBrush(_fgDark); fgDarkBrush.Freeze();
+        app.Resources["AccentForegroundDarkColor"] = _fgDark;
+        app.Resources["AccentForegroundDarkBrush"] = fgDarkBrush;
 
         // WPF-UI v4 declares BOTH naming conventions in resources/accent.baml — the legacy
         // SystemAccentColor* family AND the Fluent-v2 AccentFillColor* family. Different

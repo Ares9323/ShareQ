@@ -42,7 +42,7 @@
                     x:Name="CloseBtn"
                     Content="✕"
                     FontSize="11"
-                    Foreground="#888"
+                    Foreground="{DynamicResource AccentForegroundDarkBrush}"
                     Background="Transparent"
                     BorderThickness="0"
                     Width="20" Height="20"

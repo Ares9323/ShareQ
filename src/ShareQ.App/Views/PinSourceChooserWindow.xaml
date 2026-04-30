@@ -15,7 +15,7 @@
     <StackPanel Margin="20" Width="320">
         <TextBlock Text="Pin to screen" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,4" />
         <TextBlock Text="Pick a source for the image you want to pin on top of everything else."
-                   Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16" />
+                   Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16" />
         <ui:Button x:Name="FromScreenButton" Content="From screen…"
                    HorizontalAlignment="Stretch" Margin="0,0,0,6"
                    ToolTip="Drag a region on the screen; the captured area stays pinned at its original position." />

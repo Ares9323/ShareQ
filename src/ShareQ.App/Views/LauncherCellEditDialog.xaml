@@ -139,7 +139,7 @@
                                 PlaceholderText="(if a process with this name is running, focus it — e.g. notepad)" />
                 </Grid>
 
-                <TextBlock Foreground="#888" FontSize="10" TextWrapping="Wrap"
+                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="10" TextWrapping="Wrap"
                            Text="Window title / process name: substring match (case-insensitive). Either one being non-empty enables &quot;activate if already running&quot; mode — the cell focuses the existing window instead of starting a new instance. Leave both empty for the default &quot;always launch&quot; behaviour." />
             </StackPanel>
         </Expander>
