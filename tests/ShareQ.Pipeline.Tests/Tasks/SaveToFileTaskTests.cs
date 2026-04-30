@@ -19,6 +19,12 @@ public class SaveToFileTaskTests
         public Task<string?> GetAsync(string key, CancellationToken cancellationToken) => Task.FromResult<string?>(null);
         public Task SetAsync(string key, string value, bool sensitive, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<bool> RemoveAsync(string key, CancellationToken cancellationToken) => Task.FromResult(false);
+        public async IAsyncEnumerable<SettingEntry> EnumerateAsync(bool includeSensitive = false,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;   // satisfy async signature without yielding anything
+            yield break;
+        }
     }
 
     private static PipelineContext NewContext() => new(new ServiceCollection().BuildServiceProvider());
