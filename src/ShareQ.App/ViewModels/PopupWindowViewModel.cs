@@ -44,14 +44,18 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
         var list = await _categories.ListAsync(CancellationToken.None).ConfigureAwait(true);
         Categories.Clear();
         MovableCategories.Clear();
-        // First entry is the synthetic "All" tab — nullable Name signals "no filter" to RefreshAsync.
-        Categories.Add(new CategoryTab(Name: null, DisplayName: "All", Icon: null,
-                                       IsActive: ActiveCategory is null));
         foreach (var c in list)
         {
             var tab = new CategoryTab(c.Name, c.Name, c.Icon, IsActive: c.Name == ActiveCategory);
             Categories.Add(tab);
             MovableCategories.Add(tab);
+        }
+        // No synthetic "All" any more — default to the first real category (always
+        // "Clipboard" on a fresh DB thanks to Migration003Categories) when the user
+        // hasn't picked one yet, or when the previously-active category was deleted.
+        if (Categories.Count > 0 && (ActiveCategory is null || !Categories.Any(t => t.Name == ActiveCategory)))
+        {
+            ActiveCategory = Categories[0].Name;
         }
     }
 
@@ -103,8 +107,8 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
         _ = RefreshAsync(CancellationToken.None);
     }
 
-    // Preview state for the side panel. Code-behind on PopupWindow watches Rtf/Html bytes since
-    // those formats can't be data-bound directly into RichTextBox / WebBrowser.
+    // Preview state for the side panel. Code-behind on the clipboard window watches Rtf/Html
+    // bytes since those formats can't be data-bound directly into RichTextBox / WebBrowser.
     [ObservableProperty] private PreviewKind _previewKind = PreviewKind.None;
     [ObservableProperty] private string? _previewText;
     [ObservableProperty] private byte[]? _previewImageBytes;
@@ -258,12 +262,19 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>Raised after <see cref="PasteSelectedCommand"/> finishes (regardless of which
+    /// surface invoked it — Enter, Ctrl+digits, toolbar button). The clipboard window listens
+    /// for this so it can hide itself after a successful paste; subscribers must marshal to
+    /// the UI thread themselves.</summary>
+    public event EventHandler? PasteCompleted;
+
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private async Task PasteSelectedAsync()
     {
         if (SelectedRow is not { } row) return;
         var paster = _services.GetRequiredService<AutoPaster>();
         await paster.PasteAsync(row.Id, CancellationToken.None).ConfigureAwait(false);
+        PasteCompleted?.Invoke(this, EventArgs.Empty);
     }
 
     [RelayCommand(CanExecute = nameof(IsImageSelection))]
@@ -290,14 +301,18 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task ClearAllAsync()
     {
+        // Scope the wipe to the active category — when the synthetic "All" tab is selected
+        // (ActiveCategory == null) we fall through to the global wipe. Pinned items are
+        // always preserved by the store.
+        var scope = ActiveCategory ?? "all categories";
         var result = MessageBox.Show(
-            "Delete every non-pinned item from history? Pinned items will be kept.",
+            $"Delete every non-pinned item from \"{scope}\"? Pinned items will be kept.",
             "Clear history",
             MessageBoxButton.OKCancel,
             MessageBoxImage.Warning,
             MessageBoxResult.Cancel);
         if (result != MessageBoxResult.OK) return;
-        await _items.ClearAllExceptPinnedAsync(CancellationToken.None).ConfigureAwait(false);
+        await _items.ClearAllExceptPinnedAsync(ActiveCategory, CancellationToken.None).ConfigureAwait(false);
     }
 
     [RelayCommand]

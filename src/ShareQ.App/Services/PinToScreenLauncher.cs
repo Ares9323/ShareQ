@@ -3,7 +3,7 @@ using System.Windows;
 using System.Windows.Media.Imaging;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
-using ShareQ.App.Windows;
+using ShareQ.App.Views;
 using ShareQ.Capture;
 using ShareQ.Storage.Settings;
 

@@ -166,13 +166,16 @@ public sealed class ItemStore : IItemStore
         return ok;
     }
 
-    public async Task<int> ClearAllExceptPinnedAsync(CancellationToken cancellationToken)
+    public async Task<int> ClearAllExceptPinnedAsync(string? category, CancellationToken cancellationToken)
     {
         var conn = _database.GetOpenConnection();
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "UPDATE items SET deleted_at = $now WHERE deleted_at IS NULL AND pinned = 0;";
+        var sql = "UPDATE items SET deleted_at = $now WHERE deleted_at IS NULL AND pinned = 0";
+        if (!string.IsNullOrEmpty(category)) sql += " AND category = $category";
+        cmd.CommandText = sql + ";";
         cmd.Parameters.AddWithValue("$now", nowMs);
+        if (!string.IsNullOrEmpty(category)) cmd.Parameters.AddWithValue("$category", category);
         var rows = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         if (rows > 0) ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.Deleted, -1));
         return rows;

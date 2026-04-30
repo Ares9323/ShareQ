@@ -24,13 +24,12 @@ public partial class LauncherWindow : Window
     private readonly IconService _icons;
     private readonly ILogger<LauncherWindow> _logger;
 
-    /// <summary>The currently-shown launcher window, if any. Used by the open-launcher tasks
-    /// to implement toggle behaviour: invoking "Open launcher" while it's already up closes
-    /// it instead of stacking a second instance. Cleared in the Closed event so a re-invoke
-    /// after the user dismissed it opens fresh.</summary>
+    /// <summary>Cached singleton instance. The launcher is registered AddSingleton so the open
+    /// task can resolve it once and keep showing/hiding the same window — no visual-tree
+    /// rebuild on every shortcut press. Set in the ctor, never cleared (singleton lifetime).</summary>
     private static LauncherWindow? _current;
-    public static bool IsOpen => _current is { IsLoaded: true };
-    public static void RequestClose() => _current?.BeginClose();
+    public static bool IsOpen => _current is { IsLoaded: true, IsVisible: true };
+    public static void RequestClose() => _current?.BeginHide();
 
     private LauncherState _state = new(new Dictionary<string, LauncherCell>(),
                                         new Dictionary<string, string>());
@@ -40,9 +39,9 @@ public partial class LauncherWindow : Window
     /// shut as soon as focus moved into the dialog. We can't just Hide() the launcher because
     /// ShowDialog with a hidden owner crashes WPF (the cause of the empty-cell click crash).</summary>
     private bool _suppressDeactivation;
-    /// <summary>Latches once Close() is queued / underway. Stops OnDeactivated from re-entering
-    /// Close on its own (the launched process steals focus → Deactivated fires → would call
-    /// Close on a window that's mid-teardown, which crashes WPF on some configurations).</summary>
+    /// <summary>Latches once Hide() is queued / underway. Stops OnDeactivated from re-entering
+    /// Hide on its own (the launched process steals focus → Deactivated fires → would call
+    /// Hide on a window that's mid-teardown).</summary>
     private bool _isClosing;
     /// <summary>True while the user is in "drag-and-drop mode": the launcher stays open on
     /// deactivation, cells accept dropped files / folders / shortcuts, and a banner explains
@@ -84,25 +83,38 @@ public partial class LauncherWindow : Window
         Row2Host.ItemsSource    = _row2;
         Row3Host.ItemsSource    = _row3;
 
-        // Track the live instance so a second "Open launcher" invocation can toggle-close
-        // instead of stacking a new window on top. Cleared in Closed.
+        // Cache the singleton instance for the toggle-close path.
         _current = this;
-        Closed += (_, _) => { if (_current == this) _current = null; };
 
         // Restore the saved geometry synchronously in the ctor so the first paint already
         // lands at the right size/position — async-loading after Loaded would briefly flash
         // the default 1280×640 centred. SQLite read is ~1ms, fine to block.
         TryRestoreGeometry();
 
-        Loaded += async (_, _) =>
+        // Re-do "fresh open" work every time the window becomes visible, not just on first
+        // Loaded. Singleton lifetime means Loaded fires once per app run, but we want the
+        // user's edits (cell additions / drag-mode toggles from a previous open) reflected
+        // every time they hit the shortcut.
+        IsVisibleChanged += async (_, e) =>
         {
-            await ReloadAsync();
-            // If the launcher was opened with the drag-mode entry point, flip into drag mode
-            // before the user has to click anything — the whole point is "I want to map files".
-            if (StartInDragMode) SetDragMode(true);
-            // Focus the launcher root, NOT the search box — auto-focusing the search swallows
-            // every shortcut key (Q, F1, …) the user wanted to press to fire a cell. Ctrl+F
-            // gives them an explicit way into the search box when they actually want to type.
+            if (e.NewValue is true)
+            {
+                // Hiding then re-showing resets _isClosing so the next deactivate can re-trigger.
+                _isClosing = false;
+                await ReloadAsync();
+                SetDragMode(StartInDragMode);
+                StartInDragMode = false;   // consume the flag so a normal re-open isn't sticky
+                // Focus the launcher root, NOT the search box — auto-focusing the search swallows
+                // every shortcut key (Q, F1, …) the user wanted to press to fire a cell. Ctrl+F
+                // gives them an explicit way into the search box when they actually want to type.
+                Focus();
+            }
+            else
+            {
+                // Persist geometry on every hide. Closing event no longer fires (the window
+                // never closes during the app session) so this is the moment to snapshot.
+                PersistGeometry();
+            }
         };
     }
 
@@ -139,10 +151,15 @@ public partial class LauncherWindow : Window
         return virt.IntersectsWith(rect);
     }
 
-    private void OnLauncherClosing(object sender, CancelEventArgs e)
+    private void OnLauncherClosing(object sender, CancelEventArgs e) => PersistGeometry();
+
+    /// <summary>Snapshot the window's current size + on-screen position to the store.
+    /// Called from IsVisibleChanged on hide and from the Closing event on app shutdown — both
+    /// are the moments where we still have valid layout numbers but the user is "done" with
+    /// the window for now. RestoreBounds when maximised so we never persist a full-screen
+    /// rectangle as the user-set size.</summary>
+    private void PersistGeometry()
     {
-        // Persist whatever the window ended up at. WindowState=Maximized would skew the saved
-        // ActualWidth/Height; clamp to RestoreBounds so we always store the user-set size.
         var bounds = WindowState == WindowState.Normal
             ? new System.Windows.Rect(Left, Top, ActualWidth, ActualHeight)
             : RestoreBounds;
@@ -271,17 +288,19 @@ public partial class LauncherWindow : Window
         // sticky — focus moves to Explorer or another window while the user picks files, and
         // the launcher must not slam shut behind their back.
         if (_suppressDeactivation || _isClosing || _dragMode) return;
-        BeginClose();
+        BeginHide();
     }
 
-    /// <summary>Close on the next dispatcher cycle so the current event handler (mouse / key /
-    /// deactivation) can fully unwind before the window disposes its visual tree. Closing
-    /// inline from inside a handler has caused crashes on some Windows builds.</summary>
-    private void BeginClose()
+    /// <summary>Hide on the next dispatcher cycle so the current event handler (mouse / key /
+    /// deactivation) can fully unwind before the visual state changes. Hide() (not Close())
+    /// because the launcher is a singleton: the next Show is supposed to re-use the same
+    /// instance — that's what makes the shortcut snappy. State that needs refreshing on the
+    /// next show happens in IsVisibleChanged.</summary>
+    private void BeginHide()
     {
         if (_isClosing) return;
         _isClosing = true;
-        Dispatcher.BeginInvoke(new Action(Close), System.Windows.Threading.DispatcherPriority.Background);
+        Dispatcher.BeginInvoke(new Action(Hide), System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private void OnKeyDown(object sender, KeyEventArgs e)
@@ -304,7 +323,7 @@ public partial class LauncherWindow : Window
             // Layered the way the user would mentally back out — undo the most-recent thing first.
             if (!string.IsNullOrEmpty(_filter)) { SearchBox.Text = string.Empty; return; }
             if (_dragMode) SetDragMode(false);
-            else BeginClose();
+            else BeginHide();
             return;
         }
 
@@ -744,7 +763,7 @@ public partial class LauncherWindow : Window
             {
                 _logger.LogInformation("LauncherWindow: activated existing window for {Key} (title='{Title}' proc='{Proc}')",
                     cell.ComposedKey, cell.WindowTitle, cell.ProcessName);
-                BeginClose();
+                BeginHide();
                 return;
             }
 
@@ -775,7 +794,7 @@ public partial class LauncherWindow : Window
             _logger.LogWarning(ex, "LauncherWindow: failed to launch cell {Key} → {Path}",
                 cell.ComposedKey, cell.Path);
         }
-        BeginClose();   // one-shot menu: summon, fire, dismiss (deferred — see BeginClose).
+        BeginHide();   // one-shot menu: summon, fire, dismiss (deferred — see BeginClose).
     }
 
     private static ProcessWindowStyle MapWindowMode(LauncherWindowMode mode) => mode switch

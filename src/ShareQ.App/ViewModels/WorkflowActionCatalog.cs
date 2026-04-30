@@ -190,9 +190,9 @@ public static class WorkflowActionCatalog
             DefaultConfigJson: "{\"title\":\"ShareQ\",\"message\":\"Done.\"}"),
 
         new("shareq.open-popup",
-            "Show clipboard popup",
-            "Open the ShareQ clipboard popup window (the Win+V replacement).",
-            "Tools"),
+            "Show clipboard window",
+            "Open the ShareQ clipboard window (Win+V replacement). Pressing the same shortcut again while it's up dismisses it.",
+            "Clipboard"),
 
         new("shareq.toggle-incognito",
             "Toggle incognito mode",
@@ -274,6 +274,7 @@ public static class WorkflowActionCatalog
             "Open launcher (drag mode)",
             "Show the launcher overlay already in drag-and-drop mode: the panel stays open while you drag files / folders / shortcuts from Explorer onto cells to map them. Esc exits drag mode (the launcher stays open in normal mode); a second Esc closes it.",
             "Launch"),
+
     ];
 
     /// <summary>Only the user-pickable subset, grouped by category. Drives the "+ Add step" menu.</summary>

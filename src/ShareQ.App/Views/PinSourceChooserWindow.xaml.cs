@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
 
-namespace ShareQ.App.Windows;
+namespace ShareQ.App.Views;
 
 public enum PinSource { Cancelled, Screen, Clipboard, File }
 

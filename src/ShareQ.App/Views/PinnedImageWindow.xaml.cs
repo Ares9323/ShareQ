@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ShareQ.App.Services;
 using ShareQ.Storage.Settings;
 
-namespace ShareQ.App.Windows;
+namespace ShareQ.App.Views;
 
 public partial class PinnedImageWindow : Window
 {
@@ -75,10 +75,8 @@ public partial class PinnedImageWindow : Window
         Loaded += (_, _) => UpdateZoomLabel();
     }
 
-    /// <summary>Show + Activate + reposition. Matches PopupWindowController.ShowAsync exactly —
-    /// that path is verified to land its window precisely at cursor on Win+V, so we use the
-    /// same shape. Set Left/Top in DIPs AFTER Show so the layout pass has run and WPF accepts
-    /// the values without falling back to startup-location logic.</summary>
+    /// <summary>Show + Activate + reposition. Set Left/Top in DIPs AFTER Show so the layout
+    /// pass has run and WPF accepts the values without falling back to startup-location logic.</summary>
     public void ShowAtCapturedPixel()
     {
         _logger.LogInformation("Pin: ShowAtCapturedPixel — initialScreenPos={Pos}, dpiScale=({Sx}×{Sy}), border={Border} DIPs, bitmap={Bw}×{Bh} px",

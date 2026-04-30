@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using Microsoft.Extensions.Logging;
-using ShareQ.App.Windows;
+using ShareQ.App.Views;
 using ShareQ.Core.Pipeline;
 using ShareQ.Storage.Settings;
 

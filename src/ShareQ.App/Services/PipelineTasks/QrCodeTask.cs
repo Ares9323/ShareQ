@@ -4,7 +4,7 @@ using System.Windows;
 using System.Windows.Media.Imaging;
 using Microsoft.Extensions.Logging;
 using QRCoder;
-using ShareQ.App.Windows;
+using ShareQ.App.Views;
 using ShareQ.Core.Pipeline;
 
 namespace ShareQ.App.Services.PipelineTasks;

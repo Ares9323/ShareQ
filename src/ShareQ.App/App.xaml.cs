@@ -9,7 +9,6 @@ using ShareQ.App.Services.Launcher;
 using ShareQ.App.Services.PipelineTasks;
 using ShareQ.App.ViewModels;
 using ShareQ.App.Views;
-using ShareQ.App.Windows;
 using ShareQ.Capture.DependencyInjection;
 using ShareQ.Clipboard;
 using ShareQ.Clipboard.DependencyInjection;
@@ -113,7 +112,6 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, CopyTextToClipboardTask>();
                 services.AddSingleton<IPipelineTask, NotifyToastTask>();
                 services.AddSingleton<IPipelineTask, OpenEditorBeforeUploadTask>();
-                services.AddSingleton<IPipelineTask, OpenPopupTask>();
                 services.AddSingleton<IPipelineTask, ToggleIncognitoTask>();
                 services.AddSingleton<IPipelineTask, ColorSamplerTask>();
                 services.AddSingleton<IPipelineTask, ColorPickerTask>();
@@ -141,11 +139,17 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, RunCommandTask>();
                 services.AddSingleton<IPipelineTask, OpenLauncherMenuTask>();
                 services.AddSingleton<IPipelineTask, OpenLauncherDragModeTask>();
+                services.AddSingleton<IPipelineTask, OpenClipboardWindowTask>();
+                // Singleton + Hide (not Close) for snappy reopen on the global shortcut —
+                // same lifetime pattern the launcher uses.
+                services.AddSingleton<ShareQ.App.Views.ClipboardWindow>();
                 services.AddSingleton<LauncherStore>();
                 services.AddSingleton<IconService>();
-                // Transient: fresh window per opening so we never reuse a closed one. Closing the
-                // launcher disposes its visual tree; resolving a new instance is cheap.
-                services.AddTransient<LauncherWindow>();
+                // Singleton + Hide() instead of Close() so the user gets an instant re-show
+                // on the global shortcut (no visual-tree rebuild). State that needs to be
+                // refreshed each time (cells, drag-mode flag, search) is reset in
+                // IsVisibleChanged inside the window itself.
+                services.AddSingleton<LauncherWindow>();
 
                 services.AddSingleton<NativeClipboardHistoryProbe>();
                 services.AddSingleton<NativeClipboardHistoryBanner>();
@@ -153,7 +157,6 @@ public partial class App : Application
                 services.AddSingleton<ClipboardIngestionService>();
                 services.AddSingleton<TargetWindowTracker>();
                 services.AddSingleton<AutoPaster>();
-                services.AddSingleton<PopupWindowController>();
                 services.AddSingleton<CaptureCoordinator>();
                 services.AddSingleton<ManualUploadService>();
                 services.AddSingleton<IToastNotifier, WpfToastNotifier>();
@@ -170,7 +173,6 @@ public partial class App : Application
                 services.AddSingleton<ShareQ.Editor.Persistence.EditorDefaultsStore>();
 
                 services.AddTransient<PopupWindowViewModel>();
-                services.AddTransient<PopupWindow>();
 
                 services.AddSingleton<ShareQ.App.Services.Hotkeys.HotkeyConfigService>();
                 services.AddSingleton<WorkflowRunner>();

@@ -3,7 +3,7 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShareQ.App.Services.Hotkeys;
-using ShareQ.App.Windows;
+using ShareQ.App.Views;
 using ShareQ.Core.Pipeline;
 using ShareQ.Pipeline.Profiles;
 using MessageBox = System.Windows.MessageBox;

@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 
-namespace ShareQ.App.Windows;
+namespace ShareQ.App.Views;
 
 public partial class QrCodeWindow : Window
 {

@@ -1,7 +1,7 @@
 using System.IO;
 using System.Windows;
 using Microsoft.Extensions.Logging;
-using ShareQ.App.Windows;
+using ShareQ.App.Views;
 using ShareQ.Capture.Recording;
 using ShareQ.Core.Domain;
 using ShareQ.Storage.Items;

@@ -7,7 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using ShareQ.Capture;
 
-namespace ShareQ.App.Windows;
+namespace ShareQ.App.Views;
 
 public partial class RegionOverlayWindow : Window
 {

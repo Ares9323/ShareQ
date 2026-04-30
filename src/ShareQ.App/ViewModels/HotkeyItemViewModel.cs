@@ -1,7 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShareQ.App.Services.Hotkeys;
-using ShareQ.App.Windows;
+using ShareQ.App.Views;
 using ShareQ.Hotkeys;
 
 namespace ShareQ.App.ViewModels;

@@ -3,7 +3,7 @@ using System.Windows;
 using ShareQ.App.Services.Hotkeys;
 using ShareQ.Hotkeys;
 
-namespace ShareQ.App.Windows;
+namespace ShareQ.App.Views;
 
 public partial class HotkeyCaptureWindow : Window
 {

@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 
-namespace ShareQ.App.Windows;
+namespace ShareQ.App.Views;
 
 public partial class RecordingOverlayWindow : Window
 {

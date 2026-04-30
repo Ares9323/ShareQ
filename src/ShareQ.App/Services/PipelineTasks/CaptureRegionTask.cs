@@ -1,7 +1,7 @@
 using System.Text.Json.Nodes;
 using System.Windows;
 using Microsoft.Extensions.Logging;
-using ShareQ.App.Windows;
+using ShareQ.App.Views;
 using ShareQ.Capture;
 using ShareQ.Core.Domain;
 using ShareQ.Core.Pipeline;

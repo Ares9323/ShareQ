@@ -85,8 +85,20 @@ public sealed class TrayIconService : IDisposable
         menu.Items.Add(tools);
 
         menu.Items.Add(new Separator());
-        menu.Items.Add(BuildMenuItem("Open clipboard popup\tWin+V",
-            () => Run<PopupWindowController>(c => _ = c.ShowAsync())));
+        menu.Items.Add(BuildMenuItem("Open clipboard\tWin+V",
+            () =>
+            {
+                // Same toggle / capture-foreground / show-and-activate sequence the
+                // OpenClipboardWindowTask runs — replicated inline so the tray entry
+                // doesn't need a PipelineContext.
+                if (ShareQ.App.Views.ClipboardWindow.IsOpen)
+                {
+                    ShareQ.App.Views.ClipboardWindow.RequestClose();
+                    return;
+                }
+                Run<TargetWindowTracker>(t => t.CaptureCurrentForeground());
+                Run<ShareQ.App.Views.ClipboardWindow>(w => { w.Show(); w.Activate(); });
+            }));
         menu.Items.Add(BuildMenuItem("Toggle incognito\tCtrl+Alt+I",
             () => Run<IncognitoModeService>(s => _ = s.ToggleAsync(CancellationToken.None))));
         menu.Items.Add(new Separator());
