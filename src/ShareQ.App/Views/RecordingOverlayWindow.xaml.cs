@@ -1,4 +1,6 @@
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -23,6 +25,19 @@ public partial class RecordingOverlayWindow : Window
             Top = y / d.DpiScaleY;
             Width = width / d.DpiScaleX;
             Height = height / d.DpiScaleY;
+        };
+
+        // Exclude this overlay from screen capture so the timecode + Pause/Stop/Abort buttons
+        // don't end up baked into the recording. WDA_EXCLUDEFROMCAPTURE (Win10 2004+) tells DWM
+        // to skip the window in Graphics.Capture / DXGI / GDI capture paths used by ffmpeg's
+        // gdigrab and the dshow desktop sources. WDA_MONITOR is the older fallback (it just
+        // paints the window black in captures); we try the better one first and ignore failure.
+        SourceInitialized += (_, _) =>
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero) return;
+            if (!SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE))
+                _ = SetWindowDisplayAffinity(hwnd, WDA_MONITOR);
         };
 
         _resumedAt = DateTime.UtcNow;
@@ -57,4 +72,11 @@ public partial class RecordingOverlayWindow : Window
         else PauseRequested?.Invoke(this, EventArgs.Empty);
     }
     private void OnAbortClicked(object sender, RoutedEventArgs e) => AbortRequested?.Invoke(this, EventArgs.Empty);
+
+    private const uint WDA_MONITOR = 0x00000001;
+    private const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
 }

@@ -78,6 +78,17 @@ public sealed partial class EditorViewModel : ObservableObject
         if (_tools.TryGetValue(EditorTool.Freehand, out var t) && t is FreehandTool fh) fh.SmoothStrokes = value;
     }
 
+    /// <summary>Sticky default for the freehand "end arrow" cap (ShareX-style). Same propagation
+    /// rules as <see cref="FreehandSmoothDefault"/>: tool reads on stroke start, per-shape toggle
+    /// writes back, persisted across sessions via EditorDefaults.</summary>
+    [ObservableProperty]
+    private bool _freehandEndArrowDefault;
+
+    partial void OnFreehandEndArrowDefaultChanged(bool value)
+    {
+        if (_tools.TryGetValue(EditorTool.Freehand, out var t) && t is FreehandTool fh) fh.EndArrow = value;
+    }
+
     [ObservableProperty]
     private Shape? _selectedShape;
 
@@ -126,6 +137,16 @@ public sealed partial class EditorViewModel : ObservableObject
     public void AddImageShape(ImageShape shape)
     {
         if (shape.IsEmpty) return;
+        _commands.Execute(new AddShapeCommand(shape), Shapes);
+        SetSelection([shape]);
+    }
+
+    /// <summary>Add an arbitrary shape (any concrete subtype) and select it. Used by the
+    /// editor's clipboard paste path to round-trip shapes as editable objects rather than
+    /// rasterised images. Goes through <see cref="AddShapeCommand"/> so undo/redo works.</summary>
+    public void AddShape(Shape shape)
+    {
+        ArgumentNullException.ThrowIfNull(shape);
         _commands.Execute(new AddShapeCommand(shape), Shapes);
         SetSelection([shape]);
     }

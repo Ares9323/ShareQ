@@ -83,7 +83,7 @@
                     <ui:Button x:Name="EllipseToolBtn" Content="E Ellipse" Style="{StaticResource ToolBtn}" Click="OnEllipseToolClicked" />
                     <ui:Button x:Name="LineToolBtn" Content="L Line" Style="{StaticResource ToolBtn}" Click="OnLineToolClicked" />
                     <ui:Button x:Name="ArrowToolBtn" Content="A Arrow" Style="{StaticResource ToolBtn}" Click="OnArrowToolClicked" />
-                    <ui:Button x:Name="FreehandToolBtn" Content="P Free" Style="{StaticResource ToolBtn}" Click="OnFreehandToolClicked" />
+                    <ui:Button x:Name="FreehandToolBtn" Content="F Free" Style="{StaticResource ToolBtn}" Click="OnFreehandToolClicked" />
 
                     <TextBlock Text="OBJECTS" Style="{StaticResource GroupHeader}" />
                     <ui:Button x:Name="TextToolBtn" Content="T Text" Style="{StaticResource ToolBtn}" Click="OnTextToolClicked" />
@@ -124,12 +124,14 @@
                 Width="240" Padding="12" Background="#1F1F1F"
                 BorderBrush="#333" BorderThickness="1,0,0,0">
             <StackPanel x:Name="PropertyPanel">
-                <TextBlock Text="Properties" Foreground="White" FontSize="14" Margin="0,0,0,8" />
+                <!-- Dynamic title — set from RefreshPropertyPanel based on selection or active tool. -->
+                <TextBlock x:Name="PanelTitleText" Text="Properties"
+                           Foreground="White" FontSize="14" FontWeight="SemiBold"
+                           Margin="0,0,0,8" />
                 <TextBlock x:Name="NoSelectionText"
                            Text="Select a shape to edit its properties (V tool, then click)."
                            Foreground="#888" TextWrapping="Wrap" />
                 <StackPanel x:Name="SelectedShapeStack" Visibility="Collapsed">
-                    <TextBlock x:Name="SelectedShapeKindText" Foreground="White" Margin="0,0,0,12" />
 
                     <Grid x:Name="SelOutlineFillRow" Margin="0,0,0,12">
                         <Grid.ColumnDefinitions>
@@ -182,7 +184,12 @@
                         <CheckBox x:Name="SelFreehandSmoothCheck"
                                   Content="Smooth stroke"
                                   Foreground="#DDD" FontSize="11"
+                                  Margin="0,0,0,4"
                                   ToolTip="Apply Chaikin corner-cutting + Catmull-Rom rendering to remove hand jitter from this stroke." />
+                        <CheckBox x:Name="SelFreehandEndArrowCheck"
+                                  Content="End arrow"
+                                  Foreground="#DDD" FontSize="11"
+                                  ToolTip="Cap the stroke with an arrow head tangent to the last segment (ShareX-style freehand arrow)." />
                     </StackPanel>
 
                     <StackPanel x:Name="SelRotationSection" Visibility="Collapsed" Margin="0,0,0,12">

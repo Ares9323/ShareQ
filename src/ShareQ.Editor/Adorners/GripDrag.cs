@@ -13,7 +13,7 @@ public static class GripDrag
     {
         RectangleShape r when grip == GripKind.Rotate => r with { Rotation = AngleFromPivot(r.X + r.Width / 2, r.Y + r.Height / 2, px, py, shiftHeld) },
         EllipseShape e when grip == GripKind.Rotate => e with { Rotation = AngleFromPivot(e.X + e.Width / 2, e.Y + e.Height / 2, px, py, shiftHeld) },
-        TextShape txt when grip == GripKind.Rotate => txt with { Rotation = AngleFromPivot(TextCenterX(txt), TextCenterY(txt), px, py, shiftHeld) },
+        TextShape txt when grip == GripKind.Rotate => txt with { Rotation = AngleFromPivot(txt.X + txt.Width / 2, txt.Y + txt.Height / 2, px, py, shiftHeld) },
         BlurShape b => ResizeRect(new RectShim(b.X, b.Y, b.Width, b.Height), grip, px, py, shiftHeld) is { } box1
             ? b with { X = box1.X, Y = box1.Y, Width = box1.W, Height = box1.H }
             : null,
@@ -61,7 +61,9 @@ public static class GripDrag
             GripKind.Bend => a with { ControlOffsetX = px - (a.FromX + a.ToX) / 2, ControlOffsetY = py - (a.FromY + a.ToY) / 2 },
             _ => null
         },
-        TextShape t => grip == GripKind.Resize ? ResizeText(t, px, py) : null,
+        TextShape t => ResizeRect(new RectShim(t.X, t.Y, t.Width, t.Height), grip, px, py, shiftHeld) is { } textBox
+            ? t with { X = textBox.X, Y = textBox.Y, Width = textBox.W, Height = textBox.H }
+            : null,
         StepCounterShape c => grip == GripKind.Resize ? ResizeStepCounter(c, px, py) : null,
         _ => null
     };
@@ -136,22 +138,6 @@ public static class GripDrag
         return deg;
     }
 
-    private static double TextCenterX(TextShape t)
-    {
-        var lines = t.Text.Length == 0 ? new[] { "" } : t.Text.Split('\n');
-        var maxLen = 0;
-        foreach (var line in lines) if (line.Length > maxLen) maxLen = line.Length;
-        var w = Math.Max(8, maxLen * t.Style.FontSize * 0.55);
-        return t.X + w / 2;
-    }
-
-    private static double TextCenterY(TextShape t)
-    {
-        var lines = t.Text.Length == 0 ? new[] { "" } : t.Text.Split('\n');
-        var h = lines.Length * t.Style.FontSize * 1.2;
-        return t.Y + h / 2;
-    }
-
     private static (double X, double Y) SnapEndpoint(double anchorX, double anchorY, double px, double py, bool shiftHeld)
     {
         if (!shiftHeld) return (px, py);
@@ -161,23 +147,6 @@ public static class GripDrag
         var snapped = Math.Round(angle / (Math.PI / 4)) * (Math.PI / 4);
         var len = Math.Sqrt(dx * dx + dy * dy);
         return (anchorX + len * Math.Cos(snapped), anchorY + len * Math.Sin(snapped));
-    }
-
-    private static TextShape ResizeText(TextShape t, double px, double py)
-    {
-        // Scale the FontSize by the diagonal distance the grip travels relative to the text's anchor (X, Y).
-        // Use the longer of horizontal/vertical projections so it works for both wide and tall text.
-        var dx = Math.Max(8, px - t.X);
-        var lines = t.Text.Length == 0 ? new[] { "" } : t.Text.Split('\n');
-        var maxLen = 0;
-        foreach (var line in lines) if (line.Length > maxLen) maxLen = line.Length;
-        // Inverse of the bbox formula: width = maxLen * fontSize * 0.55  →  fontSize = width / (maxLen * 0.55).
-        var fontSizeFromWidth = maxLen > 0 ? dx / (maxLen * 0.55) : t.Style.FontSize;
-        // Also derive from height so single-character text still resizes by vertical drag.
-        var dy = Math.Max(1, py - t.Y);
-        var fontSizeFromHeight = dy / (lines.Length * 1.2);
-        var size = Math.Clamp(Math.Max(fontSizeFromWidth, fontSizeFromHeight), 4, 400);
-        return t with { Style = t.Style with { FontSize = size } };
     }
 
     private static StepCounterShape ResizeStepCounter(StepCounterShape c, double px, double py)

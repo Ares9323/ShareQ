@@ -47,6 +47,14 @@ public partial class EditorWindow : FluentWindow
     private System.Windows.Controls.TextBox? _activeTextBox;
     private TextShape? _editingTextShape;
 
+    // Text-frame drag state: when the user drags with the Text tool active we draw a marquee
+    // and use its final bounds as the new TextShape's box. Mouse-up below the threshold falls
+    // back to a click-and-default-size at the down point.
+    private bool _isDrawingTextFrame;
+    private double _textFrameStartX, _textFrameStartY;
+    private System.Windows.Shapes.Rectangle? _textFrameMarquee;
+    private const double TextFrameDragThreshold = 4;
+
     // Grip drag state (resize / endpoint / font-size). Only active for single-selection in Select tool.
     private GripKind _activeGrip = GripKind.None;
     private Shape? _gripStartShape;
@@ -106,6 +114,8 @@ public partial class EditorWindow : FluentWindow
         SelRotationBox.KeyDown += (_, ev) => { if (ev.Key == Key.Enter) OnSelRotationBoxCommitted(); };
         SelFreehandSmoothCheck.Checked += (_, _) => OnSelFreehandSmoothChanged();
         SelFreehandSmoothCheck.Unchecked += (_, _) => OnSelFreehandSmoothChanged();
+        SelFreehandEndArrowCheck.Checked += (_, _) => OnSelFreehandEndArrowChanged();
+        SelFreehandEndArrowCheck.Unchecked += (_, _) => OnSelFreehandEndArrowChanged();
 
         WireFontPicker();
         SelFontSizeSlider.ValueChanged += (_, _) => OnSelFontSizeSliderChanged();
@@ -269,6 +279,183 @@ public partial class EditorWindow : FluentWindow
         catch (System.Runtime.InteropServices.COMException) { return; }
         if (bs is null) return;
         InsertImageShape(bs);
+    }
+
+    /// <summary>Static cache of the last copy/cut from inside the editor. Holds the actual
+    /// <see cref="Shape"/> records (immutable, so safe to share). Paste consults this whenever
+    /// our clipboard sentinel <see cref="ShapeClipboardFormat"/> is still on the system clipboard
+    /// — that's how we tell "the user is pasting our own copy" apart from "the user grabbed
+    /// something from another app". Survives editor close/reopen (the field is static), but
+    /// gets invalidated the moment any other app pushes data to the clipboard, since the
+    /// sentinel disappears with it.</summary>
+    private static IReadOnlyList<Shape>? _shapeClipboard;
+
+    /// <summary>Custom DataObject format key for the round-trip sentinel — its value is
+    /// irrelevant ("1" works), the presence of the key alone signals "shapes are in our
+    /// in-process cache". Versioned so future schema changes can branch cleanly.</summary>
+    private const string ShapeClipboardFormat = "ShareQ.Editor.Shapes.v1";
+
+    /// <summary>Pixel offset applied to every pasted shape so the new copy lands beside (not on
+    /// top of) the original. Standard convention in vector editors (Figma, Illustrator, etc.).</summary>
+    private const double PasteOffset = 12;
+
+    /// <summary>Ctrl+V entry point. Resolution order:
+    /// <list type="number">
+    /// <item><description>Our sentinel on the clipboard + cached shapes → restore them as
+    ///     editable objects (offset by <see cref="PasteOffset"/> so they don't overlap).</description></item>
+    /// <item><description>Image on the clipboard → insert as <see cref="ImageShape"/>.</description></item>
+    /// <item><description>Text on the clipboard → insert as <see cref="TextShape"/> at the canvas centre.</description></item>
+    /// </list>
+    /// Mixed HTML+text+image clipboards (e.g. browser drag) hit the image branch — that's usually
+    /// what the user wants. Sentinel always wins, so an in-editor copy round-trips losslessly.</summary>
+    private void PasteFromClipboard()
+    {
+        try
+        {
+            if (System.Windows.Clipboard.ContainsData(ShapeClipboardFormat) && _shapeClipboard is { Count: > 0 } cached)
+            {
+                var pasted = cached.Select(s => TranslateShape(s, PasteOffset, PasteOffset)).ToList();
+                foreach (var s in pasted) _vm.AddShape(s);
+                // AddShape selects each individually; final state ends with the last one focused
+                // — match the user's expectation that "paste" leaves the freshly-pasted shapes
+                // selected so they can immediately drag/edit them.
+                _vm.SelectedShapes.Clear();
+                foreach (var s in pasted) _vm.SelectedShapes.Add(s);
+                return;
+            }
+            if (System.Windows.Clipboard.ContainsImage())
+            {
+                PasteImageFromClipboard();
+                return;
+            }
+            if (System.Windows.Clipboard.ContainsText())
+            {
+                var text = System.Windows.Clipboard.GetText();
+                if (!string.IsNullOrEmpty(text)) InsertTextShape(text);
+            }
+        }
+        catch (System.Runtime.InteropServices.COMException) { /* clipboard contention — drop the request */ }
+    }
+
+    /// <summary>Add a <see cref="TextShape"/> at the canvas centre using the current style,
+    /// pre-populated with <paramref name="text"/>. Skipped when text is empty (matches the
+    /// in-place text tool which also rejects empty submissions).</summary>
+    private void InsertTextShape(string text)
+    {
+        var canvasW = DrawingCanvas.Width  > 0 ? DrawingCanvas.Width  : 800;
+        var canvasH = DrawingCanvas.Height > 0 ? DrawingCanvas.Height : 600;
+        var x = canvasW * 0.1;
+        var y = canvasH * 0.1;
+        var fontSize = _vm.CurrentTextStyle.FontSize;
+        _vm.AddTextShape(new TextShape(x, y,
+            TextShape.DefaultWidthFor(fontSize), TextShape.DefaultHeightFor(fontSize),
+            text, _vm.CurrentTextStyle, _vm.OutlineColor, ShapeColor.Transparent, _vm.StrokeWidth));
+    }
+
+    /// <summary>Ctrl+C / Ctrl+X — export the current selection. Two channels are populated in
+    /// parallel on a single <see cref="DataObject"/>:
+    /// <list type="bullet">
+    /// <item><description>Our private <see cref="ShapeClipboardFormat"/> sentinel — paired with
+    ///     a static cache of the actual shape records, so an in-editor round-trip preserves
+    ///     them as editable objects (arrows stay arrows, not flattened images).</description></item>
+    /// <item><description>A native fallback for other apps: text for a single <see cref="TextShape"/>,
+    ///     image for a single <see cref="ImageShape"/>, otherwise a rasterised PNG of the
+    ///     selection's bounding rect.</description></item>
+    /// </list>
+    /// When <paramref name="cut"/> is true, the selection is also removed via the existing
+    /// remove-shapes path so undo/redo continue to work.</summary>
+    private void CopySelectionToClipboard(bool cut)
+    {
+        var sels = _vm.SelectedShapes.ToList();
+        if (sels.Count == 0) return;
+        CommitPendingLiveEdit();
+
+        // Cache the immutable shape records first — even if SetDataObject throws below, the
+        // in-process clipboard still has them. Records are immutable so sharing references is
+        // safe; paste applies TranslateShape which produces a fresh `with`-cloned instance.
+        _shapeClipboard = sels;
+
+        var data = new DataObject();
+        data.SetData(ShapeClipboardFormat, "1"); // sentinel — value irrelevant, presence drives paste
+
+        // Native fallback so external apps still see something useful. Single-shape branches
+        // map to lossless formats; the catch-all rasterises onto a transparent bitmap.
+        try
+        {
+            switch (sels.Count == 1 ? sels[0] : null)
+            {
+                case TextShape t when !string.IsNullOrEmpty(t.Text):
+                    data.SetText(t.Text);
+                    break;
+                case ImageShape img when img.PngBytes is { Length: > 0 }:
+                    using (var ms = new System.IO.MemoryStream(img.PngBytes))
+                    {
+                        var decoder = System.Windows.Media.Imaging.BitmapFrame.Create(
+                            ms,
+                            System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat,
+                            System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+                        data.SetImage(decoder);
+                    }
+                    break;
+                default:
+                    if (RasterizeSelection(sels) is { } bs) data.SetImage(bs);
+                    break;
+            }
+            // copy: true → clipboard survives this process exiting; required so the user can
+            // paste in another app after closing the editor.
+            System.Windows.Clipboard.SetDataObject(data, copy: true);
+        }
+        catch (System.Runtime.InteropServices.COMException) { /* clipboard contention — drop */ }
+
+        if (cut) _vm.RemoveShapes(sels);
+    }
+
+    /// <summary>Render the bounding rect of <paramref name="shapes"/> to a transparent
+    /// <see cref="BitmapSource"/>. Each shape is materialised through the same factory the
+    /// canvas uses (<see cref="MakeUiElement"/>), translated so the bbox top-left lands at
+    /// (0, 0), and packed into a throwaway Canvas. RenderTargetBitmap captures the result at
+    /// device DPI. Returns null when the selection has zero area (collapsed shapes).</summary>
+    private BitmapSource? RasterizeSelection(IReadOnlyList<Shape> shapes)
+    {
+        var bounds = shapes
+            .Select(ComputeBounds)
+            .Where(b => b.Width > 0 && b.Height > 0)
+            .ToList();
+        if (bounds.Count == 0) return null;
+        var minX = bounds.Min(b => b.X);
+        var minY = bounds.Min(b => b.Y);
+        var maxX = bounds.Max(b => b.X + b.Width);
+        var maxY = bounds.Max(b => b.Y + b.Height);
+        // Pad by stroke width so anti-aliased edges aren't clipped at the bbox border.
+        const double pad = 4;
+        var w = (int)Math.Ceiling(maxX - minX + pad * 2);
+        var h = (int)Math.Ceiling(maxY - minY + pad * 2);
+        if (w <= 0 || h <= 0) return null;
+
+        var host = new Canvas { Width = w, Height = h, Background = System.Windows.Media.Brushes.Transparent };
+        foreach (var s in shapes)
+        {
+            var ui = MakeUiElement(s);
+            if (ui is FrameworkElement fe)
+            {
+                // Compose a translation so the selection bbox top-left lands inside the
+                // throwaway host. Existing per-shape RenderTransform (rotation) is preserved
+                // by stacking via TransformGroup.
+                var tg = new TransformGroup();
+                if (fe.RenderTransform is { } existing && existing != Transform.Identity)
+                    tg.Children.Add(existing);
+                tg.Children.Add(new TranslateTransform(-minX + pad, -minY + pad));
+                fe.RenderTransform = tg;
+            }
+            host.Children.Add(ui);
+        }
+        host.Measure(new Size(w, h));
+        host.Arrange(new Rect(0, 0, w, h));
+
+        var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(host);
+        rtb.Freeze();
+        return rtb;
     }
 
     /// <summary>Encode <paramref name="bs"/> as PNG, fit to ~50% of the canvas, center, add as ImageShape.</summary>
@@ -513,7 +700,9 @@ public partial class EditorWindow : FluentWindow
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
         if (ctrl && e.Key == Key.Z) { _vm.UndoCommand.Execute(null); e.Handled = true; return; }
         if (ctrl && e.Key == Key.Y) { _vm.RedoCommand.Execute(null); e.Handled = true; return; }
-        if (ctrl && e.Key == Key.V) { PasteImageFromClipboard(); e.Handled = true; return; }
+        if (ctrl && e.Key == Key.V) { PasteFromClipboard(); e.Handled = true; return; }
+        if (ctrl && e.Key == Key.C) { CopySelectionToClipboard(cut: false); e.Handled = true; return; }
+        if (ctrl && e.Key == Key.X) { CopySelectionToClipboard(cut: true);  e.Handled = true; return; }
 
         if (e.Key == Key.Delete || e.Key == Key.Back)
         {
@@ -526,6 +715,11 @@ public partial class EditorWindow : FluentWindow
             }
         }
 
+        // Bare-letter tool shortcuts only fire without modifiers — otherwise Ctrl+X / Ctrl+C
+        // would bleed through and switch tools after copy / cut. Modifier-bearing keys are
+        // handled above (Ctrl+Z / Y / V / C / X) and below (none yet).
+        if (ctrl) return;
+
         switch (e.Key)
         {
             case Key.V: _vm.CurrentTool = EditorTool.Select; e.Handled = true; break;
@@ -533,7 +727,7 @@ public partial class EditorWindow : FluentWindow
             case Key.A: _vm.CurrentTool = EditorTool.Arrow; e.Handled = true; break;
             case Key.L: _vm.CurrentTool = EditorTool.Line; e.Handled = true; break;
             case Key.E: _vm.CurrentTool = EditorTool.Ellipse; e.Handled = true; break;
-            case Key.P: _vm.CurrentTool = EditorTool.Freehand; e.Handled = true; break;
+            case Key.F: _vm.CurrentTool = EditorTool.Freehand; e.Handled = true; break;
             case Key.T: _vm.CurrentTool = EditorTool.Text; e.Handled = true; break;
             case Key.N: _vm.CurrentTool = EditorTool.StepCounter; e.Handled = true; break;
             case Key.B: _vm.CurrentTool = EditorTool.Blur; e.Handled = true; break;
@@ -564,7 +758,13 @@ public partial class EditorWindow : FluentWindow
 
         if (_vm.CurrentTool == EditorTool.Text)
         {
-            BeginInlineTextEdit(p.X, p.Y, existing: null);
+            // Start a frame-draw gesture. If the user just clicks (mouse up before
+            // dragging past the threshold) we fall back to default-size at the down point;
+            // otherwise the marquee bounds become the new TextShape's box.
+            _isDrawingTextFrame = true;
+            _textFrameStartX = p.X;
+            _textFrameStartY = p.Y;
+            DrawingCanvas.CaptureMouse();
             e.Handled = true;
             return;
         }
@@ -663,6 +863,13 @@ public partial class EditorWindow : FluentWindow
         UpdateCursorForGripHover(e.GetPosition(DrawingCanvas));
 
         if (e.LeftButton != MouseButtonState.Pressed) return;
+
+        if (_isDrawingTextFrame)
+        {
+            var p = e.GetPosition(DrawingCanvas);
+            UpdateTextFrameMarquee(p.X, p.Y);
+            return;
+        }
 
         if (_vm.CurrentTool == EditorTool.Select)
         {
@@ -806,6 +1013,13 @@ public partial class EditorWindow : FluentWindow
 
     private void OnCanvasMouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (_isDrawingTextFrame)
+        {
+            FinishTextFrameDraw(e.GetPosition(DrawingCanvas));
+            e.Handled = true;
+            return;
+        }
+
         if (_vm.CurrentTool == EditorTool.Select)
         {
             if (_activeGrip != GripKind.None)
@@ -962,6 +1176,19 @@ public partial class EditorWindow : FluentWindow
         _vm.FreehandSmoothDefault = smooth;
     }
 
+    private void OnSelFreehandEndArrowChanged()
+    {
+        if (_suppressLiveUpdates) return;
+        var endArrow = SelFreehandEndArrowCheck.IsChecked == true;
+        foreach (var s in _vm.SelectedShapes.ToList())
+        {
+            if (s is FreehandShape f && f.EndArrow != endArrow)
+                _vm.LiveReplaceShape(s, f with { EndArrow = endArrow });
+        }
+        // Sticky: same propagation pattern as Smooth — next stroke inherits.
+        _vm.FreehandEndArrowDefault = endArrow;
+    }
+
     private void OnSelRotationSliderChanged()
     {
         if (_suppressLiveUpdates) return;
@@ -1078,7 +1305,68 @@ public partial class EditorWindow : FluentWindow
         }
     }
 
+    /// <summary>Update or create the dashed marquee that previews the text-frame box during
+    /// drag. Lazily instantiates the rectangle on first move past the threshold so a plain
+    /// click (no drag) doesn't paint anything.</summary>
+    private void UpdateTextFrameMarquee(double px, double py)
+    {
+        var dx = Math.Abs(px - _textFrameStartX);
+        var dy = Math.Abs(py - _textFrameStartY);
+        if (dx < TextFrameDragThreshold && dy < TextFrameDragThreshold) return;
+
+        if (_textFrameMarquee is null)
+        {
+            _textFrameMarquee = new System.Windows.Shapes.Rectangle
+            {
+                Stroke = new SolidColorBrush(Color.FromArgb(180, 80, 200, 255)),
+                StrokeThickness = 1,
+                StrokeDashArray = [4.0, 3.0],
+                Fill = new SolidColorBrush(Color.FromArgb(20, 80, 200, 255)),
+                IsHitTestVisible = false
+            };
+            DrawingCanvas.Children.Add(_textFrameMarquee);
+        }
+        var x = Math.Min(_textFrameStartX, px);
+        var y = Math.Min(_textFrameStartY, py);
+        Canvas.SetLeft(_textFrameMarquee, x);
+        Canvas.SetTop(_textFrameMarquee, y);
+        _textFrameMarquee.Width = Math.Abs(px - _textFrameStartX);
+        _textFrameMarquee.Height = Math.Abs(py - _textFrameStartY);
+    }
+
+    /// <summary>Wrap up a text-frame drag: tear down the marquee, release capture, then open
+    /// the inline editor sized to the dragged rect. A drag below <see cref="TextFrameDragThreshold"/>
+    /// in both axes (i.e. just a click) falls back to <see cref="TextShape.DefaultWidthFor"/>
+    /// / <see cref="TextShape.DefaultHeightFor"/> at the down point, matching the legacy
+    /// behaviour for users who don't want to think about box size.</summary>
+    private void FinishTextFrameDraw(System.Windows.Point upPoint)
+    {
+        if (_textFrameMarquee is not null)
+        {
+            DrawingCanvas.Children.Remove(_textFrameMarquee);
+            _textFrameMarquee = null;
+        }
+        DrawingCanvas.ReleaseMouseCapture();
+        _isDrawingTextFrame = false;
+
+        var w = Math.Abs(upPoint.X - _textFrameStartX);
+        var h = Math.Abs(upPoint.Y - _textFrameStartY);
+        var x = Math.Min(_textFrameStartX, upPoint.X);
+        var y = Math.Min(_textFrameStartY, upPoint.Y);
+
+        if (w < TextFrameDragThreshold || h < TextFrameDragThreshold)
+        {
+            // Click → use defaults at the down point.
+            BeginInlineTextEdit(_textFrameStartX, _textFrameStartY, existing: null);
+            return;
+        }
+        BeginInlineTextEdit(x, y, existing: null, boxWidth: w, boxHeight: h);
+    }
+
     private void BeginInlineTextEdit(double x, double y, TextShape? existing)
+        => BeginInlineTextEdit(x, y, existing, boxWidth: null, boxHeight: null);
+
+    private void BeginInlineTextEdit(double x, double y, TextShape? existing, double? boxWidth, double? boxHeight)
     {
         CommitInlineTextEdit();
 
@@ -1090,20 +1378,53 @@ public partial class EditorWindow : FluentWindow
         var initialText = existing?.Text ?? "";
 
         _editingTextShape = existing;
+        // Box size resolution order: caller-supplied (drag-to-draw frame) → existing shape's
+        // size (in-place edit) → font-size-derived defaults (plain click). Defaults scale with
+        // the active font so a tiny / huge font doesn't get the same fixed-px frame.
+        var boxW = boxWidth ?? existing?.Width ?? TextShape.DefaultWidthFor(style.FontSize);
+        var boxH = boxHeight ?? existing?.Height ?? TextShape.DefaultHeightFor(style.FontSize);
+
+        // For plain-click placement (no drag-rect, not editing an existing shape) the click
+        // point becomes the anchor that matches the text alignment: Left → top-left,
+        // Centre → top-centre, Right → top-right. That way clicking exactly where you want
+        // the text edge to live "just works" regardless of which alignment is active.
+        // Drag-rect callers already chose the bounds explicitly, so they're left alone.
+        if (boxWidth is null && existing is null)
+        {
+            switch (style.Align)
+            {
+                case TextAlign.Center: x -= boxW / 2; break;
+                case TextAlign.Right:  x -= boxW; break;
+            }
+        }
         _activeTextBox = new System.Windows.Controls.TextBox
         {
+            // Style=null escapes WPF-UI's implicit TextBox style (merged in via the App's
+            // ControlsDictionary) which would otherwise paint a TextControlBackground-bound
+            // surface3 fill on top of our subtle dark overlay AND add internal chrome padding
+            // that crops the trailing characters during typing. The bare WPF template gives
+            // us a transparent-friendly TextBox we can dress ourselves.
+            Style = null,
             Text = initialText,
             FontFamily = new FontFamily(style.FontFamily),
             FontSize = style.FontSize,
             FontWeight = style.Bold ? FontWeights.Bold : FontWeights.Normal,
             FontStyle = style.Italic ? FontStyles.Italic : FontStyles.Normal,
             Foreground = ToBrush(style.Color),
+            CaretBrush = ToBrush(style.Color),
             TextAlignment = ToTextAlignment(style.Align),
             Background = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)),
             BorderBrush = new SolidColorBrush(Color.FromArgb(180, 80, 200, 255)),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(2),
-            MinWidth = 60,
+            // Fixed-size box: width/height match the shape, content wraps inside instead of
+            // pushing the box out. Aligns with Photoshop / Figma behaviour and avoids the
+            // right-edge cropping the auto-grow path used to suffer from.
+            Width = boxW,
+            Height = boxH,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             AcceptsReturn = true,
             AcceptsTab = false,
             Tag = "inline-text-editor"
@@ -1112,8 +1433,7 @@ public partial class EditorWindow : FluentWindow
         Canvas.SetTop(_activeTextBox, y);
         if (existing is { Rotation: var rot } && rot != 0)
         {
-            var existingBounds = TextBounds(existing);
-            _activeTextBox.RenderTransform = new RotateTransform(rot, existingBounds.Width / 2, existingBounds.Height / 2);
+            _activeTextBox.RenderTransform = new RotateTransform(rot, boxW / 2, boxH / 2);
         }
         DrawingCanvas.Children.Add(_activeTextBox);
         _activeTextBox.KeyDown += OnInlineTextBoxKeyDown;
@@ -1155,6 +1475,13 @@ public partial class EditorWindow : FluentWindow
         var text = _activeTextBox.Text;
         var x = Canvas.GetLeft(_activeTextBox);
         var y = Canvas.GetTop(_activeTextBox);
+        // Inherit the inline editor's current size — that's the user-resized width/height the
+        // editor was tracking. For a fresh text the editor was sized to the existing shape (or
+        // DefaultWidth/Height for new text); for an in-place edit we honour the existing
+        // shape's size so a "just type more text" pass doesn't shrink the box.
+        var fontSize = (_editingTextShape?.Style ?? _vm.CurrentTextStyle).FontSize;
+        var width = _activeTextBox.ActualWidth > 0 ? _activeTextBox.ActualWidth : TextShape.DefaultWidthFor(fontSize);
+        var height = _activeTextBox.ActualHeight > 0 ? _activeTextBox.ActualHeight : TextShape.DefaultHeightFor(fontSize);
 
         DrawingCanvas.Children.Remove(_activeTextBox);
         var existing = _editingTextShape;
@@ -1169,9 +1496,13 @@ public partial class EditorWindow : FluentWindow
         }
 
         // The TextShape's Outline is unused for rendering (foreground comes from Style.Color);
-        // we still set it for hit-testing parity with other shapes. Preserve rotation on edit.
+        // we still set it for hit-testing parity with other shapes. Preserve rotation + size
+        // on edit; new shapes inherit the inline editor's working dimensions.
         var rotation = existing?.Rotation ?? 0;
-        var shape = new TextShape(x, y, text, style, style.Color, ShapeColor.Transparent, 1, rotation);
+        var finalWidth = existing?.Width ?? width;
+        var finalHeight = existing?.Height ?? height;
+        var shape = new TextShape(x, y, finalWidth, finalHeight,
+            text, style, style.Color, ShapeColor.Transparent, 1, rotation);
         if (existing is null)
         {
             _vm.AddTextShape(shape);
@@ -1463,6 +1794,112 @@ public partial class EditorWindow : FluentWindow
         return TextAlign.Left;
     }
 
+    /// <summary>Capabilities of a shape category, used to drive section visibility and the
+    /// "no-selection defaults" preview. Maps 1:1 to a drawing tool that produces this shape
+    /// kind (text → TextShape, freehand → FreehandShape, etc.). Tools that don't produce a
+    /// freestanding editable shape (Select, Crop, SmartEraser) return null from <see cref="ToolCategory"/>.</summary>
+    private sealed record ShapeCategory(
+        string Name,
+        bool Outline,
+        bool Fill,
+        bool Stroke,
+        bool Text,
+        bool Freehand,
+        ShapeCategory.EffectKind Effect)
+    {
+        public enum EffectKind { None, Blur, Pixelate, Spotlight }
+    }
+
+    private static ShapeCategory? ToolCategory(EditorTool tool) => tool switch
+    {
+        EditorTool.Rectangle   => new("Rectangle",   Outline: true,  Fill: true,  Stroke: true,  Text: false, Freehand: false, ShapeCategory.EffectKind.None),
+        EditorTool.Ellipse     => new("Ellipse",     Outline: true,  Fill: true,  Stroke: true,  Text: false, Freehand: false, ShapeCategory.EffectKind.None),
+        EditorTool.Arrow       => new("Arrow",       Outline: true,  Fill: false, Stroke: true,  Text: false, Freehand: false, ShapeCategory.EffectKind.None),
+        EditorTool.Line        => new("Line",        Outline: true,  Fill: false, Stroke: true,  Text: false, Freehand: false, ShapeCategory.EffectKind.None),
+        EditorTool.Freehand    => new("Freehand",    Outline: true,  Fill: false, Stroke: true,  Text: false, Freehand: true,  ShapeCategory.EffectKind.None),
+        EditorTool.Text        => new("Text",        Outline: false, Fill: false, Stroke: false, Text: true,  Freehand: false, ShapeCategory.EffectKind.None),
+        EditorTool.StepCounter => new("Step counter",Outline: true,  Fill: true,  Stroke: true,  Text: false, Freehand: false, ShapeCategory.EffectKind.None),
+        EditorTool.Blur        => new("Blur",        Outline: false, Fill: false, Stroke: false, Text: false, Freehand: false, ShapeCategory.EffectKind.Blur),
+        EditorTool.Pixelate    => new("Pixelate",    Outline: false, Fill: false, Stroke: false, Text: false, Freehand: false, ShapeCategory.EffectKind.Pixelate),
+        EditorTool.Spotlight   => new("Spotlight",   Outline: false, Fill: false, Stroke: false, Text: false, Freehand: false, ShapeCategory.EffectKind.Spotlight),
+        // Select / Crop / SmartEraser have no per-shape props worth previewing — fall back to
+        // the empty-state hint.
+        _ => null,
+    };
+
+    private static string ShapeKindName(Shape s) => s switch
+    {
+        RectangleShape    => "Rectangle",
+        EllipseShape      => "Ellipse",
+        ArrowShape        => "Arrow",
+        LineShape         => "Line",
+        FreehandShape     => "Freehand",
+        TextShape         => "Text",
+        StepCounterShape  => "Step counter",
+        BlurShape         => "Blur",
+        PixelateShape     => "Pixelate",
+        SpotlightShape    => "Spotlight",
+        ImageShape        => "Image",
+        SmartEraserShape  => "Smart eraser",
+        _ => s.GetType().Name.Replace("Shape", string.Empty),
+    };
+
+    /// <summary>Show the sections relevant to <paramref name="category"/> and pre-fill them
+    /// with the current VM defaults so the user sees the values their next stroke will inherit.
+    /// Mirrors what an active selection would show, just sourced from <c>EditorViewModel</c>
+    /// state instead of a concrete shape.</summary>
+    private void ApplyToolDefaultsToPanel(ShapeCategory category)
+    {
+        SelOutlineSection.Visibility = category.Outline ? Visibility.Visible : Visibility.Collapsed;
+        SelFillSection.Visibility    = category.Fill    ? Visibility.Visible : Visibility.Collapsed;
+        SelOutlineFillRow.Visibility = (category.Outline || category.Fill) ? Visibility.Visible : Visibility.Collapsed;
+        SelStrokeSection.Visibility  = category.Stroke  ? Visibility.Visible : Visibility.Collapsed;
+        SelTextStyleSection.Visibility = category.Text  ? Visibility.Visible : Visibility.Collapsed;
+        SelFreehandSection.Visibility  = category.Freehand ? Visibility.Visible : Visibility.Collapsed;
+        SelEffectSection.Visibility    = category.Effect != ShapeCategory.EffectKind.None ? Visibility.Visible : Visibility.Collapsed;
+        // Rotation only makes sense once a concrete shape exists with an X/Y/W/H bbox, so it
+        // stays hidden in the defaults view — there's nothing to rotate yet.
+        SelRotationSection.Visibility = Visibility.Collapsed;
+
+        _suppressLiveUpdates = true;
+        try
+        {
+            if (category.Outline) SelOutlineSwatch.SelectedColor = _vm.OutlineColor;
+            if (category.Fill)    SelFillSwatch.SelectedColor    = _vm.FillColor;
+            if (category.Stroke)  SelStrokeSlider.Value          = _vm.StrokeWidth;
+            if (category.Text)    ApplyDefaultsToTextSection();
+            if (category.Freehand)
+            {
+                SelFreehandSmoothCheck.IsChecked = _vm.FreehandSmoothDefault;
+                SelFreehandEndArrowCheck.IsChecked = _vm.FreehandEndArrowDefault;
+            }
+            // Effect-tool defaults: surface the slider's range/label even when no shape exists
+            // yet, so the user sees what they're about to draw. Concrete values come from the
+            // shape itself once it's drawn — here we just tee up the chrome.
+            switch (category.Effect)
+            {
+                case ShapeCategory.EffectKind.Blur:
+                    SelEffectLabel.Text = "Blur radius (px)";
+                    SelEffectSlider.Minimum = 0; SelEffectSlider.Maximum = 60;
+                    SelEffectSecondarySection.Visibility = Visibility.Collapsed;
+                    break;
+                case ShapeCategory.EffectKind.Pixelate:
+                    SelEffectLabel.Text = "Pixel block size";
+                    SelEffectSlider.Minimum = 2; SelEffectSlider.Maximum = 60;
+                    SelEffectSecondarySection.Visibility = Visibility.Collapsed;
+                    break;
+                case ShapeCategory.EffectKind.Spotlight:
+                    SelEffectLabel.Text = "Spotlight dim (%)";
+                    SelEffectSlider.Minimum = 0; SelEffectSlider.Maximum = 100;
+                    SelEffectSecondarySection.Visibility = Visibility.Visible;
+                    SelEffectSecondaryLabel.Text = "Edge blur (px)";
+                    SelEffectSecondarySlider.Minimum = 0; SelEffectSecondarySlider.Maximum = 60;
+                    break;
+            }
+        }
+        finally { _suppressLiveUpdates = false; }
+    }
+
     private void ApplyDefaultsToTextSection()
     {
         _suppressLiveUpdates = true;
@@ -1520,6 +1957,7 @@ public partial class EditorWindow : FluentWindow
         FreehandShape f => f with { Outline = c },
         TextShape t => t with { Outline = c },
         StepCounterShape sc => sc with { Outline = c },
+        ImageShape i => i with { Outline = c },
         _ => s
     };
 
@@ -1535,14 +1973,16 @@ public partial class EditorWindow : FluentWindow
     private static bool ShapeSupportsFill(Shape s) => s is RectangleShape or EllipseShape or StepCounterShape;
 
     /// <summary>True for shapes that visually use the Outline color. TextShape uses Style.Color
-    /// instead, and effect shapes (blur/pixelate/spotlight) have no colored stroke at all.</summary>
+    /// instead, and effect shapes (blur/pixelate/spotlight) have no colored stroke at all.
+    /// <see cref="ImageShape"/> participates because outer-aligned outlines wrap the bitmap
+    /// without affecting the rendered pixels — same UX as Photoshop's "Stroke" layer effect.</summary>
     private static bool ShapeSupportsOutline(Shape s) =>
-        s is RectangleShape or EllipseShape or ArrowShape or LineShape or FreehandShape or StepCounterShape;
+        s is RectangleShape or EllipseShape or ArrowShape or LineShape or FreehandShape or StepCounterShape or ImageShape;
 
     /// <summary>True for shapes that visually use StrokeWidth. TextShape uses FontSize, effect shapes
     /// have no stroke.</summary>
     private static bool ShapeSupportsStroke(Shape s) =>
-        s is RectangleShape or EllipseShape or ArrowShape or LineShape or FreehandShape or StepCounterShape;
+        s is RectangleShape or EllipseShape or ArrowShape or LineShape or FreehandShape or StepCounterShape or ImageShape;
 
     private static Shape ApplyStrokeWidth(Shape s, double w) => s switch
     {
@@ -1552,6 +1992,7 @@ public partial class EditorWindow : FluentWindow
         LineShape l => l with { StrokeWidth = w },
         FreehandShape f => f with { StrokeWidth = w },
         StepCounterShape sc => sc with { StrokeWidth = w },
+        ImageShape i => i with { StrokeWidth = w },
         // TextShape uses Style.FontSize, not StrokeWidth — ignore.
         _ => s
     };
@@ -1709,7 +2150,7 @@ public partial class EditorWindow : FluentWindow
         ArrowShape a => (Math.Min(a.FromX, a.ToX), Math.Min(a.FromY, a.ToY), Math.Abs(a.ToX - a.FromX), Math.Abs(a.ToY - a.FromY)),
         LineShape l => (Math.Min(l.FromX, l.ToX), Math.Min(l.FromY, l.ToY), Math.Abs(l.ToX - l.FromX), Math.Abs(l.ToY - l.FromY)),
         FreehandShape f => FreehandBounds(f),
-        TextShape t => TextBounds(t),
+        TextShape t => (t.X, t.Y, t.Width, t.Height),
         StepCounterShape c => (c.CenterX - c.Radius, c.CenterY - c.Radius, c.Radius * 2, c.Radius * 2),
         BlurShape b => (b.X, b.Y, b.Width, b.Height),
         PixelateShape p => (p.X, p.Y, p.Width, p.Height),
@@ -1718,16 +2159,6 @@ public partial class EditorWindow : FluentWindow
         SmartEraserShape se => (se.X, se.Y, se.Width, se.Height),
         _ => (0, 0, 0, 0)
     };
-
-    private static (double X, double Y, double Width, double Height) TextBounds(TextShape t)
-    {
-        var lines = t.Text.Length == 0 ? new[] { "" } : t.Text.Split('\n');
-        var maxLen = 0;
-        foreach (var line in lines) if (line.Length > maxLen) maxLen = line.Length;
-        var w = Math.Max(8, maxLen * t.Style.FontSize * 0.55);
-        var h = lines.Length * t.Style.FontSize * 1.2;
-        return (t.X, t.Y, w, h);
-    }
 
     private static (double X, double Y, double Width, double Height) FreehandBounds(FreehandShape f)
     {
@@ -1763,43 +2194,86 @@ public partial class EditorWindow : FluentWindow
     }
 
     private static UIElement CreateRectangle(RectangleShape r)
-    {
-        var rect = new System.Windows.Shapes.Rectangle
-        {
-            Width = r.Width,
-            Height = r.Height,
-            Stroke = ToBrush(r.Outline),
-            StrokeThickness = r.StrokeWidth,
-            Fill = ToBrush(r.Fill)
-        };
-        Canvas.SetLeft(rect, r.X);
-        Canvas.SetTop(rect, r.Y);
-        if (r.Rotation != 0)
-        {
-            // RotateTransform's center is in the element's own coordinate system (origin top-left),
-            // so the geometric center is (Width/2, Height/2).
-            rect.RenderTransform = new RotateTransform(r.Rotation, r.Width / 2, r.Height / 2);
-        }
-        return rect;
-    }
+        => BuildOuterStrokedShape(
+            r.X, r.Y, r.Width, r.Height, r.StrokeWidth, r.Outline, r.Fill, r.Rotation,
+            isEllipse: false);
 
     private static UIElement CreateEllipse(EllipseShape e)
+        => BuildOuterStrokedShape(
+            e.X, e.Y, e.Width, e.Height, e.StrokeWidth, e.Outline, e.Fill, e.Rotation,
+            isEllipse: true);
+
+    /// <summary>Render a closed shape (rectangle or ellipse) with an OUTER-aligned stroke.
+    /// WPF's <c>Stroke</c>/<c>StrokeThickness</c> on a Shape straddles the geometry edge —
+    /// half inside, half outside — which makes interior fills shrink as the stroke gets thicker.
+    /// Outer alignment keeps the fill at the size the user dragged and pushes the visible
+    /// outline band entirely outside, matching the convention every raster editor (Photoshop,
+    /// Affinity, Figma) uses.
+    /// <para>Implementation: build the outline as a <em>filled</em> ring geometry — outer
+    /// shape minus inner shape with <see cref="FillRule.EvenOdd"/> — instead of using
+    /// <c>Stroke</c>. That eliminates stroke-straddling math; the ring's inner edge is exactly
+    /// the user's drawn rectangle, the outer edge sits <c>strokeWidth</c> further out. The
+    /// fill (when present) is rendered separately at the original bounds. Both children live
+    /// inside a single Canvas so one rotation transform spins them together.</para></summary>
+    private static UIElement BuildOuterStrokedShape(
+        double x, double y, double w, double h,
+        double strokeWidth, ShapeColor outline, ShapeColor fill, double rotation,
+        bool isEllipse)
     {
-        var ellipse = new System.Windows.Shapes.Ellipse
+        var t = strokeWidth;
+        var canvas = new Canvas
         {
-            Width = e.Width,
-            Height = e.Height,
-            Stroke = ToBrush(e.Outline),
-            StrokeThickness = e.StrokeWidth,
-            Fill = ToBrush(e.Fill)
+            Width = w + 2 * t,
+            Height = h + 2 * t,
+            // Transparent background keeps the wrapper hit-test friendly when inert (the editor
+            // sets IsHitTestVisible=false on the returned element anyway, but explicit is safer
+            // than relying on null-background semantics).
+            Background = System.Windows.Media.Brushes.Transparent
         };
-        Canvas.SetLeft(ellipse, e.X);
-        Canvas.SetTop(ellipse, e.Y);
-        if (e.Rotation != 0)
+
+        if (!fill.IsTransparent)
         {
-            ellipse.RenderTransform = new RotateTransform(e.Rotation, e.Width / 2, e.Height / 2);
+            System.Windows.Shapes.Shape fillElement = isEllipse
+                ? new System.Windows.Shapes.Ellipse { Width = w, Height = h, Fill = ToBrush(fill) }
+                : new System.Windows.Shapes.Rectangle { Width = w, Height = h, Fill = ToBrush(fill) };
+            Canvas.SetLeft(fillElement, t);
+            Canvas.SetTop(fillElement, t);
+            canvas.Children.Add(fillElement);
         }
-        return ellipse;
+
+        if (t > 0 && !outline.IsTransparent)
+        {
+            // Ring = outer geometry XOR inner geometry. EvenOdd treats overlapping interiors
+            // as "outside", so the inner rectangle/ellipse punches a hole through the outer
+            // and we get a band of width `t` exactly where we want it.
+            var group = new GeometryGroup { FillRule = FillRule.EvenOdd };
+            if (isEllipse)
+            {
+                group.Children.Add(new EllipseGeometry(new Rect(0, 0, w + 2 * t, h + 2 * t)));
+                group.Children.Add(new EllipseGeometry(new Rect(t, t, w, h)));
+            }
+            else
+            {
+                group.Children.Add(new RectangleGeometry(new Rect(0, 0, w + 2 * t, h + 2 * t)));
+                group.Children.Add(new RectangleGeometry(new Rect(t, t, w, h)));
+            }
+            var ring = new System.Windows.Shapes.Path
+            {
+                Data = group,
+                Fill = ToBrush(outline)
+            };
+            canvas.Children.Add(ring);
+        }
+
+        // Place the wrapper so the inner area lands at (x, y) — that's where the user dragged
+        // the geometry; the ring extends `t` further out in every direction.
+        Canvas.SetLeft(canvas, x - t);
+        Canvas.SetTop(canvas, y - t);
+        if (rotation != 0)
+        {
+            canvas.RenderTransform = new RotateTransform(rotation, canvas.Width / 2, canvas.Height / 2);
+        }
+        return canvas;
     }
 
     private static UIElement CreateLine(LineShape l)
@@ -1873,7 +2347,13 @@ public partial class EditorWindow : FluentWindow
 
     private static UIElement CreateFreehand(FreehandShape f)
     {
-        UIElement element;
+        // Whichever branch we take below, we want a uniform PathGeometry so adding the
+        // optional end-arrow cap is just two appended LineSegments instead of an extra
+        // overlay element. Non-smooth strokes get a polyline-as-path; smooth strokes get a
+        // Catmull-Rom-through-Bezier path. The cap then anchors to whatever the last
+        // rendered point is — same code path for both styles.
+        IReadOnlyList<(double X, double Y)> renderPts;
+        var geom = new PathGeometry();
         if (f.Smooth && f.Points.Count >= 3)
         {
             // Smoothing pipeline:
@@ -1885,7 +2365,7 @@ public partial class EditorWindow : FluentWindow
             //   2. Catmull-Rom → cubic Bezier rendering through the denoised points so the
             //      stroke looks like a continuous ink curve, not micro-segments.
             var pts = MovingAverage(MovingAverage(f.Points, 7), 7);
-            var geom = new PathGeometry();
+            renderPts = pts;
             var fig = new PathFigure { StartPoint = new Point(pts[0].X, pts[0].Y) };
             for (var i = 0; i < pts.Count - 1; i++)
             {
@@ -1899,36 +2379,74 @@ public partial class EditorWindow : FluentWindow
                 var c2y = p2.Y - (p3.Y - p1.Y) / 6.0;
                 fig.Segments.Add(new BezierSegment(new Point(c1x, c1y), new Point(c2x, c2y), new Point(p2.X, p2.Y), true));
             }
+            AppendEndArrowIfNeeded(fig, pts, f);
             geom.Figures.Add(fig);
-            element = new System.Windows.Shapes.Path
-            {
-                Data = geom,
-                Stroke = ToBrush(f.Outline),
-                StrokeThickness = f.StrokeWidth,
-                StrokeStartLineCap = PenLineCap.Round,
-                StrokeEndLineCap = PenLineCap.Round,
-                StrokeLineJoin = PenLineJoin.Round
-            };
         }
         else
         {
-            var poly = new System.Windows.Shapes.Polyline
+            renderPts = f.Points;
+            if (f.Points.Count > 0)
             {
-                Stroke = ToBrush(f.Outline),
-                StrokeThickness = f.StrokeWidth,
-                StrokeStartLineCap = PenLineCap.Round,
-                StrokeEndLineCap = PenLineCap.Round,
-                StrokeLineJoin = PenLineJoin.Round
-            };
-            foreach (var (x, y) in f.Points) poly.Points.Add(new Point(x, y));
-            element = poly;
+                var fig = new PathFigure { StartPoint = new Point(f.Points[0].X, f.Points[0].Y) };
+                for (var i = 1; i < f.Points.Count; i++)
+                    fig.Segments.Add(new LineSegment(new Point(f.Points[i].X, f.Points[i].Y), true));
+                AppendEndArrowIfNeeded(fig, f.Points, f);
+                geom.Figures.Add(fig);
+            }
         }
-        if (f.Rotation != 0 && element is FrameworkElement fe)
+
+        var element = new System.Windows.Shapes.Path
+        {
+            Data = geom,
+            Stroke = ToBrush(f.Outline),
+            StrokeThickness = f.StrokeWidth,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round
+        };
+        if (f.Rotation != 0)
         {
             var (px, py) = f.Pivot;
-            fe.RenderTransform = new RotateTransform(f.Rotation, px, py);
+            element.RenderTransform = new RotateTransform(f.Rotation, px, py);
         }
+        _ = renderPts; // reserved for future hit-testing on the rendered geometry
         return element;
+    }
+
+    /// <summary>If <see cref="FreehandShape.EndArrow"/> is set, append two stroked line segments
+    /// that form a "&gt;" arrowhead at the last rendered point. Tangent is averaged over the
+    /// final stretch of the stroke (up to 8 points back) so a single jittery last sample doesn't
+    /// flick the head sideways. Falls back to a no-op when the stroke has fewer than 2 points.</summary>
+    private static void AppendEndArrowIfNeeded(PathFigure fig,
+        IReadOnlyList<(double X, double Y)> pts,
+        FreehandShape f)
+    {
+        if (!f.EndArrow || pts.Count < 2) return;
+
+        var endIdx = pts.Count - 1;
+        var anchorIdx = Math.Max(0, endIdx - 8);
+        var endX = pts[endIdx].X; var endY = pts[endIdx].Y;
+        var dx = endX - pts[anchorIdx].X;
+        var dy = endY - pts[anchorIdx].Y;
+        var len = Math.Sqrt(dx * dx + dy * dy);
+        if (len < 0.5) return; // degenerate — tangent undefined, skip head
+        var ux = dx / len; var uy = dy / len;
+
+        // Same head-size relation as ArrowShape so a freehand-arrow visually matches a regular
+        // arrow at equivalent stroke weight.
+        var headSize = Math.Max(8, f.StrokeWidth * 4);
+        var leftX = endX - ux * headSize - uy * (headSize / 2);
+        var leftY = endY - uy * headSize + ux * (headSize / 2);
+        var rightX = endX - ux * headSize + uy * (headSize / 2);
+        var rightY = endY - uy * headSize - ux * (headSize / 2);
+
+        // Trace ">" anchored at the end-point: line back to the left wing, jump to the
+        // end-point, line out to the right wing. The first jump is "non-stroked" so we don't
+        // draw a visible line back along the body — the segment is still part of the figure
+        // for path continuity but skips the pen.
+        fig.Segments.Add(new LineSegment(new Point(leftX, leftY), true));
+        fig.Segments.Add(new LineSegment(new Point(endX, endY), true));
+        fig.Segments.Add(new LineSegment(new Point(rightX, rightY), true));
     }
 
     /// <summary>Moving-average denoising. Each output point is the mean of its window-sized
@@ -1954,9 +2472,10 @@ public partial class EditorWindow : FluentWindow
 
     private static UIElement CreateText(TextShape t)
     {
-        // Width must be explicitly set for TextAlignment to take effect on short lines.
-        // Without Width, TextBlock auto-sizes to its content and Center/Right look identical to Left.
-        var bounds = TextBounds(t);
+        // Fixed-size box: explicit Width AND Height come from the shape; text wraps inside
+        // and clips at the bottom edge if the user hasn't grown the box enough. TextAlignment
+        // needs the explicit Width too — without it short lines collapse to their content
+        // size and Centre/Right read identically to Left.
         var tb = new System.Windows.Controls.TextBlock
         {
             Text = t.Text,
@@ -1966,13 +2485,15 @@ public partial class EditorWindow : FluentWindow
             FontStyle = t.Style.Italic ? FontStyles.Italic : FontStyles.Normal,
             Foreground = ToBrush(t.Style.Color),
             TextAlignment = ToTextAlignment(t.Style.Align),
-            Width = bounds.Width
+            TextWrapping = TextWrapping.Wrap,
+            Width = t.Width,
+            Height = t.Height
         };
         Canvas.SetLeft(tb, t.X);
         Canvas.SetTop(tb, t.Y);
         if (t.Rotation != 0)
         {
-            tb.RenderTransform = new RotateTransform(t.Rotation, bounds.Width / 2, bounds.Height / 2);
+            tb.RenderTransform = new RotateTransform(t.Rotation, t.Width / 2, t.Height / 2);
         }
         return tb;
     }
@@ -2121,6 +2642,37 @@ public partial class EditorWindow : FluentWindow
         bmp.StreamSource = new System.IO.MemoryStream(i.PngBytes);
         bmp.EndInit();
         bmp.Freeze();
+
+        var hasOutline = i.StrokeWidth > 0 && !i.Outline.IsTransparent;
+        if (!hasOutline)
+        {
+            // Common case: no outline → return the bare Image so we don't pay for an extra
+            // Canvas + transform layer on every paste.
+            var bareImg = new System.Windows.Controls.Image
+            {
+                Source = bmp,
+                Stretch = Stretch.Fill,
+                Width = i.Width,
+                Height = i.Height
+            };
+            Canvas.SetLeft(bareImg, i.X);
+            Canvas.SetTop(bareImg, i.Y);
+            if (i.Rotation != 0)
+            {
+                bareImg.RenderTransform = new RotateTransform(i.Rotation, i.Width / 2, i.Height / 2);
+            }
+            return bareImg;
+        }
+
+        // Outer-aligned outline (same EvenOdd ring trick BuildOuterStrokedShape uses). The
+        // bitmap stays at user bounds; the outline band wraps it entirely outside.
+        var t = i.StrokeWidth;
+        var canvas = new Canvas
+        {
+            Width = i.Width + 2 * t,
+            Height = i.Height + 2 * t,
+            Background = System.Windows.Media.Brushes.Transparent
+        };
         var img = new System.Windows.Controls.Image
         {
             Source = bmp,
@@ -2128,13 +2680,23 @@ public partial class EditorWindow : FluentWindow
             Width = i.Width,
             Height = i.Height
         };
-        Canvas.SetLeft(img, i.X);
-        Canvas.SetTop(img, i.Y);
+        Canvas.SetLeft(img, t);
+        Canvas.SetTop(img, t);
+        canvas.Children.Add(img);
+
+        var ringGroup = new GeometryGroup { FillRule = FillRule.EvenOdd };
+        ringGroup.Children.Add(new RectangleGeometry(new Rect(0, 0, i.Width + 2 * t, i.Height + 2 * t)));
+        ringGroup.Children.Add(new RectangleGeometry(new Rect(t, t, i.Width, i.Height)));
+        var ring = new System.Windows.Shapes.Path { Data = ringGroup, Fill = ToBrush(i.Outline) };
+        canvas.Children.Add(ring);
+
+        Canvas.SetLeft(canvas, i.X - t);
+        Canvas.SetTop(canvas, i.Y - t);
         if (i.Rotation != 0)
         {
-            img.RenderTransform = new RotateTransform(i.Rotation, i.Width / 2, i.Height / 2);
+            canvas.RenderTransform = new RotateTransform(i.Rotation, canvas.Width / 2, canvas.Height / 2);
         }
-        return img;
+        return canvas;
     }
 
     private UIElement CreateSmartEraser(SmartEraserShape s)
@@ -2208,19 +2770,36 @@ public partial class EditorWindow : FluentWindow
 
     private static UIElement CreateStepCounter(StepCounterShape c)
     {
+        // Outer-aligned outline (same EvenOdd ring trick BuildOuterStrokedShape uses). The
+        // disc fill stays at the user's radius; the outline band sits entirely outside it.
+        // Step counters always have a fill — transparent input fills with the outline colour,
+        // matching the legacy "filled disc with a number" look.
+        var t = c.StrokeWidth;
+        var diameter = c.Radius * 2;
         var grid = new Grid
         {
-            Width = c.Radius * 2,
-            Height = c.Radius * 2
+            Width = diameter + 2 * t,
+            Height = diameter + 2 * t
         };
-        var ellipse = new System.Windows.Shapes.Ellipse
+        var fillEllipse = new System.Windows.Shapes.Ellipse
         {
-            Width = c.Radius * 2,
-            Height = c.Radius * 2,
-            Stroke = ToBrush(c.Outline),
-            StrokeThickness = c.StrokeWidth,
-            Fill = c.Fill.IsTransparent ? ToBrush(c.Outline) : ToBrush(c.Fill)
+            Width = diameter,
+            Height = diameter,
+            Fill = c.Fill.IsTransparent ? ToBrush(c.Outline) : ToBrush(c.Fill),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
         };
+        grid.Children.Add(fillEllipse);
+
+        if (t > 0 && !c.Outline.IsTransparent)
+        {
+            var ringGroup = new GeometryGroup { FillRule = FillRule.EvenOdd };
+            ringGroup.Children.Add(new EllipseGeometry(new Rect(0, 0, diameter + 2 * t, diameter + 2 * t)));
+            ringGroup.Children.Add(new EllipseGeometry(new Rect(t, t, diameter, diameter)));
+            var ring = new System.Windows.Shapes.Path { Data = ringGroup, Fill = ToBrush(c.Outline) };
+            grid.Children.Add(ring);
+        }
+
         var text = new System.Windows.Controls.TextBlock
         {
             Text = c.Number.ToString(System.Globalization.CultureInfo.InvariantCulture),
@@ -2230,10 +2809,11 @@ public partial class EditorWindow : FluentWindow
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
-        grid.Children.Add(ellipse);
         grid.Children.Add(text);
-        Canvas.SetLeft(grid, c.CenterX - c.Radius);
-        Canvas.SetTop(grid, c.CenterY - c.Radius);
+
+        // Offset by t so the disc centre still lands at (CenterX, CenterY) in world space.
+        Canvas.SetLeft(grid, c.CenterX - c.Radius - t);
+        Canvas.SetTop(grid, c.CenterY - c.Radius - t);
         return grid;
     }
 
@@ -2247,26 +2827,34 @@ public partial class EditorWindow : FluentWindow
         var sels = _vm.SelectedShapes;
         if (sels.Count == 0)
         {
-            // Empty selection but Text tool active: show only the text-style section pre-filled with defaults.
-            if (_vm.CurrentTool == EditorTool.Text)
+            // No selection: defer to the active tool. Drawing tools render their target shape's
+            // sections pre-populated with the current VM defaults; the Select / Crop / Smart-eraser
+            // tools (which don't produce a freestanding shape) fall through to the empty-state hint.
+            var category = ToolCategory(_vm.CurrentTool);
+            if (category is null)
             {
-                NoSelectionText.Visibility = Visibility.Collapsed;
-                SelectedShapeStack.Visibility = Visibility.Visible;
-                SelectedShapeKindText.Text = "New text — defaults";
-                SelOutlineFillRow.Visibility = Visibility.Collapsed;
-                SelStrokeSection.Visibility = Visibility.Collapsed;
-                SelTextStyleSection.Visibility = Visibility.Visible;
-                ApplyDefaultsToTextSection();
+                PanelTitleText.Text = "Properties";
+                NoSelectionText.Visibility = Visibility.Visible;
+                NoSelectionText.Text = "Select a shape to edit its properties (V tool, then click).";
+                SelectedShapeStack.Visibility = Visibility.Collapsed;
                 RefreshSelectionAdorner();
                 return;
             }
-            NoSelectionText.Visibility = Visibility.Visible;
-            NoSelectionText.Text = "Select a shape to edit its properties (V tool, then click).";
-            SelectedShapeStack.Visibility = Visibility.Collapsed;
+
+            PanelTitleText.Text = $"{category.Name} Properties";
+            NoSelectionText.Visibility = Visibility.Collapsed;
+            SelectedShapeStack.Visibility = Visibility.Visible;
+            ApplyToolDefaultsToPanel(category);
             RefreshSelectionAdorner();
             return;
         }
 
+        // Selection-driven title — single shape names its kind (e.g. "Rectangle Properties"),
+        // multi-selection collapses to a generic "Shared Properties" since per-shape sections
+        // (rotation / freehand toggles / effect sliders) are hidden anyway in that case.
+        PanelTitleText.Text = sels.Count == 1
+            ? $"{ShapeKindName(sels[0])} Properties"
+            : "Shared Properties";
         NoSelectionText.Visibility = Visibility.Collapsed;
         SelectedShapeStack.Visibility = Visibility.Visible;
 
@@ -2290,13 +2878,27 @@ public partial class EditorWindow : FluentWindow
         var rotatable = sels.Count == 1 && sels[0] is RectangleShape or EllipseShape or TextShape or ImageShape;
         SelRotationSection.Visibility = rotatable ? Visibility.Visible : Visibility.Collapsed;
 
-        // Freehand-specific: smooth toggle. Visible only on a single FreehandShape selection.
+        // Freehand-specific: smooth + end-arrow toggles. Visible when a single FreehandShape
+        // is selected OR when the Freehand tool itself is active (so the user can pre-toggle
+        // before drawing — same UX the text-style section uses). The checkboxes reflect the
+        // selected shape's flags when a shape is picked, otherwise the persisted defaults so
+        // the user immediately sees their last-session choice.
         var singleFreehand = sels.Count == 1 ? sels[0] as FreehandShape : null;
-        SelFreehandSection.Visibility = singleFreehand is not null ? Visibility.Visible : Visibility.Collapsed;
-        if (singleFreehand is not null)
+        var showFreehandSection = singleFreehand is not null || _vm.CurrentTool == EditorTool.Freehand;
+        SelFreehandSection.Visibility = showFreehandSection ? Visibility.Visible : Visibility.Collapsed;
+        if (showFreehandSection)
         {
             _suppressLiveUpdates = true;
-            SelFreehandSmoothCheck.IsChecked = singleFreehand.Smooth;
+            if (singleFreehand is not null)
+            {
+                SelFreehandSmoothCheck.IsChecked = singleFreehand.Smooth;
+                SelFreehandEndArrowCheck.IsChecked = singleFreehand.EndArrow;
+            }
+            else
+            {
+                SelFreehandSmoothCheck.IsChecked = _vm.FreehandSmoothDefault;
+                SelFreehandEndArrowCheck.IsChecked = _vm.FreehandEndArrowDefault;
+            }
             _suppressLiveUpdates = false;
         }
 
@@ -2316,10 +2918,6 @@ public partial class EditorWindow : FluentWindow
         _suppressLiveUpdates = true;
         try
         {
-            SelectedShapeKindText.Text = sels.Count == 1
-                ? first.GetType().Name.Replace("Shape", "")
-                : $"{sels.Count} shapes selected";
-
             SelOutlineSwatch.SelectedColor = allSameOutline ? first.Outline : ShapeColor.Black;
             SelFillSwatch.SelectedColor = allSameFill ? fillRef : ShapeColor.Transparent;
             SelStrokeSlider.Value = allSameStroke ? first.StrokeWidth : 2;

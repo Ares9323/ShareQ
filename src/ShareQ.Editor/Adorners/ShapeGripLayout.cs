@@ -22,7 +22,7 @@ public static class ShapeGripLayout
         // midpoint, dragging it bends the line into a quadratic curve. ShareX uses the same UX.
         ArrowShape a => [new(GripKind.From, a.FromX, a.FromY), new(GripKind.To, a.ToX, a.ToY), new(GripKind.Bend, a.ControlPoint.X, a.ControlPoint.Y)],
         LineShape l => [new(GripKind.From, l.FromX, l.FromY), new(GripKind.To, l.ToX, l.ToY), new(GripKind.Bend, l.ControlPoint.X, l.ControlPoint.Y)],
-        TextShape t => TextGrip(t, rotateGripOffset),
+        TextShape t => RectGrips(t.X, t.Y, t.Width, t.Height, rotateGripOffset),
         StepCounterShape c => [new(GripKind.Resize, c.CenterX + c.Radius * 0.707, c.CenterY + c.Radius * 0.707)],
         BlurShape b => RectGrips(b.X, b.Y, b.Width, b.Height, 0),
         PixelateShape p => RectGrips(p.X, p.Y, p.Width, p.Height, 0),
@@ -53,7 +53,7 @@ public static class ShapeGripLayout
     {
         RectangleShape r => (r.X + r.Width / 2, r.Y + r.Height / 2),
         EllipseShape e => (e.X + e.Width / 2, e.Y + e.Height / 2),
-        TextShape t => TextPivot(t),
+        TextShape t => (t.X + t.Width / 2, t.Y + t.Height / 2),
         StepCounterShape c => (c.CenterX, c.CenterY),
         BlurShape b => (b.X + b.Width / 2, b.Y + b.Height / 2),
         PixelateShape p => (p.X + p.Width / 2, p.Y + p.Height / 2),
@@ -92,16 +92,6 @@ public static class ShapeGripLayout
         return (cx + dx * cos - dy * sin, cy + dx * sin + dy * cos);
     }
 
-    private static (double X, double Y) TextPivot(TextShape t)
-    {
-        var lines = t.Text.Length == 0 ? new[] { "" } : t.Text.Split('\n');
-        var maxLen = 0;
-        foreach (var line in lines) if (line.Length > maxLen) maxLen = line.Length;
-        var w = Math.Max(8, maxLen * t.Style.FontSize * 0.55);
-        var h = lines.Length * t.Style.FontSize * 1.2;
-        return (t.X + w / 2, t.Y + h / 2);
-    }
-
     private static IReadOnlyList<GripPosition> RectGrips(double x, double y, double w, double h, double rotateOffset)
     {
         var grips = new List<GripPosition>(9)
@@ -119,15 +109,4 @@ public static class ShapeGripLayout
         return grips;
     }
 
-    private static IReadOnlyList<GripPosition> TextGrip(TextShape t, double rotateOffset)
-    {
-        var lines = t.Text.Length == 0 ? new[] { "" } : t.Text.Split('\n');
-        var maxLen = 0;
-        foreach (var line in lines) if (line.Length > maxLen) maxLen = line.Length;
-        var w = Math.Max(8, maxLen * t.Style.FontSize * 0.55);
-        var h = lines.Length * t.Style.FontSize * 1.2;
-        var grips = new List<GripPosition>(2) { new(GripKind.Resize, t.X + w, t.Y + h) };
-        if (rotateOffset > 0) grips.Add(new(GripKind.Rotate, t.X + w / 2, t.Y - rotateOffset));
-        return grips;
-    }
 }

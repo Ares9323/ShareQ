@@ -74,7 +74,10 @@ public sealed class ResizeCommand : IEditorCommand
         ArrowShape a => a with { FromX = a.FromX * sx, FromY = a.FromY * sy, ToX = a.ToX * sx, ToY = a.ToY * sy, ControlOffsetX = a.ControlOffsetX * sx, ControlOffsetY = a.ControlOffsetY * sy, StrokeWidth = a.StrokeWidth * AvgScale(sx, sy) },
         LineShape l => l with { FromX = l.FromX * sx, FromY = l.FromY * sy, ToX = l.ToX * sx, ToY = l.ToY * sy, ControlOffsetX = l.ControlOffsetX * sx, ControlOffsetY = l.ControlOffsetY * sy, StrokeWidth = l.StrokeWidth * AvgScale(sx, sy) },
         FreehandShape f => f with { Points = f.Points.Select(p => (p.X * sx, p.Y * sy)).ToList(), StrokeWidth = f.StrokeWidth * AvgScale(sx, sy) },
-        TextShape t => t with { X = t.X * sx, Y = t.Y * sy, Style = t.Style with { FontSize = t.Style.FontSize * AvgScale(sx, sy) } },
+        // Canvas-resize scales the text frame's box dimensions AND the font so the visible
+        // proportions match the pre-resize render. (Grip-resize is different — that one only
+        // changes Width/Height to reflow the text, leaving the font alone.)
+        TextShape t => t with { X = t.X * sx, Y = t.Y * sy, Width = t.Width * sx, Height = t.Height * sy, Style = t.Style with { FontSize = t.Style.FontSize * AvgScale(sx, sy) } },
         StepCounterShape c => c with { CenterX = c.CenterX * sx, CenterY = c.CenterY * sy, Radius = c.Radius * AvgScale(sx, sy), StrokeWidth = c.StrokeWidth * AvgScale(sx, sy) },
         BlurShape b => b with { X = b.X * sx, Y = b.Y * sy, Width = b.Width * sx, Height = b.Height * sy, Radius = b.Radius * AvgScale(sx, sy) },
         PixelateShape p => p with { X = p.X * sx, Y = p.Y * sy, Width = p.Width * sx, Height = p.Height * sy, BlockSize = (int)Math.Max(2, Math.Round(p.BlockSize * AvgScale(sx, sy))) },

@@ -74,14 +74,18 @@ public class GripDragTests
     }
 
     [Fact]
-    public void Text_Resize_grip_grows_FontSize()
+    public void Text_BottomRight_grip_resizes_box_not_font()
     {
-        var t = new TextShape(0, 0, "ABCDE",
+        // TextShape now behaves like a rectangle frame — grip resize changes Width/Height
+        // (text reflows inside) and leaves the font size alone. Drag bottom-right from
+        // (100, 40) → (200, 80) doubles each dimension; FontSize stays put.
+        var t = new TextShape(0, 0, 100, 40, "ABCDE",
             new TextStyle("Segoe UI", 20, false, false, ShapeColor.Red, TextAlign.Left),
             ShapeColor.Red, ShapeColor.Transparent, 1);
-        // Original bbox width ≈ 5 * 20 * 0.55 = 55. Drag to (110, …) doubles the size.
-        var resized = (TextShape)GripDrag.Transform(t, GripKind.Resize, 110, 200, shiftHeld: false)!;
-        Assert.True(resized.Style.FontSize > t.Style.FontSize);
+        var resized = (TextShape)GripDrag.Transform(t, GripKind.BottomRight, 200, 80, shiftHeld: false)!;
+        Assert.Equal(200, resized.Width);
+        Assert.Equal(80, resized.Height);
+        Assert.Equal(t.Style.FontSize, resized.Style.FontSize);
     }
 
     [Fact]

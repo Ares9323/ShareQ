@@ -20,7 +20,9 @@ public sealed class TextTool : IDrawingTool
 
     public void Begin(double x, double y, ShapeColor outline, ShapeColor fill, double strokeWidth)
     {
-        _preview = new TextShape(x, y, "", _style, outline, fill, strokeWidth);
+        _preview = new TextShape(x, y,
+            TextShape.DefaultWidthFor(_style.FontSize), TextShape.DefaultHeightFor(_style.FontSize),
+            "", _style, outline, fill, strokeWidth);
     }
 
     public void Update(double x, double y) { }

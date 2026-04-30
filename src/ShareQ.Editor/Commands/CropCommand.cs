@@ -101,7 +101,7 @@ public sealed class CropCommand : IEditorCommand
         LineShape l => (Math.Min(l.FromX, l.ToX), Math.Min(l.FromY, l.ToY), Math.Abs(l.ToX - l.FromX), Math.Abs(l.ToY - l.FromY)),
         FreehandShape f when f.Points.Count > 0 => (f.Points.Min(p => p.X), f.Points.Min(p => p.Y),
             f.Points.Max(p => p.X) - f.Points.Min(p => p.X), f.Points.Max(p => p.Y) - f.Points.Min(p => p.Y)),
-        TextShape t => (t.X, t.Y, Math.Max(8, t.Text.Length * t.Style.FontSize * 0.55), t.Style.FontSize * 1.2),
+        TextShape t => (t.X, t.Y, t.Width, t.Height),
         StepCounterShape c => (c.CenterX - c.Radius, c.CenterY - c.Radius, c.Radius * 2, c.Radius * 2),
         BlurShape b => (b.X, b.Y, b.Width, b.Height),
         PixelateShape p => (p.X, p.Y, p.Width, p.Height),

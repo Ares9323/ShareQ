@@ -81,30 +81,14 @@ public static class ShapeHitTester
 
     private static bool HitTextRotated(TextShape t, double px, double py)
     {
-        // The rotation pivot of a TextShape is the center of its bbox.
-        var (w, h) = TextBboxSize(t);
-        var cx = t.X + w / 2;
-        var cy = t.Y + h / 2;
+        // Box-driven hit-test now: TextShape carries explicit Width/Height that the user can
+        // resize via grips. The whole rect is hittable so dragging on the empty area inside
+        // the box still grabs the text — matches Photoshop / Figma's "click anywhere in the
+        // text frame" behaviour. Rotation is unwound around the box centre.
+        var cx = t.X + t.Width / 2;
+        var cy = t.Y + t.Height / 2;
         var (qx, qy) = UnrotateAroundCenter(px, py, cx, cy, t.Rotation);
-        return HitText(t, qx, qy);
-    }
-
-    private static (double Width, double Height) TextBboxSize(TextShape t)
-    {
-        var lines = t.Text.Length == 0 ? new[] { "" } : t.Text.Split('\n');
-        var maxLen = 0;
-        foreach (var line in lines) if (line.Length > maxLen) maxLen = line.Length;
-        return (Math.Max(8, maxLen * t.Style.FontSize * 0.55), lines.Length * t.Style.FontSize * 1.2);
-    }
-
-    private static bool HitText(TextShape t, double px, double py)
-    {
-        var lines = t.Text.Length == 0 ? new[] { "" } : t.Text.Split('\n');
-        var maxLen = 0;
-        foreach (var line in lines) if (line.Length > maxLen) maxLen = line.Length;
-        var width = Math.Max(8, maxLen * t.Style.FontSize * 0.55);
-        var height = lines.Length * t.Style.FontSize * 1.2;
-        return px >= t.X && px <= t.X + width && py >= t.Y && py <= t.Y + height;
+        return qx >= t.X && qx <= t.X + t.Width && qy >= t.Y && qy <= t.Y + t.Height;
     }
 
     private static bool HitStepCounter(StepCounterShape c, double px, double py)

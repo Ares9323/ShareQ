@@ -11,14 +11,16 @@ public sealed record EditorDefaults(
     double StrokeWidth,
     EditorTool Tool,
     TextStyle TextStyle,
-    bool FreehandSmooth = true);
+    bool FreehandSmooth = true,
+    bool FreehandEndArrow = false);
 
 public sealed class EditorDefaultsStore
 {
     private const string SettingsKey = "editor.defaults";
 
     public static readonly EditorDefaults Initial =
-        new(ShapeColor.Red, ShapeColor.Transparent, 2, EditorTool.Rectangle, TextStyle.Default, FreehandSmooth: true);
+        new(ShapeColor.Red, ShapeColor.Transparent, 2, EditorTool.Rectangle, TextStyle.Default,
+            FreehandSmooth: true, FreehandEndArrow: false);
 
     private readonly ISettingsStore _settings;
 
@@ -49,7 +51,8 @@ public sealed class EditorDefaultsStore
                 dto.StrokeWidth,
                 Enum.IsDefined(typeof(EditorTool), dto.Tool) ? (EditorTool)dto.Tool : Initial.Tool,
                 new TextStyle(family, size, dto.Bold, dto.Italic, textColor, align),
-                FreehandSmooth: dto.FreehandSmooth);
+                FreehandSmooth: dto.FreehandSmooth,
+                FreehandEndArrow: dto.FreehandEndArrow);
         }
         catch (JsonException)
         {
@@ -70,7 +73,8 @@ public sealed class EditorDefaultsStore
             defaults.TextStyle.Italic,
             defaults.TextStyle.Color.A, defaults.TextStyle.Color.R, defaults.TextStyle.Color.G, defaults.TextStyle.Color.B,
             (int)defaults.TextStyle.Align,
-            defaults.FreehandSmooth);
+            defaults.FreehandSmooth,
+            defaults.FreehandEndArrow);
         var json = JsonSerializer.Serialize(dto);
         await _settings.SetAsync(SettingsKey, json, sensitive: false, cancellationToken).ConfigureAwait(false);
     }
@@ -88,5 +92,8 @@ public sealed class EditorDefaultsStore
         int Align = 0,
         // Defaults to true so older payloads (pre-Smooth field) load with smoothing enabled —
         // matches the new "smooth on by default" UX.
-        bool FreehandSmooth = true);
+        bool FreehandSmooth = true,
+        // Defaults to false so older payloads (pre-EndArrow field) load with the cap off —
+        // matches "no arrow unless the user asked for one".
+        bool FreehandEndArrow = false);
 }
