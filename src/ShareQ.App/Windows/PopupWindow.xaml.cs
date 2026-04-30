@@ -66,7 +66,10 @@ public partial class PopupWindow : Window
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        SearchBox.Focus();
+        // Focus the popup itself (not the SearchBox) so number-row digits, arrows and Enter go
+        // straight to the keyboard handler instead of typing into the search field. Ctrl+F is
+        // the explicit way to drop into search.
+        Focus();
         // Pre-navigate the WebBrowser to a dark blank page so MSHTML doesn't flash white about:blank
         // before the first real preview lands.
         try { HtmlPreviewBox.NavigateToString(WrapWithCharset(string.Empty)); }
@@ -287,6 +290,42 @@ public partial class PopupWindow : Window
         }
     }
 
+    /// <summary>Right-clicking a row should both select it and open its context menu. WPF
+    /// doesn't auto-select on right-click, so the move-to command would otherwise act on
+    /// whichever row was previously selected. Setting SelectedItem on the ListBox triggers
+    /// the VM's selection binding, then ContextMenu opens normally on the click bubble.</summary>
+    private void OnItemRowPreviewRightClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Border b) return;
+        if (b.DataContext is ItemRowViewModel row)
+        {
+            ResultsList.SelectedItem = row;
+        }
+    }
+
+    /// <summary>Cycle the active category tab by <paramref name="delta"/> (+1 = next, -1 = prev).
+    /// After applying the switch, RefreshAsync runs in the VM and selects the first row of the
+    /// new category — ScrollSelectedIntoView keeps it visible. Wraps around at both ends.</summary>
+    private async void SwitchCategory(int delta)
+    {
+        var tabs = ViewModel.Categories;
+        if (tabs.Count == 0) return;
+        var current = -1;
+        for (var i = 0; i < tabs.Count; i++) if (tabs[i].IsActive) { current = i; break; }
+        if (current < 0) current = 0;
+        var next = (current + delta + tabs.Count) % tabs.Count;
+        ViewModel.SelectCategoryCommand.Execute(tabs[next].Name);
+
+        // RefreshAsync inside the VM reloads Rows; wait one dispatcher tick so the new rows
+        // are materialized before we drop the focus on the first one.
+        await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Background);
+        if (ViewModel.Rows.Count > 0)
+        {
+            ViewModel.SelectedRow = ViewModel.Rows[0];
+            ScrollSelectedIntoView();
+        }
+    }
+
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
         switch (e.Key)
@@ -304,6 +343,18 @@ public partial class PopupWindow : Window
                 ViewModel.MoveSelectionCommand.Execute(-1);
                 ScrollSelectedIntoView();
                 e.Handled = true;
+                break;
+            case Key.Right:
+            case Key.Left:
+                // Sideways arrows cycle through the category tab strip — Right = next, Left =
+                // previous. Skip when the search box has focus so the user can still move the
+                // caret inside their query. After the switch, the VM auto-selects the first
+                // visible row (see SwitchCategory below).
+                if (!SearchBox.IsKeyboardFocused)
+                {
+                    SwitchCategory(e.Key == Key.Right ? 1 : -1);
+                    e.Handled = true;
+                }
                 break;
             case Key.Enter:
                 if (ViewModel.SelectedRow is { } row)

@@ -27,12 +27,14 @@ public static class StorageServiceCollectionExtensions
 
         services.AddSingleton<IMigration, Migration001InitialSchema>();
         services.AddSingleton<IMigration, Migration002Thumbnail>();
+        services.AddSingleton<IMigration, Migration003Categories>();
         services.AddSingleton<MigrationRunner>(sp =>
             new MigrationRunner(sp.GetServices<IMigration>()));
         services.AddSingleton<IShareQDatabase, ShareQDatabase>();
 
         services.AddSingleton<ItemSerializer>();
         services.AddSingleton<IItemStore, ItemStore>();
+        services.AddSingleton<ICategoryStore, SqliteCategoryStore>();
 
         services.AddSingleton<IBlobStore, FileSystemBlobStore>();
 

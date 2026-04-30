@@ -92,6 +92,11 @@
                            Appearance="{Binding IsThemeSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Margin="0,0,0,4"
+                           Content="Categories"
+                           Command="{Binding ShowCategoriesCommand}"
+                           Appearance="{Binding IsCategoriesSelected, Converter={StaticResource BoolToAppearance}}" />
+                <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                           Margin="0,0,0,4"
                            Content="Settings"
                            Command="{Binding ShowSettingsCommand}"
                            Appearance="{Binding IsSettingsSelected, Converter={StaticResource BoolToAppearance}}" />
@@ -840,6 +845,100 @@
                            Command="{Binding Theme.ResetCommand}"
                            ToolTip="Restore the original ShareQ accent (#751C8B background, white foreground, #371242 launcher dark)." />
             </StackPanel>
+            </ScrollViewer>
+
+            <!-- Categories — clipboard "tabs" à la CopyQ. Each row is a category the user can
+                 rename / cap / cleanup. The default "Clipboard" bucket is read-only because
+                 there's nowhere to dump its items if it disappeared. -->
+            <ScrollViewer Visibility="{Binding IsCategoriesSelected, Converter={StaticResource BoolToVisibility}}"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="24,16,24,16">
+                    <TextBlock Text="Categories" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                               Text="Categories are buckets for clipboard items. Right-click any item in the popup → Move to → … to file it. Items in deleted categories return to the default 'Clipboard' bucket; pinned items keep their pin." />
+
+                    <!-- Add row -->
+                    <Border Background="{DynamicResource Surface3Brush}" CornerRadius="4"
+                            Padding="14" Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock Text="Add a new category" FontWeight="SemiBold" Margin="0,0,0,8" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="80" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ui:TextBox Grid.Column="0"
+                                            Text="{Binding Categories.NewCategoryName, UpdateSourceTrigger=PropertyChanged}"
+                                            PlaceholderText="Name (e.g. Code)"
+                                            Margin="0,0,8,0" />
+                                <ui:TextBox Grid.Column="1"
+                                            Text="{Binding Categories.NewCategoryIcon, UpdateSourceTrigger=PropertyChanged}"
+                                            PlaceholderText="🏷️"
+                                            Margin="0,0,8,0"
+                                            ToolTip="Optional emoji or character to display next to the name." />
+                                <ui:Button Grid.Column="2" Content="Add"
+                                           Command="{Binding Categories.AddCategoryCommand}"
+                                           Appearance="Primary"
+                                           Padding="14,4" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <ItemsControl ItemsSource="{Binding Categories.Categories}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:CategoryRowViewModel}">
+                                <Border Background="{DynamicResource Surface1Brush}"
+                                        BorderBrush="#333" BorderThickness="1" CornerRadius="6"
+                                        Padding="14,10" Margin="0,0,0,8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="60" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="100" />
+                                            <ColumnDefinition Width="100" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <ui:TextBox Grid.Column="0"
+                                                    Text="{Binding Icon, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                    IsEnabled="{Binding CanModify}"
+                                                    PlaceholderText="🏷️"
+                                                    Margin="0,0,8,0"
+                                                    ToolTip="Emoji or icon char." />
+                                        <ui:TextBox Grid.Column="1"
+                                                    Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                    IsEnabled="{Binding CanModify}"
+                                                    Margin="0,0,8,0"
+                                                    ToolTip="Category name. Renaming re-routes every existing item to the new name." />
+                                        <ui:NumberBox Grid.Column="2"
+                                                      Value="{Binding MaxItems, Mode=TwoWay}"
+                                                      IsEnabled="{Binding CanModify}"
+                                                      Minimum="0" Maximum="100000"
+                                                      ClearButtonEnabled="False"
+                                                      Margin="0,0,8,0"
+                                                      ToolTip="Max items kept (0 = no cap)." />
+                                        <ui:NumberBox Grid.Column="3"
+                                                      Value="{Binding AutoCleanupDays, Mode=TwoWay}"
+                                                      IsEnabled="{Binding CanModify}"
+                                                      Minimum="0" Maximum="3650"
+                                                      ClearButtonEnabled="False"
+                                                      Margin="0,0,8,0"
+                                                      ToolTip="Auto-delete items older than N days (0 = never)." />
+                                        <ui:Button Grid.Column="4" Content="Save"
+                                                   Command="{Binding SaveCommand}"
+                                                   Margin="0,0,4,0" />
+                                        <ui:Button Grid.Column="5" Content="✕"
+                                                   Command="{Binding DeleteCommand}"
+                                                   Appearance="Danger"
+                                                   ToolTip="Delete category (items will move to 'Clipboard')." />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
             </ScrollViewer>
 
             <!-- Settings — generic preferences that don't belong under a specific feature tab.

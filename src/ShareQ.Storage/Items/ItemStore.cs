@@ -43,10 +43,10 @@ public sealed class ItemStore : IItemStore
         cmd.CommandText = """
             INSERT INTO items
                 (kind, source, created_at, pinned, source_process, source_window,
-                 payload, payload_size, blob_ref, uploaded_url, uploader_id, search_text, thumbnail)
+                 payload, payload_size, blob_ref, uploaded_url, uploader_id, search_text, thumbnail, category)
             VALUES
                 ($kind, $source, $created_at, $pinned, $source_process, $source_window,
-                 $payload, $payload_size, $blob_ref, $uploaded_url, $uploader_id, $search_text, $thumbnail);
+                 $payload, $payload_size, $blob_ref, $uploaded_url, $uploader_id, $search_text, $thumbnail, $category);
             SELECT last_insert_rowid();
             """;
         cmd.Parameters.AddWithValue("$kind", item.Kind.ToString());
@@ -62,6 +62,7 @@ public sealed class ItemStore : IItemStore
         cmd.Parameters.AddWithValue("$uploader_id", (object?)item.UploaderId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$search_text", (object?)item.SearchText ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$thumbnail", (object?)thumbnail ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$category", string.IsNullOrEmpty(item.Category) ? "Clipboard" : item.Category);
 
         var newId = (long)(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false))!;
         ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.Added, newId));
@@ -91,8 +92,9 @@ public sealed class ItemStore : IItemStore
         // between instant and several seconds.
         var payloadColumn = query.IncludePayload ? "payload" : "NULL AS payload";
         var thumbnailColumn = query.IncludeThumbnail ? "thumbnail" : "NULL AS thumbnail";
-        var sql = new System.Text.StringBuilder($"SELECT items.id, items.kind, items.source, items.created_at, items.payload_size, items.pinned, items.deleted_at, items.source_process, items.source_window, items.blob_ref, items.uploaded_url, items.uploader_id, items.search_text, {payloadColumn}, {thumbnailColumn} FROM items");
+        var sql = new System.Text.StringBuilder($"SELECT items.id, items.kind, items.source, items.created_at, items.payload_size, items.pinned, items.deleted_at, items.source_process, items.source_window, items.blob_ref, items.uploaded_url, items.uploader_id, items.search_text, items.category, {payloadColumn}, {thumbnailColumn} FROM items");
         var hasFts = !string.IsNullOrWhiteSpace(query.Search);
+        var hasCategory = !string.IsNullOrEmpty(query.Category);
         if (hasFts)
         {
             sql.Append(" JOIN items_fts ON items_fts.rowid = items.id");
@@ -102,6 +104,7 @@ public sealed class ItemStore : IItemStore
         if (!query.IncludeDeleted) sql.Append(" AND items.deleted_at IS NULL");
         if (query.Kind is not null) sql.Append(" AND items.kind = $kind");
         if (query.Pinned is not null) sql.Append(" AND items.pinned = $pinned");
+        if (hasCategory) sql.Append(" AND items.category = $category");
         if (hasFts) sql.Append(" AND items_fts.search_text MATCH $search");
 
         // Pinned rows always float to the top; within each group, newest first.
@@ -111,6 +114,7 @@ public sealed class ItemStore : IItemStore
         cmd.CommandText = sql.ToString();
         if (query.Kind is not null) cmd.Parameters.AddWithValue("$kind", query.Kind.Value.ToString());
         if (query.Pinned is not null) cmd.Parameters.AddWithValue("$pinned", query.Pinned.Value ? 1 : 0);
+        if (hasCategory) cmd.Parameters.AddWithValue("$category", query.Category!);
         if (hasFts) cmd.Parameters.AddWithValue("$search", BuildFtsQuery(query.Search!));
         cmd.Parameters.AddWithValue("$limit", query.Limit);
         cmd.Parameters.AddWithValue("$offset", query.Offset);
@@ -293,6 +297,16 @@ public sealed class ItemStore : IItemStore
             if (!reader.IsDBNull(thumbOrd)) thumbnail = (byte[])reader["thumbnail"];
         }
         catch (IndexOutOfRangeException) { /* v1 schema — no thumbnail column */ }
+        // Category column was added in v3 — older readers (e.g. tests on a v1/v2 schema) don't
+        // have it. Fall back to the default "Clipboard" category in that case.
+        string category = "Clipboard";
+        try
+        {
+            var catOrd = reader.GetOrdinal("category");
+            if (!reader.IsDBNull(catOrd)) category = reader.GetString(catOrd);
+        }
+        catch (IndexOutOfRangeException) { /* pre-v3 schema — column missing */ }
+
         return new ItemRecord(
             Id: reader.GetInt64(reader.GetOrdinal("id")),
             Kind: Enum.Parse<ItemKind>(reader.GetString(reader.GetOrdinal("kind"))),
@@ -309,7 +323,21 @@ public sealed class ItemStore : IItemStore
             UploaderId: NullableString(reader, "uploader_id"),
             Payload: plaintext,
             SearchText: NullableString(reader, "search_text"),
-            Thumbnail: thumbnail);
+            Thumbnail: thumbnail,
+            Category: category);
+    }
+
+    public async Task<bool> SetCategoryAsync(long id, string category, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(category);
+        var conn = _database.GetOpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE items SET category = $cat WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$cat", category);
+        cmd.Parameters.AddWithValue("$id", id);
+        var rows = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        if (rows == 1) ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.Updated, id));
+        return rows == 1;
     }
 
     private static string? NullableString(SqliteDataReader reader, string column)

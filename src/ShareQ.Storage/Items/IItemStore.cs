@@ -17,6 +17,10 @@ public interface IItemStore
     /// <summary>Soft-delete every non-pinned item. Returns the count affected.</summary>
     Task<int> ClearAllExceptPinnedAsync(CancellationToken cancellationToken);
 
+    /// <summary>Move an item into a different category bucket. Used by the popup's right-click
+    /// "Move to → …" menu and by future auto-routing rules. Raises Updated when it changes.</summary>
+    Task<bool> SetCategoryAsync(long id, string category, CancellationToken cancellationToken);
+
     /// <summary>Raised after any mutation (add / update / pin / soft-delete / restore). Subscribers
     /// must marshal to the UI thread themselves.</summary>
     event EventHandler<ItemsChangedEventArgs>? ItemsChanged;
@@ -45,4 +49,5 @@ public sealed record NewItem(
     string? BlobRef = null,
     string? UploadedUrl = null,
     string? UploaderId = null,
-    string? SearchText = null);
+    string? SearchText = null,
+    string Category = "Clipboard");

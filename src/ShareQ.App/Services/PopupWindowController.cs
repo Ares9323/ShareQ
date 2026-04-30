@@ -21,6 +21,17 @@ public sealed partial class PopupWindowController
 
     public async Task ShowAsync()
     {
+        // Toggle behaviour: if the popup is already up, hide it and bail. Same UX the
+        // launcher exposes — one shortcut becomes "open" on first press, "close" on the
+        // second. IsActive guards against the case where the window is technically visible
+        // but minimised / behind something: we still want a tap of the shortcut to bring
+        // it forward, not hide it.
+        if (_window is { IsVisible: true, IsActive: true })
+        {
+            _window.Hide();
+            return;
+        }
+
         _target.CaptureCurrentForeground();
         EnsureWindow();
         await _window!.ViewModel.RefreshAsync(CancellationToken.None).ConfigureAwait(true);

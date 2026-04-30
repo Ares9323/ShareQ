@@ -21,7 +21,8 @@ public sealed record ItemRecord(
     string? UploaderId,
     ReadOnlyMemory<byte> Payload,
     string? SearchText,
-    ReadOnlyMemory<byte>? Thumbnail = null)
+    ReadOnlyMemory<byte>? Thumbnail = null,
+    string Category = "Clipboard")
 {
     public Item ToDomain() => new(
         Id: Id,
@@ -35,5 +36,6 @@ public sealed record ItemRecord(
         SourceWindow: SourceWindow,
         BlobRef: BlobRef,
         UploadedUrl: UploadedUrl,
-        UploaderId: UploaderId);
+        UploaderId: UploaderId,
+        Category: Category);
 }

@@ -183,6 +183,7 @@ public partial class App : Application
                 services.AddSingleton<ThemeService>();
                 services.AddSingleton<SettingsBackupService>();
                 services.AddSingleton<ThemeViewModel>();
+                services.AddSingleton<CategoriesViewModel>();
                 services.AddSingleton<DebugViewModel>();
                 services.AddSingleton<SettingsViewModel>();
                 services.AddSingleton<MainWindow>();

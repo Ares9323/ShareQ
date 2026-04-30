@@ -10,4 +10,7 @@ public sealed record ItemQuery(
     bool IncludeDeleted = false,
     string? Search = null,
     bool IncludePayload = true,
-    bool IncludeThumbnail = true);
+    bool IncludeThumbnail = true,
+    /// <summary>When set, restrict results to items in this category. null = all categories
+    /// (the popup's "All" tab). Empty string is treated like null.</summary>
+    string? Category = null);

@@ -13,19 +13,47 @@ namespace ShareQ.App.ViewModels;
 public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
 {
     private readonly IItemStore _items;
+    private readonly ICategoryStore _categories;
     private readonly IServiceProvider _services;
     private long _previewLoadToken;
     private string? _selectedItemBlobRef;
 
-    public PopupWindowViewModel(IItemStore items, IServiceProvider services)
+    public PopupWindowViewModel(IItemStore items, ICategoryStore categories, IServiceProvider services)
     {
         _items = items;
+        _categories = categories;
         _services = services;
         Rows = [];
+        Categories = [];
         _items.ItemsChanged += OnItemsChanged;
+        _categories.Changed += OnCategoriesChanged;
+        _ = ReloadCategoriesAsync();
     }
 
-    public void Dispose() => _items.ItemsChanged -= OnItemsChanged;
+    public void Dispose()
+    {
+        _items.ItemsChanged -= OnItemsChanged;
+        _categories.Changed -= OnCategoriesChanged;
+    }
+
+    private void OnCategoriesChanged(object? sender, EventArgs e)
+        => Application.Current?.Dispatcher.InvokeAsync(() => _ = ReloadCategoriesAsync());
+
+    private async Task ReloadCategoriesAsync()
+    {
+        var list = await _categories.ListAsync(CancellationToken.None).ConfigureAwait(true);
+        Categories.Clear();
+        MovableCategories.Clear();
+        // First entry is the synthetic "All" tab — nullable Name signals "no filter" to RefreshAsync.
+        Categories.Add(new CategoryTab(Name: null, DisplayName: "All", Icon: null,
+                                       IsActive: ActiveCategory is null));
+        foreach (var c in list)
+        {
+            var tab = new CategoryTab(c.Name, c.Name, c.Icon, IsActive: c.Name == ActiveCategory);
+            Categories.Add(tab);
+            MovableCategories.Add(tab);
+        }
+    }
 
     private void OnItemsChanged(object? sender, ItemsChangedEventArgs e)
     {
@@ -34,6 +62,10 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
     }
 
     public ObservableCollection<ItemRowViewModel> Rows { get; }
+    public ObservableCollection<CategoryTab> Categories { get; }
+    /// <summary>Categories without the synthetic "All" entry — feeds the right-click "Move to"
+    /// submenu where the only meaningful targets are real, persistent buckets.</summary>
+    public ObservableCollection<CategoryTab> MovableCategories { get; } = [];
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -43,6 +75,21 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private ItemKind? _kindFilter;
+
+    /// <summary>Currently selected category. <c>null</c> = "All" tab (no filter).</summary>
+    [ObservableProperty]
+    private string? _activeCategory;
+
+    partial void OnActiveCategoryChanged(string? value)
+    {
+        // Reflect the new active flag in the tab strip + reload items.
+        for (var i = 0; i < Categories.Count; i++)
+        {
+            var t = Categories[i];
+            Categories[i] = t with { IsActive = t.Name == value };
+        }
+        _ = RefreshAsync(CancellationToken.None);
+    }
 
     public bool IsAllFilter => KindFilter is null;
     public bool IsTextFilter => KindFilter == ItemKind.Text;
@@ -156,7 +203,8 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
             Limit: 500,
             Search: NormalizeSearch(SearchText),
             Kind: KindFilter,
-            IncludePayload: false);
+            IncludePayload: false,
+            Category: ActiveCategory);
         var previousId = SelectedRow?.Id;
         var loaded = await _items.ListAsync(query, cancellationToken).ConfigureAwait(false);
         Rows.Clear();
@@ -259,6 +307,48 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void SetFilterImage() => KindFilter = ItemKind.Image;
 
+    /// <summary>Click handler for a tab in the category strip — switches the active filter.
+    /// Pass null/empty to select the synthetic "All" tab.</summary>
+    [RelayCommand]
+    private void SelectCategory(string? name)
+        => ActiveCategory = string.IsNullOrEmpty(name) ? null : name;
+
+    /// <summary>Move the selected item into the named category (right-click → Move to → …).</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task MoveSelectedToCategoryAsync(string? name)
+    {
+        if (SelectedRow is not { } row || string.IsNullOrEmpty(name)) return;
+        await _items.SetCategoryAsync(row.Id, name, CancellationToken.None).ConfigureAwait(true);
+        await RefreshAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
+    /// <summary>Copy the selected item into the named category — same payload, fresh row.
+    /// The original stays where it is (unlike Move). Implemented by re-reading the source
+    /// record (payload included) then inserting a NewItem under the target category.</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task CopySelectedToCategoryAsync(string? name)
+    {
+        if (SelectedRow is not { } row || string.IsNullOrEmpty(name)) return;
+        var record = await _items.GetByIdAsync(row.Id, CancellationToken.None).ConfigureAwait(true);
+        if (record is null) return;
+        var clone = new NewItem(
+            Kind: record.Kind,
+            Source: record.Source,
+            CreatedAt: DateTimeOffset.UtcNow,
+            Payload: record.Payload,
+            PayloadSize: record.PayloadSize,
+            Pinned: false,                               // a copy starts unpinned — the original keeps its pin
+            SourceProcess: record.SourceProcess,
+            SourceWindow: record.SourceWindow,
+            BlobRef: record.BlobRef,
+            UploadedUrl: record.UploadedUrl,
+            UploaderId: record.UploaderId,
+            SearchText: record.SearchText,
+            Category: name);
+        await _items.AddAsync(clone, CancellationToken.None).ConfigureAwait(true);
+        // ItemsChanged event triggers RefreshAsync via the existing handler.
+    }
+
     private bool HasSelection() => SelectedRow is not null;
     private bool IsImageSelection() => SelectedRow?.Kind == ItemKind.Image;
     private bool HasFileOnDisk() => !string.IsNullOrEmpty(_selectedItemBlobRef);
@@ -271,3 +361,9 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
 }
 
 public enum PreviewKind { None, Text, Html, Rtf, Image }
+
+/// <summary>One entry in the popup's category tab strip. <see cref="Name"/> = null marks the
+/// synthetic "All" tab that ignores the category filter; otherwise it's the category's
+/// stored name. <see cref="DisplayName"/> is what the tab button shows (mirrors Name for
+/// real categories, "All" for the synthetic one).</summary>
+public sealed record CategoryTab(string? Name, string DisplayName, string? Icon, bool IsActive);

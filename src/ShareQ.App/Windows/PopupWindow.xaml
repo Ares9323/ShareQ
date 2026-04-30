@@ -26,11 +26,12 @@
     </WindowChrome.WindowChrome>
     <Grid Margin="12">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />  <!-- 0: header -->
+            <RowDefinition Height="Auto" />  <!-- 1: category tab strip -->
+            <RowDefinition Height="Auto" />  <!-- 2: search box -->
+            <RowDefinition Height="Auto" />  <!-- 3: kind filter chips + clear -->
+            <RowDefinition Height="*" />     <!-- 4: results list / preview pane -->
+            <RowDefinition Height="Auto" />  <!-- 5: footer hint + action buttons -->
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" MinWidth="380" />
@@ -76,9 +77,31 @@
                     ToolTip="Close (Esc)" />
         </Grid>
 
+        <!-- Category tab strip — CopyQ-style "tabs". The synthetic "All" comes first (null Name);
+             then user categories in their stored sort order. Click switches the active filter
+             via SelectCategoryCommand → ActiveCategory in the view-model → RefreshAsync. -->
+        <ItemsControl Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                      ItemsSource="{Binding Categories}"
+                      Margin="0,0,0,8">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:CategoryTab}">
+                    <ui:Button Content="{Binding DisplayName}"
+                               Command="{Binding DataContext.SelectCategoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                               CommandParameter="{Binding Name}"
+                               Appearance="{Binding IsActive, Converter={StaticResource BoolToAppearance}}"
+                               Margin="0,0,4,0" />
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
         <!-- SearchBox on its own row — exact replica of commit f2fd070 (last known working). -->
         <TextBox x:Name="SearchBox"
-                 Grid.Row="1"
+                 Grid.Row="2"
                  Grid.Column="0"
                  Margin="0,0,8,0"
                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
@@ -91,7 +114,7 @@
                  CaretBrush="White" />
 
         <!-- Filter chips + Clear all (left column only — preview pane spans full height on the right). -->
-        <Grid Grid.Row="2" Grid.Column="0" Margin="0,8,8,0">
+        <Grid Grid.Row="3" Grid.Column="0" Margin="0,8,8,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -116,7 +139,7 @@
         </Grid>
 
         <ListBox x:Name="ResultsList"
-                 Grid.Row="3"
+                 Grid.Row="4"
                  Grid.Column="0"
                  Margin="0,8,8,8"
                  Background="Transparent"
@@ -139,7 +162,46 @@
                 <DataTemplate DataType="{x:Type vm:ItemRowViewModel}">
                     <Border Padding="8,6" Margin="0,2"
                             CornerRadius="4"
-                            BorderThickness="2">
+                            BorderThickness="2"
+                            PreviewMouseRightButtonDown="OnItemRowPreviewRightClick"
+                            Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <Border.ContextMenu>
+                            <!-- ContextMenu lives in a popup outside the visual tree, so
+                                 RelativeSource AncestorType=Window doesn't resolve from inside.
+                                 The standard fix: stash the parent VM in the Border.Tag and
+                                 rebind ContextMenu.DataContext via PlacementTarget.Tag.
+                                 Everything inside the menu now reads from the popup VM. -->
+                            <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+                                <MenuItem Header="Pin / unpin"
+                                          Command="{Binding TogglePinSelectedCommand}" />
+                                <Separator />
+                                <MenuItem Header="Move to"
+                                          ItemsSource="{Binding MovableCategories}">
+                                    <MenuItem.ItemContainerStyle>
+                                        <Style TargetType="MenuItem">
+                                            <Setter Property="Header" Value="{Binding DisplayName}" />
+                                            <Setter Property="Command"
+                                                    Value="{Binding DataContext.MoveSelectedToCategoryCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                            <Setter Property="CommandParameter" Value="{Binding Name}" />
+                                        </Style>
+                                    </MenuItem.ItemContainerStyle>
+                                </MenuItem>
+                                <MenuItem Header="Copy to"
+                                          ItemsSource="{Binding MovableCategories}">
+                                    <MenuItem.ItemContainerStyle>
+                                        <Style TargetType="MenuItem">
+                                            <Setter Property="Header" Value="{Binding DisplayName}" />
+                                            <Setter Property="Command"
+                                                    Value="{Binding DataContext.CopySelectedToCategoryCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                            <Setter Property="CommandParameter" Value="{Binding Name}" />
+                                        </Style>
+                                    </MenuItem.ItemContainerStyle>
+                                </MenuItem>
+                                <Separator />
+                                <MenuItem Header="Delete"
+                                          Command="{Binding DeleteSelectedCommand}" />
+                            </ContextMenu>
+                        </Border.ContextMenu>
                         <Border.Style>
                             <Style TargetType="Border">
                                 <Setter Property="Background" Value="{DynamicResource Surface3Brush}" />
@@ -212,14 +274,14 @@
         <!-- Side panel: rich preview of the selected row. Code-behind on PopupWindow watches the
              VM's PreviewRtfBytes / PreviewHtml since RichTextBox.Document and WebBrowser content
              can't be data-bound directly. -->
-        <GridSplitter Grid.Row="1" Grid.RowSpan="3" Grid.Column="1"
+        <GridSplitter Grid.Row="2" Grid.RowSpan="3" Grid.Column="1"
                       Width="4"
                       HorizontalAlignment="Stretch"
                       VerticalAlignment="Stretch"
                       Background="Transparent"
                       ShowsPreview="False" />
 
-        <Border Grid.Row="1" Grid.RowSpan="3" Grid.Column="2"
+        <Border Grid.Row="2" Grid.RowSpan="3" Grid.Column="2"
                 x:Name="PreviewPane"
                 Margin="0,0,0,8"
                 Background="{DynamicResource Surface1Brush}"
@@ -297,7 +359,7 @@
             </Grid>
         </Border>
 
-        <TextBlock Grid.Row="4"
+        <TextBlock Grid.Row="5"
                    Grid.Column="0"
                    Grid.ColumnSpan="3"
                    Foreground="#666"

@@ -22,12 +22,14 @@ public sealed partial class SettingsViewModel : ObservableObject
         CaptureDefaultsViewModel capture,
         WorkflowsViewModel workflows,
         ThemeViewModel theme,
+        CategoriesViewModel categories,
         DebugViewModel debug)
     {
         _registry = registry;
         _configFactory = configFactory;
         _autostart = autostart;
         Theme = theme;
+        Categories = categories;
         Debug = debug;
         // Initial state mirrors the registry. Future toggles persist via OnStartWithWindowsChanged.
         _suppressAutostartPersist = true;
@@ -58,6 +60,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public CaptureDefaultsViewModel Capture { get; }
     public WorkflowsViewModel Workflows { get; }
     public ThemeViewModel Theme { get; }
+    public CategoriesViewModel Categories { get; }
     public DebugViewModel Debug { get; }
 
     /// <summary>Non-null while the user is in the Plugins → Configure detail view. Drives the
@@ -92,8 +95,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool IsUploadersSelected => SelectedTab == SettingsTab.Uploaders;
     public bool IsHotkeysSelected   => SelectedTab == SettingsTab.Hotkeys;
     public bool IsCaptureSelected   => SelectedTab == SettingsTab.Capture;
-    public bool IsThemeSelected     => SelectedTab == SettingsTab.Theme;
-    public bool IsSettingsSelected  => SelectedTab == SettingsTab.Settings;
+    public bool IsThemeSelected      => SelectedTab == SettingsTab.Theme;
+    public bool IsCategoriesSelected => SelectedTab == SettingsTab.Categories;
+    public bool IsSettingsSelected   => SelectedTab == SettingsTab.Settings;
     public bool IsDebugSelected     => SelectedTab == SettingsTab.Debug;
     public bool IsAboutSelected     => SelectedTab == SettingsTab.About;
 
@@ -107,6 +111,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsHotkeysSelected));
         OnPropertyChanged(nameof(IsCaptureSelected));
         OnPropertyChanged(nameof(IsThemeSelected));
+        OnPropertyChanged(nameof(IsCategoriesSelected));
         OnPropertyChanged(nameof(IsSettingsSelected));
         OnPropertyChanged(nameof(IsDebugSelected));
         OnPropertyChanged(nameof(IsAboutSelected));
@@ -119,8 +124,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand] private void ShowUploaders() => SelectedTab = SettingsTab.Uploaders;
     [RelayCommand] private void ShowHotkeys()   => SelectedTab = SettingsTab.Hotkeys;
     [RelayCommand] private void ShowCapture()   => SelectedTab = SettingsTab.Capture;
-    [RelayCommand] private void ShowTheme()     => SelectedTab = SettingsTab.Theme;
-    [RelayCommand] private void ShowSettings()  => SelectedTab = SettingsTab.Settings;
+    [RelayCommand] private void ShowTheme()      => SelectedTab = SettingsTab.Theme;
+    [RelayCommand] private void ShowCategories() => SelectedTab = SettingsTab.Categories;
+    [RelayCommand] private void ShowSettings()   => SelectedTab = SettingsTab.Settings;
     [RelayCommand] private void ShowDebug()     => SelectedTab = SettingsTab.Debug;
     [RelayCommand] private void ShowAbout()     => SelectedTab = SettingsTab.About;
 
@@ -152,4 +158,4 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 }
 
-public enum SettingsTab { Home, Plugins, Uploaders, Hotkeys, Capture, Theme, Settings, Debug, About }
+public enum SettingsTab { Home, Plugins, Uploaders, Hotkeys, Capture, Theme, Categories, Settings, Debug, About }
