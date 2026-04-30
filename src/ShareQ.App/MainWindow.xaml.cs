@@ -20,15 +20,18 @@ public partial class MainWindow : FluentWindow
     private WorkflowStepViewModel? _dragSourceStep;
     private readonly ShareQ.App.Services.ScreenColorPickerService _screenSampler;
     private readonly ShareQ.Editor.Persistence.ColorRecentsStore _colorRecents;
+    private readonly ShareQ.App.Services.SettingsBackupService _settingsBackup;
 
     public MainWindow(SettingsViewModel viewModel,
         ShareQ.App.Services.ScreenColorPickerService screenSampler,
-        ShareQ.Editor.Persistence.ColorRecentsStore colorRecents)
+        ShareQ.Editor.Persistence.ColorRecentsStore colorRecents,
+        ShareQ.App.Services.SettingsBackupService settingsBackup)
     {
         InitializeComponent();
         DataContext = viewModel;
         _screenSampler = screenSampler;
         _colorRecents = colorRecents;
+        _settingsBackup = settingsBackup;
         // Newly-added workflow: focus the inline name field and select its text so the user can
         // type the real name straight away. Defer to a low-priority dispatcher tick because the
         // edit-view's TextBox isn't realised until the visibility binding flips.
@@ -295,17 +298,31 @@ public partial class MainWindow : FluentWindow
     /// code-behind (rather than the VM) so we don't drag <see cref="ColorPickerWindow"/> — a UI
     /// type — into the view-model layer. The hex assignment fires the existing TryApply path
     /// which propagates colors live across the app.</summary>
+    private enum AccentChannel { Background, Foreground, Dark }
+
     private void OnAccentBgSwatchClick(object sender, MouseButtonEventArgs e)
-        => PickAccentColor(isBackground: true);
+        => PickAccentColor(AccentChannel.Background);
 
     private void OnAccentFgSwatchClick(object sender, MouseButtonEventArgs e)
-        => PickAccentColor(isBackground: false);
+        => PickAccentColor(AccentChannel.Foreground);
 
-    private void PickAccentColor(bool isBackground)
+    private void OnAccentDarkSwatchClick(object sender, MouseButtonEventArgs e)
+        => PickAccentColor(AccentChannel.Dark);
+
+    private void PickAccentColor(AccentChannel channel)
     {
         if (DataContext is not SettingsViewModel vm) return;
-        var currentHex = isBackground ? vm.Theme.AccentBackgroundHex : vm.Theme.AccentForegroundHex;
-        var current = TryParseShapeColor(currentHex) ?? (isBackground ? ShapeColor.Black : new ShapeColor(255, 255, 255, 255));
+        var currentHex = channel switch
+        {
+            AccentChannel.Background => vm.Theme.AccentBackgroundHex,
+            AccentChannel.Foreground => vm.Theme.AccentForegroundHex,
+            AccentChannel.Dark       => vm.Theme.AccentBackgroundDarkHex,
+            _ => vm.Theme.AccentBackgroundHex,
+        };
+        var fallback = channel == AccentChannel.Foreground
+            ? new ShapeColor(255, 255, 255, 255)
+            : ShapeColor.Black;
+        var current = TryParseShapeColor(currentHex) ?? fallback;
         var dialog = new ColorPickerWindow(current) { Owner = this };
 
         // Wire 🔍 button → screen sampler. SampleAtCursor returns hex (no clipboard side-effect)
@@ -318,15 +335,15 @@ public partial class MainWindow : FluentWindow
         };
 
         // OK button live preview: as the user picks inside the dialog, override the OK button's
-        // matching channel (Background when picking AccentBg, Foreground when picking AccentFg)
-        // so the user sees the *future* accent landed in a real button shape — without the rest
-        // of the app re-painting until they actually commit with OK.
+        // matching channel so the user sees the *future* accent landed in a real button shape —
+        // without the rest of the app re-painting until they commit with OK. Dark channel
+        // previews on the Background slot too (it's still a "background-ish" colour).
         EventHandler<ShapeColor> previewHandler = (_, c) =>
         {
             var brush = new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B));
             brush.Freeze();
-            if (isBackground) dialog.OkButton.Background = brush;
-            else               dialog.OkButton.Foreground = brush;
+            if (channel == AccentChannel.Foreground) dialog.OkButton.Foreground = brush;
+            else                                      dialog.OkButton.Background = brush;
         };
         dialog.ColorChanged += previewHandler;
 
@@ -337,10 +354,68 @@ public partial class MainWindow : FluentWindow
         if (dialog.ShowDialog() != true) return;
         var picked = dialog.PickedColor;
         var hex2 = $"#{picked.R:X2}{picked.G:X2}{picked.B:X2}";
-        if (isBackground) vm.Theme.AccentBackgroundHex = hex2;
-        else               vm.Theme.AccentForegroundHex = hex2;
+        switch (channel)
+        {
+            case AccentChannel.Background: vm.Theme.AccentBackgroundHex = hex2; break;
+            case AccentChannel.Foreground: vm.Theme.AccentForegroundHex = hex2; break;
+            case AccentChannel.Dark:       vm.Theme.AccentBackgroundDarkHex = hex2; break;
+        }
         // Push to recents so the colour shows up next time the user opens any picker.
         _ = _colorRecents.PushAsync(picked, System.Threading.CancellationToken.None);
+    }
+
+    private async void OnExportSettingsClicked(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export ShareQ settings",
+            Filter = "JSON|*.json|All files|*.*",
+            FileName = $"shareq-settings-{DateTime.Now:yyyy-MM-dd-HHmm}.json",
+            DefaultExt = ".json",
+            AddExtension = true,
+        };
+        if (dlg.ShowDialog(this) != true) return;
+        try
+        {
+            await _settingsBackup.ExportAsync(dlg.FileName).ConfigureAwait(true);
+            System.Windows.MessageBox.Show(this, $"Settings exported to:\n{dlg.FileName}",
+                "ShareQ", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"Export failed: {ex.Message}",
+                "ShareQ", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    private async void OnImportSettingsClicked(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Import ShareQ settings",
+            Filter = "JSON|*.json|All files|*.*",
+            CheckFileExists = true,
+            Multiselect = false,
+        };
+        if (dlg.ShowDialog(this) != true) return;
+        // Confirm before overwriting — import isn't destructive (it merges, doesn't wipe), but
+        // it does silently rewrite existing keys, which the user should know.
+        var ok = System.Windows.MessageBox.Show(this,
+            $"Import settings from:\n{dlg.FileName}\n\nExisting values will be overwritten where the file declares them. Settings not in the file stay untouched. Continue?",
+            "ShareQ — Import settings", System.Windows.MessageBoxButton.OKCancel, System.Windows.MessageBoxImage.Question);
+        if (ok != System.Windows.MessageBoxResult.OK) return;
+        try
+        {
+            var count = await _settingsBackup.ImportAsync(dlg.FileName).ConfigureAwait(true);
+            System.Windows.MessageBox.Show(this,
+                $"Imported {count} setting(s). Some changes (theme, hotkeys) apply immediately; others may require restarting ShareQ to take effect.",
+                "ShareQ", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"Import failed: {ex.Message}",
+                "ShareQ", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
     }
 
     private static ShapeColor? TryParseShapeColor(string hex)

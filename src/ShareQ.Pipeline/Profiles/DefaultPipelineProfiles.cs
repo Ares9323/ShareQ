@@ -16,6 +16,7 @@ public static class DefaultPipelineProfiles
     public const string RecordScreenMp4Id   = "record-screen";
     public const string RecordScreenGifId   = "record-screen-gif";
     public const string OpenScreenshotFolderId = "open-screenshot-folder";
+    public const string OpenLauncherId         = "open-launcher";
 
     // Task IDs whose implementations live in ShareQ.App (resolved at runtime by the registry).
     public const string CopyImageToClipboardTaskId = "shareq.copy-image-to-clipboard";
@@ -30,6 +31,7 @@ public static class DefaultPipelineProfiles
     public const string CaptureRegionTaskId        = "shareq.capture-region";
     public const string RecordScreenTaskId         = "shareq.record-screen";
     public const string OpenScreenshotFolderTaskId = "shareq.open-screenshot-folder";
+    public const string OpenLauncherMenuTaskId     = "shareq.open-launcher-menu";
 
     // Task IDs from ShareQ.Plugins.
     public const string UploadTaskId = "shareq.upload";
@@ -165,6 +167,20 @@ public static class DefaultPipelineProfiles
                 new PipelineStep(OpenScreenshotFolderTaskId, Id: "open-screenshot-folder")
             ],
             // No default hotkey — user assigns one if desired.
+            IsBuiltIn: true),
+
+        new PipelineProfile(
+            Id: OpenLauncherId,
+            DisplayName: "Open launcher",
+            Trigger: "hotkey:launcher",
+            Steps:
+            [
+                new PipelineStep(OpenLauncherMenuTaskId, Id: "open-launcher-menu")
+            ],
+            // Win+Z — picked because the Z position is unused by stock Windows shortcuts and
+            // sits where the right-hand stays naturally in muscle-memory keyboard navigation.
+            // The task itself toggles open/close so a second press dismisses the launcher.
+            Hotkey: new HotkeyBinding(Win, 0x5A),
             IsBuiltIn: true),
     ];
 }

@@ -5,8 +5,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ShareQ.App.Native;
 using ShareQ.App.Services;
+using ShareQ.App.Services.Launcher;
 using ShareQ.App.Services.PipelineTasks;
 using ShareQ.App.ViewModels;
+using ShareQ.App.Views;
 using ShareQ.App.Windows;
 using ShareQ.Capture.DependencyInjection;
 using ShareQ.Clipboard;
@@ -137,6 +139,13 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, LaunchAppTask>();
                 services.AddSingleton<IPipelineTask, OpenFileTask>();
                 services.AddSingleton<IPipelineTask, RunCommandTask>();
+                services.AddSingleton<IPipelineTask, OpenLauncherMenuTask>();
+                services.AddSingleton<IPipelineTask, OpenLauncherDragModeTask>();
+                services.AddSingleton<LauncherStore>();
+                services.AddSingleton<IconService>();
+                // Transient: fresh window per opening so we never reuse a closed one. Closing the
+                // launcher disposes its visual tree; resolving a new instance is cheap.
+                services.AddTransient<LauncherWindow>();
 
                 services.AddSingleton<NativeClipboardHistoryProbe>();
                 services.AddSingleton<NativeClipboardHistoryBanner>();
@@ -172,6 +181,7 @@ public partial class App : Application
                 services.AddSingleton<WorkflowsViewModel>();
                 services.AddSingleton<CaptureDefaultsViewModel>();
                 services.AddSingleton<ThemeService>();
+                services.AddSingleton<SettingsBackupService>();
                 services.AddSingleton<ThemeViewModel>();
                 services.AddSingleton<DebugViewModel>();
                 services.AddSingleton<SettingsViewModel>();

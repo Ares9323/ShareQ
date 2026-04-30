@@ -24,18 +24,27 @@ public sealed class ThemeService
 {
     private const string BgKey = "theme.accent_bg";
     private const string FgKey = "theme.accent_fg";
-    public static readonly Color DefaultBackground = (Color)ColorConverter.ConvertFromString("#0078D4")!;
+    private const string DarkKey = "theme.accent_dark";
+    public static readonly Color DefaultBackground = (Color)ColorConverter.ConvertFromString("#751C8B")!;
     public static readonly Color DefaultForeground = Colors.White;
+    /// <summary>Default for the "dark accent" — used as the canvas / inactive surface in the
+    /// launcher overlay (cell background, inactive tab headers). Sits low on the value axis so
+    /// the brighter accent reads on top of it without contrast issues. Picked to pair with the
+    /// default purple accent so the launcher's "active vs ambient" tabs read as the same hue
+    /// family out of the box.</summary>
+    public static readonly Color DefaultAccentDark = (Color)ColorConverter.ConvertFromString("#371242")!;
 
     private readonly ISettingsStore _settings;
 
     private Color _bg = DefaultBackground;
     private Color _fg = DefaultForeground;
+    private Color _dark = DefaultAccentDark;
 
     public ThemeService(ISettingsStore settings) => _settings = settings;
 
     public Color AccentBackground => _bg;
     public Color AccentForeground => _fg;
+    public Color AccentBackgroundDark => _dark;
 
     /// <summary>Fires after either color changes (via <see cref="SetAsync"/> or
     /// <see cref="LoadAsync"/>). The Theme view-model uses this to re-sync its hex inputs when the
@@ -47,23 +56,28 @@ public sealed class ThemeService
     {
         var bgRaw = await _settings.GetAsync(BgKey, ct).ConfigureAwait(false);
         var fgRaw = await _settings.GetAsync(FgKey, ct).ConfigureAwait(false);
+        var darkRaw = await _settings.GetAsync(DarkKey, ct).ConfigureAwait(false);
         _bg = TryParseHex(bgRaw) ?? DefaultBackground;
         _fg = TryParseHex(fgRaw) ?? DefaultForeground;
+        _dark = TryParseHex(darkRaw) ?? DefaultAccentDark;
         Apply();
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    public async Task SetAsync(Color background, Color foreground, CancellationToken ct = default)
+    public async Task SetAsync(Color background, Color foreground, Color dark, CancellationToken ct = default)
     {
         _bg = background;
         _fg = foreground;
+        _dark = dark;
         Apply();
         await _settings.SetAsync(BgKey, ToHex(background), sensitive: false, ct).ConfigureAwait(false);
         await _settings.SetAsync(FgKey, ToHex(foreground), sensitive: false, ct).ConfigureAwait(false);
+        await _settings.SetAsync(DarkKey, ToHex(dark), sensitive: false, ct).ConfigureAwait(false);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    public Task ResetAsync(CancellationToken ct = default) => SetAsync(DefaultBackground, DefaultForeground, ct);
+    public Task ResetAsync(CancellationToken ct = default) =>
+        SetAsync(DefaultBackground, DefaultForeground, DefaultAccentDark, ct);
 
     /// <summary>Pushes the current colors into Application.Resources and the WPF-UI accent
     /// manager. Called on Load and on every Set; safe to call from any thread (marshals to the UI
@@ -102,6 +116,16 @@ public sealed class ThemeService
         app.Resources["AccentForegroundColor"] = _fg;
         app.Resources["AccentBackgroundBrush"] = bgBrush;
         app.Resources["AccentForegroundBrush"] = fgBrush;
+
+        // Accent dark — separate user-tunable colour used by surfaces that aren't the primary
+        // accent but still want to follow the theme: launcher cells, inactive tab headers,
+        // anywhere that needs an "ambient" accent-tinted dark. Also derive a slightly-lighter
+        // shade for borders so the launcher gets a coherent tone with one user setting.
+        var darkBrush = new SolidColorBrush(_dark); darkBrush.Freeze();
+        var darkBorderBrush = new SolidColorBrush(Lighten(_dark, 0.15)); darkBorderBrush.Freeze();
+        app.Resources["AccentBackgroundDarkColor"] = _dark;
+        app.Resources["AccentBackgroundDarkBrush"] = darkBrush;
+        app.Resources["AccentBackgroundDarkBorderBrush"] = darkBorderBrush;
 
         // WPF-UI v4 declares BOTH naming conventions in resources/accent.baml — the legacy
         // SystemAccentColor* family AND the Fluent-v2 AccentFillColor* family. Different

@@ -24,10 +24,13 @@ public sealed partial class ThemeViewModel : ObservableObject
     }
 
     [ObservableProperty]
-    private string _accentBackgroundHex = "#0078D4";
+    private string _accentBackgroundHex = "#751C8B";
 
     [ObservableProperty]
     private string _accentForegroundHex = "#FFFFFF";
+
+    [ObservableProperty]
+    private string _accentBackgroundDarkHex = "#371242";
 
     /// <summary>Live preview brushes for the swatch rectangles. Updated whenever the hex strings
     /// parse cleanly; left untouched on parse failure so the user can keep typing.</summary>
@@ -37,8 +40,12 @@ public sealed partial class ThemeViewModel : ObservableObject
     [ObservableProperty]
     private Brush _accentForegroundPreview = new SolidColorBrush(ThemeService.DefaultForeground);
 
+    [ObservableProperty]
+    private Brush _accentBackgroundDarkPreview = new SolidColorBrush(ThemeService.DefaultAccentDark);
+
     partial void OnAccentBackgroundHexChanged(string value) => TryApply();
     partial void OnAccentForegroundHexChanged(string value) => TryApply();
+    partial void OnAccentBackgroundDarkHexChanged(string value) => TryApply();
 
     [RelayCommand]
     private async Task ResetAsync() => await _theme.ResetAsync().ConfigureAwait(true);
@@ -48,8 +55,10 @@ public sealed partial class ThemeViewModel : ObservableObject
         _suppressApply = true;
         AccentBackgroundHex = ThemeService.ToHex(_theme.AccentBackground);
         AccentForegroundHex = ThemeService.ToHex(_theme.AccentForeground);
+        AccentBackgroundDarkHex = ThemeService.ToHex(_theme.AccentBackgroundDark);
         AccentBackgroundPreview = Freeze(new SolidColorBrush(_theme.AccentBackground));
         AccentForegroundPreview = Freeze(new SolidColorBrush(_theme.AccentForeground));
+        AccentBackgroundDarkPreview = Freeze(new SolidColorBrush(_theme.AccentBackgroundDark));
         _suppressApply = false;
     }
 
@@ -58,14 +67,16 @@ public sealed partial class ThemeViewModel : ObservableObject
         if (_suppressApply) return;
         var bg = ParseOrNull(AccentBackgroundHex);
         var fg = ParseOrNull(AccentForegroundHex);
-        if (bg is null || fg is null) return;
+        var dark = ParseOrNull(AccentBackgroundDarkHex);
+        if (bg is null || fg is null || dark is null) return;
 
         AccentBackgroundPreview = Freeze(new SolidColorBrush(bg.Value));
         AccentForegroundPreview = Freeze(new SolidColorBrush(fg.Value));
+        AccentBackgroundDarkPreview = Freeze(new SolidColorBrush(dark.Value));
 
         // Persist + apply globally. Fire-and-forget: persistence is ~1ms (single SQLite row) and
         // a stray failure shouldn't block the UI; the user just sees their hex stuck and can retry.
-        _ = _theme.SetAsync(bg.Value, fg.Value);
+        _ = _theme.SetAsync(bg.Value, fg.Value, dark.Value);
     }
 
     private static Color? ParseOrNull(string hex)

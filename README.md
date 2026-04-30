@@ -25,6 +25,7 @@ ShareQ stands directly on the shoulders of two GPL-3 projects, and reuses substa
 
 - **[ShareX](https://github.com/ShareX/ShareX)** — the bulk of ShareQ's backend (capture, image editor, screen recorder, image effects, uploaders) is being ported from ShareX's modular libraries. Original authors and maintainers retain credit; ShareQ is a derivative work and is itself GPL-3-or-later.
 - **[CopyQ](https://github.com/hluk/CopyQ)** — used as conceptual reference for the clipboard manager experience: history model, item-plugin architecture, popup-on-hotkey workflow.
+- **[MaxLauncher](https://maxlauncher.sourceforge.io/)** — inspired ShareQ's launcher overlay: the keyboard-centric grid of mappable cells (F1-F10 global strip + 10 numeric tabs × 30 QWERTY keys), drag-and-drop assignment of files / shortcuts / folders, and the search-as-you-type filter that hides non-matching tabs and cells.
 
 The licensing of both upstream projects (GPL-3-or-later) carries through to ShareQ. See [`LICENSE`](LICENSE).
 

@@ -93,6 +93,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool IsHotkeysSelected   => SelectedTab == SettingsTab.Hotkeys;
     public bool IsCaptureSelected   => SelectedTab == SettingsTab.Capture;
     public bool IsThemeSelected     => SelectedTab == SettingsTab.Theme;
+    public bool IsSettingsSelected  => SelectedTab == SettingsTab.Settings;
     public bool IsDebugSelected     => SelectedTab == SettingsTab.Debug;
     public bool IsAboutSelected     => SelectedTab == SettingsTab.About;
 
@@ -106,6 +107,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsHotkeysSelected));
         OnPropertyChanged(nameof(IsCaptureSelected));
         OnPropertyChanged(nameof(IsThemeSelected));
+        OnPropertyChanged(nameof(IsSettingsSelected));
         OnPropertyChanged(nameof(IsDebugSelected));
         OnPropertyChanged(nameof(IsAboutSelected));
         if (value == SettingsTab.Uploaders) _ = Uploaders.ReloadAsync();
@@ -118,6 +120,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand] private void ShowHotkeys()   => SelectedTab = SettingsTab.Hotkeys;
     [RelayCommand] private void ShowCapture()   => SelectedTab = SettingsTab.Capture;
     [RelayCommand] private void ShowTheme()     => SelectedTab = SettingsTab.Theme;
+    [RelayCommand] private void ShowSettings()  => SelectedTab = SettingsTab.Settings;
     [RelayCommand] private void ShowDebug()     => SelectedTab = SettingsTab.Debug;
     [RelayCommand] private void ShowAbout()     => SelectedTab = SettingsTab.About;
 
@@ -149,4 +152,4 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 }
 
-public enum SettingsTab { Home, Plugins, Uploaders, Hotkeys, Capture, Theme, Debug, About }
+public enum SettingsTab { Home, Plugins, Uploaders, Hotkeys, Capture, Theme, Settings, Debug, About }

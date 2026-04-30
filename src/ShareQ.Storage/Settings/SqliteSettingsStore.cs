@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using ShareQ.Storage.Database;
 using ShareQ.Storage.Protection;
@@ -64,5 +65,37 @@ public sealed class SqliteSettingsStore : ISettingsStore
         cmd.Parameters.AddWithValue("$key", key);
         var rows = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         return rows == 1;
+    }
+
+    public async IAsyncEnumerable<SettingEntry> EnumerateAsync(
+        bool includeSensitive = false,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var conn = _database.GetOpenConnection();
+        await using var cmd = conn.CreateCommand();
+        // Filter at SQL level when sensitive entries should be skipped — saves us from
+        // unprotecting payloads we'll discard anyway and keeps the streaming cost flat.
+        cmd.CommandText = includeSensitive
+            ? "SELECT key, value, is_sensitive FROM settings ORDER BY key;"
+            : "SELECT key, value, is_sensitive FROM settings WHERE is_sensitive = 0 ORDER BY key;";
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var key = reader.GetString(0);
+            var stored = reader.GetString(1);
+            var sensitive = reader.GetInt32(2) == 1;
+            string value;
+            if (sensitive)
+            {
+                var ciphertext = Convert.FromBase64String(stored);
+                var plaintext = _protector.Unprotect(ciphertext);
+                value = Encoding.UTF8.GetString(plaintext);
+            }
+            else
+            {
+                value = stored;
+            }
+            yield return new SettingEntry(key, value, sensitive);
+        }
     }
 }

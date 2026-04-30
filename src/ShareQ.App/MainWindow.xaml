@@ -68,6 +68,11 @@
                            Appearance="{Binding IsThemeSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Margin="0,0,0,4"
+                           Content="Settings"
+                           Command="{Binding ShowSettingsCommand}"
+                           Appearance="{Binding IsSettingsSelected, Converter={StaticResource BoolToAppearance}}" />
+                <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                           Margin="0,0,0,4"
                            Content="Debug"
                            Command="{Binding ShowDebugCommand}"
                            Appearance="{Binding IsDebugSelected, Converter={StaticResource BoolToAppearance}}" />
@@ -83,19 +88,34 @@
             <!-- Home -->
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
                         Visibility="{Binding IsHomeSelected, Converter={StaticResource BoolToVisibility}}">
+                <!-- ShareQ logo as vector — the source SVG (Grafica/ShareQ.svg, 1024×1024 viewBox)
+                     ported into WPF Path geometry. Renders crisp at any size since it scales
+                     by transform; no raster sampling. Three fill colours match the SVG
+                     classes: #231f20 outline, #7fc99a green half, #e6e7e7 grey half. -->
+                <Viewbox Width="128" Height="128" Margin="0,0,0,12" HorizontalAlignment="Center">
+                    <Canvas Width="1024" Height="1024">
+                        <Path Fill="#231f20" Data="M446.99,701.31l-2.4-2.08c-33.6-29.05-61.01-64.42-81.47-105.12-21.84-43.44-35.24-92.04-39.82-144.46l-.28-3.18,2.1-2.4c29.09-33.37,64.44-60.58,105.08-80.88,43.36-21.66,91.84-34.93,144.1-39.44l3.17-.27,2.4,2.09c33.48,29.17,60.76,64.63,81.08,105.4,21.7,43.52,34.95,92.18,39.38,144.64l.27,3.17-2.1,2.4c-29.05,33.2-64.31,60.29-104.81,80.5-43.2,21.56-91.5,34.8-143.55,39.35l-3.16.28ZM338.54,451.54c9.08,95.87,48.26,176.75,113.48,234.26,95.17-9,175.63-47.71,233.09-112.11-8.81-95.94-47.72-176.96-112.7-234.71-95.57,8.95-176.3,47.8-233.87,112.55Z" />
+                        <Path Fill="#231f20" Data="M184.41,325.67l-9.35-11.73c30.39-24.78,64.48-43.19,101.34-54.74l4.66,14.26c-34.9,11.88-67.42,29.45-96.65,52.21Z" />
+                        <Path Fill="#231f20" Data="M323.4,860.62c-31.47-35-53.91-75.24-66.7-119.6l14.35-4.36c13.25,41.43,35.25,80.87,63.63,114.07l-11.28,9.89Z" />
+                        <Path Fill="#231f20" Data="M754.88,295.24c-12.23-41.93-33.4-82.11-61.21-116.2l11.5-9.63c30.83,35.83,52.42,76.82,64.17,121.84l-14.46,3.99Z" />
+                        <Path Fill="#7fc99a" Data="M179.8,319.76c30.38-24.76,63.9-42.45,98.84-53.39,100.3-34.16,214.75-19.6,297.56,64.75-.42.04-.84.08-1.26.12,63.28,55.14,108.88,138.11,117.92,245.02,69.06-78.94,94.67-185.56,69.22-283.11-12.52-42.92-33.91-83.68-62.6-118.84-37.14-43.16-89.06-79.51-156.87-103.83.38-.16.75-.3,1.13-.46C293.55-30.89-45.1,203.09,69.26,480.9c.09-.21.17-.43.25-.64,18.86-65.53,59.02-120.59,110.29-160.51Z" />
+                        <Path Fill="#231f20" Data="M686.88,594.48l-1.49-17.6c-8.33-98.5-48.23-181.49-115.38-239.99l-13.32-11.61,2.4-.21c-73.83-66.81-176.52-86.18-278.03-51.61l-.18.06c-35.03,10.97-67.44,28.49-96.35,52.05l-.13.1c-52.78,41.09-90.02,95.27-107.69,156.66l-.5,1.36-6.88,17.11-7.02-17.05c-24.75-60.14-29.99-120.54-15.57-179.54,13-53.17,42.29-103.85,84.71-146.57,51.09-51.46,119.45-89.66,192.48-107.56,77.48-18.99,154.46-14.5,222.61,12.98l17.06,6.88-.65.27c57.96,23.5,105.73,56.82,142.21,99.2l.13.15c29.07,35.63,51.19,77.63,63.98,121.48l.06.21c12.83,49.17,13.13,101.79.86,152.2-12.3,50.56-37.09,98.19-71.69,137.74l-11.63,13.29ZM592.6,337.26c27.72,26.79,50.67,58.24,68.35,93.72,19.21,38.53,31.79,81.08,37.51,126.74,58.86-75.29,79.94-172.17,56.39-262.58-12.23-41.87-33.36-81.98-61.12-116.02-38.43-44.62-90.12-78.8-153.65-101.58l-18.24-6.54,1.33-.55c-126.53-42.2-280.58-3.43-381.07,97.77-81.66,82.25-107.81,186.92-73.31,290,20.4-56.21,56.85-105.78,106.34-144.32,30.35-24.73,64.39-43.12,101.19-54.66,52.71-17.93,107.72-22.19,159.09-12.3,55.39,10.66,105.93,37.96,146.16,78.93l11.18,11.39h-.14Z" />
+                        <Path Fill="#7fc99a" Data="M954.49,544.58c-60.98,211.84-344.51,314.36-506.7,149.14.57-.05,1.13-.11,1.7-.16-63.51-54.92-109.38-137.74-118.72-244.56-70.49,80.86-95.51,190.62-66.87,289.93,13.54,42.36,35.76,82.37,65.07,116.66,36.8,40.93,87.27,75.4,152.41,98.76-.11.04-.21.08-.32.13,249.77,99.47,586.53-133.48,473.61-410.38-.06.15-.12.31-.18.46Z" />
+                        <Path Fill="#231f20" Data="M606,985.47c-44.47,0-87.6-8.03-127.71-24.01l-8.84-3.52c-59.27-22.69-108.36-55.4-146.05-97.32l-.12-.14c-29.67-34.7-52.67-75.94-66.51-119.25l-.06-.21c-14.42-50.02-15.75-103.84-3.84-155.64,11.93-51.89,36.92-100.75,72.27-141.3l11.59-13.29,1.54,17.57c8.61,98.44,48.77,181.27,116.16,239.54l13.42,11.6-2.94.26c67.68,61.32,159.08,82.83,253.34,58.96,109.31-27.67,199.22-112.54,229.06-216.21l.42-1.17,6.89-17.28,7.02,17.22c24.44,59.92,29.5,120.1,15.06,178.87-13.02,52.97-42.23,103.48-84.47,146.07-50.91,51.33-119.04,89.51-191.85,107.51-31.71,7.84-63.36,11.74-94.35,11.74ZM501.82,954.04c126.27,41.42,279.77,2.4,379.73-98.39,81.22-81.9,107.44-186.11,73.54-288.75-17.31,47.37-46.39,90.61-84.92,126.03-42.03,38.63-93.3,66.4-148.26,80.32-49.26,12.47-99.91,13.09-146.46,1.8-50.8-12.33-95.55-37.92-133.01-76.08l-11.19-11.4.5-.04c-27.79-26.68-50.84-58.03-68.63-93.42-19.34-38.46-32.06-80.97-37.9-126.6-60.46,77.51-80.74,176.89-54.14,269.24,13.24,41.36,35.21,80.74,63.53,113.9,37.98,42.22,88.21,74.74,149.3,96.65l18.31,6.57-.41.17Z" />
+                        <Path Fill="#e6e7e7" Data="M328.98,855.6c-31.55-35.1-53.04-74.96-65.07-116.66-28.64-99.31-3.62-209.07,66.87-289.93,55-63.09,137.68-108.58,244.16-117.78.42-.04.84-.08,1.26-.12-82.81-84.36-197.26-98.91-297.56-64.75-35.38,12.05-68.99,30.15-98.84,53.39-51.27,39.92-91.43,94.98-110.29,160.51-.09.21-.17.43-.25.64-100.35,250.34,133.93,588.68,411.81,473.59.11-.04.21-.08.32-.13-65.14-23.36-115.61-57.83-152.41-98.76Z" />
+                        <Path Fill="#231f20" Data="M369.19,985.22c-21.73,0-43.36-2.59-64.8-7.77-53.18-12.86-103.91-42.01-146.69-84.32-51.56-50.98-89.9-119.28-107.94-192.32-19.14-77.47-14.8-154.48,12.55-222.7l.1-.26c18.59-64.32,57.59-121.03,112.79-164.01,30.55-23.79,64.55-42.15,101.03-54.58,52.74-17.96,107.78-22.22,159.18-12.33,55.39,10.66,105.93,37.96,146.16,78.93l11.18,11.39-17.15,1.45c-98.13,8.48-180.83,48.32-239.16,115.23-69.12,79.29-93.54,185.05-65.32,282.92,12.16,42.16,33.5,80.42,63.44,113.72,37.98,42.25,88.24,74.79,149.36,96.72l18.31,6.57-18.25,7.53c-38.31,15.87-76.71,23.81-114.79,23.82ZM379.92,256.63c-32.38,0-65.68,5.53-98.86,16.83-34.9,11.88-67.42,29.45-96.65,52.21-52.78,41.09-90.02,95.27-107.69,156.66l-.5,1.36c-52.03,129.78-14.19,293.76,92.02,398.76,82.89,81.94,188.42,107.62,292.1,71.88-55.2-22.5-101.2-53.97-136.94-93.72h0c-31.47-35-53.91-75.24-66.7-119.6-14.42-50.02-15.75-103.84-3.84-155.64,11.93-51.89,36.92-100.75,72.27-141.3,29.09-33.37,64.44-60.58,105.08-80.88,39.19-19.58,82.57-32.3,129.14-37.9-49.74-45.11-112.63-68.68-179.42-68.68Z" />
+                        <Path Fill="#e6e7e7" Data="M699.48,174.31c30.9,35.9,51.55,76.51,62.6,118.84,25.45,97.55-.16,204.16-69.22,283.11-54.92,62.78-137.32,108.05-243.36,117.32-.57.05-1.13.11-1.7.16,162.19,165.22,445.72,62.7,506.7-149.14.06-.15.12-.31.18-.46,100.44-250.12-133.34-588.22-410.93-474.09-.38.16-.75.3-1.13.46,67.81,24.32,119.73,60.67,156.87,103.83Z" />
+                        <Path Fill="#231f20" Data="M643.9,783.09c-23.35,0-46.36-2.68-68.45-8.04-50.8-12.33-95.55-37.92-133.01-76.08l-11.19-11.4,15.91-1.33c.27-.02.55-.05.82-.08l.86-.08c97.72-8.54,180.15-48.23,238.37-114.78,67.38-77.02,92.65-180.3,67.6-276.27-11.16-42.79-31.69-81.76-61.02-115.84-38.43-44.66-90.15-78.86-153.71-101.66l-18.24-6.54,17.9-7.44c.24-.1.47-.19.7-.28l.45-.18c60.08-24.7,120.43-29.93,179.38-15.53,53.12,12.98,103.77,42.22,146.47,84.57,51.45,51.02,89.67,119.31,107.62,192.29,19.04,77.41,14.65,154.35-12.72,222.48l-.03.08c-15.95,55.16-47.56,105.62-91.43,145.94-42.03,38.63-93.3,66.41-148.26,80.32-25.88,6.55-52.15,9.83-78.01,9.83ZM464.65,699.54c67.7,61.5,159.2,83.07,253.58,59.18,109.31-27.67,199.22-112.54,229.06-216.21l.42-1.17c52.04-129.6,14.4-293.48-91.54-398.55-82.92-82.25-188.64-108.09-292.5-72.28,57.63,23.48,105.17,56.7,141.49,98.91,30.83,35.83,52.42,76.82,64.17,121.84,12.83,49.17,13.13,101.79.86,152.2-12.3,50.56-37.09,98.19-71.69,137.74-29.05,33.2-64.31,60.29-104.81,80.5-39.17,19.55-82.52,32.25-129.05,37.85Z" />
+                    </Canvas>
+                </Viewbox>
                 <TextBlock Text="ShareQ" FontSize="22" FontWeight="SemiBold"
                            HorizontalAlignment="Center" Margin="0,0,0,12" />
                 <TextBlock Foreground="#AAA" FontSize="12" HorizontalAlignment="Center" Margin="0,0,0,4"
                            Text="Press Win+V to open the clipboard popup." />
                 <TextBlock Foreground="#AAA" FontSize="12" HorizontalAlignment="Center" Margin="0,0,0,4"
                            Text="Use the tray icon to toggle incognito or quit." />
-                <TextBlock Foreground="#777" FontSize="11" HorizontalAlignment="Center" Margin="0,16,0,8"
+                <TextBlock Foreground="#777" FontSize="11" HorizontalAlignment="Center" Margin="0,16,0,0"
                            Text="Hotkeys: Ctrl+Alt+R region · Ctrl+Shift+P picker · Ctrl+Alt+S record · Ctrl+Alt+G gif" />
-                <CheckBox IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
-                          Content="Run ShareQ when Windows starts"
-                          Foreground="#DDD" FontSize="12"
-                          HorizontalAlignment="Center" Margin="0,8,0,0"
-                          ToolTip="Adds (or removes) ShareQ to the per-user Windows startup list. No admin rights needed." />
             </StackPanel>
 
             <!-- Plugins: list / configure inline detail. Single tab, two sub-views toggled by
@@ -649,33 +669,19 @@
                               HorizontalAlignment="Left" Width="120" />
             </StackPanel>
 
-            <!-- Theme -->
-            <StackPanel Visibility="{Binding IsThemeSelected, Converter={StaticResource BoolToVisibility}}"
-                        Margin="24,16,24,16">
+            <!-- Theme — wrapped in ScrollViewer because the page now has three colour rows +
+                 a backup card; on a short window the bottom controls would otherwise clip. -->
+            <ScrollViewer Visibility="{Binding IsThemeSelected, Converter={StaticResource BoolToVisibility}}"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="24,16,24,16">
                 <TextBlock Text="Theme" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
                 <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
                            Text="Two colors that flow everywhere ShareQ uses an accent: primary buttons, toggle switches, the pinned-image border, drag-to-reorder indicators, and selected sidebar entries. Edit the hex values to see the changes apply live." />
 
-                <!-- Background row -->
-                <TextBlock Text="Accent background" FontWeight="SemiBold" Margin="0,4,0,4" />
-                <Grid Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
-                            Background="{Binding Theme.AccentBackgroundPreview}"
-                            BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
-                            Cursor="Hand"
-                            ToolTip="Click to open the color picker"
-                            MouseLeftButtonDown="OnAccentBgSwatchClick" />
-                    <ui:TextBox Grid.Column="1"
-                                Text="{Binding Theme.AccentBackgroundHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                PlaceholderText="#0078D4"
-                                FontFamily="Consolas" />
-                </Grid>
-
-                <!-- Foreground row -->
+                <!-- Foreground row first — paired with "Accent background light" below since the
+                     foreground is what gets drawn on top of it; reading top-to-bottom the user
+                     sees fg → light → dark, which matches the visual stacking inside the app. -->
                 <TextBlock Text="Accent foreground" FontWeight="SemiBold" Margin="0,4,0,4" />
                 <Grid Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>
@@ -697,6 +703,51 @@
                 <TextBlock Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
                            Text="Foreground is the text/icon color drawn on top of the accent background — pick one with enough contrast (e.g. white on a dark accent, near-black on a light one)." />
 
+                <!-- Background row — renamed "light" so it pairs visually with "Accent background
+                     dark" below. Both tint surfaces inside the app: light is the bright primary
+                     accent, dark is the ambient surface tone. -->
+                <TextBlock Text="Accent background light" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
+                            Background="{Binding Theme.AccentBackgroundPreview}"
+                            BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
+                            Cursor="Hand"
+                            ToolTip="Click to open the color picker"
+                            MouseLeftButtonDown="OnAccentBgSwatchClick" />
+                    <ui:TextBox Grid.Column="1"
+                                Text="{Binding Theme.AccentBackgroundHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                PlaceholderText="#751C8B"
+                                FontFamily="Consolas" />
+                </Grid>
+
+                <!-- Accent dark — used by ambient surfaces that follow the theme but aren't the
+                     primary accent: launcher cells, inactive tab headers. Sits darker than the
+                     main accent so the bright accent reads cleanly on top of it. -->
+                <TextBlock Text="Accent background dark" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
+                            Background="{Binding Theme.AccentBackgroundDarkPreview}"
+                            BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
+                            Cursor="Hand"
+                            ToolTip="Click to open the color picker"
+                            MouseLeftButtonDown="OnAccentDarkSwatchClick" />
+                    <ui:TextBox Grid.Column="1"
+                                Text="{Binding Theme.AccentBackgroundDarkHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                PlaceholderText="#371242"
+                                FontFamily="Consolas" />
+                </Grid>
+
+                <TextBlock Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
+                           Text="Used by the launcher overlay (cell backgrounds, inactive tab headers). Pick a low-luminance shade so the main accent reads on top of it." />
+
                 <!-- No sample / Apply button: clicking a swatch opens the picker, which previews
                      the new colour on its own OK button. The accent only commits app-wide when
                      the picker closes with OK — so editing here doesn't constantly repaint the
@@ -704,8 +755,47 @@
                      immediately because there's no separate preview surface for it. -->
                 <ui:Button Content="Reset to defaults" HorizontalAlignment="Left"
                            Command="{Binding Theme.ResetCommand}"
-                           ToolTip="Restore the original ShareQ accent (#0078D4 background, white foreground)." />
+                           ToolTip="Restore the original ShareQ accent (#751C8B background, white foreground, #371242 launcher dark)." />
             </StackPanel>
+            </ScrollViewer>
+
+            <!-- Settings — generic preferences that don't belong under a specific feature tab.
+                 Lives between Theme and Debug in the sidebar. Wraps content in ScrollViewer
+                 because we expect this list to grow (autostart + future toggles + backup). -->
+            <ScrollViewer Visibility="{Binding IsSettingsSelected, Converter={StaticResource BoolToVisibility}}"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="24,16,24,16">
+                    <TextBlock Text="Settings" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <TextBlock Foreground="#888" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                               Text="App-level preferences. Toggle behaviours that don't belong on a specific feature page." />
+
+                    <CheckBox IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
+                              Content="Run ShareQ when Windows starts"
+                              Foreground="#DDD" FontSize="12"
+                              HorizontalAlignment="Left" Margin="0,0,0,16"
+                              ToolTip="Adds (or removes) ShareQ to the per-user Windows startup list. No admin rights needed." />
+
+                    <!-- Portable JSON dump of every non-sensitive setting. Skips OAuth tokens /
+                         credentials / DPAPI-protected payloads — those are bound to the local
+                         user account and wouldn't decrypt on another machine anyway. -->
+                    <Border Background="#2A2A2A" CornerRadius="4" Padding="14" Margin="0,8,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Backup &amp; restore" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
+                                       Text="Export every non-sensitive ShareQ setting (theme, hotkeys, launcher cells, workflow steps, capture defaults, plugin selection) to a single JSON file you can sync between machines. Sensitive values (OAuth tokens, credentials) are not included — they'd be unusable on another box anyway." />
+                            <StackPanel Orientation="Horizontal">
+                                <ui:Button Content="Export…" Margin="0,0,8,0" Padding="14,4"
+                                           Click="OnExportSettingsClicked"
+                                           ToolTip="Save every non-sensitive setting to a JSON file." />
+                                <ui:Button Content="Import…" Padding="14,4"
+                                           Click="OnImportSettingsClicked"
+                                           ToolTip="Load settings from a previously-exported JSON file. Existing values get overwritten; settings not in the file stay untouched." />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
 
             <!-- Debug: live in-app log viewer. Captures every ILogger<T>.Log call across the
                  codebase via InMemoryLoggerProvider, so packaged builds + non-Rider runs still

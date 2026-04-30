@@ -1,0 +1,212 @@
+using System.Text.Json;
+using ShareQ.Storage.Settings;
+
+namespace ShareQ.App.Services.Launcher;
+
+/// <summary>Persists the entire launcher state (cells + tab titles) as a single JSON blob
+/// under "launcher.state". Old "launcher.cells" key is read for migration but no longer
+/// written. Load always returns the full <see cref="LauncherState"/> with every cell slot
+/// filled (empty for unconfigured), so callers don't juggle missing-key cases.</summary>
+public sealed class LauncherStore
+{
+    private const string SettingsKey = "launcher.state";
+    private const string LegacySettingsKey = "launcher.cells";
+    /// <summary>Last user-selected tab (e.g. "3"). Restored on next launcher open so the user
+    /// returns to whatever they were working on. Stored separately from the cells blob so
+    /// updating the active-tab marker doesn't rewrite the (potentially large) cell payload.</summary>
+    private const string ActiveTabKey = "launcher.active_tab";
+    /// <summary>Window geometry — size and on-screen position. JSON blob so the four numbers
+    /// commit atomically (a partial save would put the launcher in a contradictory layout).</summary>
+    private const string GeometryKey = "launcher.geometry";
+
+    private readonly ISettingsStore _settings;
+
+    public LauncherStore(ISettingsStore settings) { _settings = settings; }
+
+    public async Task<LauncherState> LoadAsync(CancellationToken cancellationToken)
+    {
+        var cells = new Dictionary<string, LauncherCell>(StringComparer.OrdinalIgnoreCase);
+        var titles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var raw = await _settings.GetAsync(SettingsKey, cancellationToken).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty(raw))
+        {
+            try
+            {
+                var dto = JsonSerializer.Deserialize<StateDto>(raw);
+                if (dto is not null)
+                {
+                    if (dto.Cells is not null)
+                    {
+                        foreach (var c in dto.Cells)
+                        {
+                            if (string.IsNullOrEmpty(c.TabKey) || string.IsNullOrEmpty(c.KeyChar)) continue;
+                            // Older blobs (before window-mode / admin / title fields) just
+                            // omit the new keys; deserialisation gives them their defaults
+                            // (Normal mode, false admin, empty title/process), which match
+                            // the LauncherCell positional defaults — so no migration needed.
+                            var mode = Enum.TryParse<LauncherWindowMode>(c.WindowMode, ignoreCase: true, out var m)
+                                ? m : LauncherWindowMode.Normal;
+                            var cell = new LauncherCell(
+                                c.TabKey, c.KeyChar,
+                                c.Label ?? string.Empty,
+                                c.Path  ?? string.Empty,
+                                c.Args  ?? string.Empty,
+                                RunAsAdmin: c.RunAsAdmin ?? false,
+                                WindowMode: mode,
+                                WindowTitle: c.WindowTitle ?? string.Empty,
+                                ProcessName: c.ProcessName ?? string.Empty,
+                                IconPath: c.IconPath ?? string.Empty,
+                                IconIndex: c.IconIndex ?? 0);
+                            cells[cell.ComposedKey] = cell;
+                        }
+                    }
+                    if (dto.TabTitles is not null)
+                    {
+                        foreach (var kv in dto.TabTitles)
+                        {
+                            if (!string.IsNullOrEmpty(kv.Key)) titles[kv.Key] = kv.Value ?? string.Empty;
+                        }
+                    }
+                }
+            }
+            catch (JsonException) { /* ignore malformed and rebuild from defaults */ }
+        }
+        else
+        {
+            // Backward-compat: a previous build wrote "launcher.cells" as a flat list with no
+            // tab info. Migrate those into tab "1" so the user doesn't lose their entries.
+            await TryMigrateLegacyAsync(cells, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Always materialise the full layout — every F-key slot + every (tab, key) pair gets a
+        // LauncherCell, defaulting to Empty when not yet configured. The window just iterates.
+        EnsureSlot(cells, LauncherTabs.FunctionStrip, LauncherKeyboardLayout.FunctionKeys);
+        foreach (var t in LauncherKeyboardLayout.TabKeys)
+            EnsureSlot(cells, t, LauncherKeyboardLayout.AllTabKeyChars());
+
+        return new LauncherState(cells, titles);
+    }
+
+    public async Task SaveAsync(LauncherState state, CancellationToken cancellationToken)
+    {
+        // Persist only configured cells + non-empty titles to keep the JSON small.
+        var dto = new StateDto
+        {
+            Cells = state.Cells.Values.Where(c => c.IsConfigured)
+                .Select(c => new CellDto(c.TabKey, c.KeyChar, c.Label, c.Path, c.Args)
+                {
+                    // Only emit the extra fields when they're non-default — keeps the JSON
+                    // blob compact and easy to read for users who never touch advanced opts.
+                    RunAsAdmin   = c.RunAsAdmin ? true : null,
+                    WindowMode   = c.WindowMode == LauncherWindowMode.Normal ? null : c.WindowMode.ToString(),
+                    WindowTitle  = string.IsNullOrWhiteSpace(c.WindowTitle) ? null : c.WindowTitle,
+                    ProcessName  = string.IsNullOrWhiteSpace(c.ProcessName) ? null : c.ProcessName,
+                    IconPath     = string.IsNullOrWhiteSpace(c.IconPath) ? null : c.IconPath,
+                    IconIndex    = c.IconIndex == 0 ? null : c.IconIndex,
+                })
+                .ToList(),
+            TabTitles = state.TabTitles
+                .Where(kv => !string.IsNullOrWhiteSpace(kv.Value))
+                .ToDictionary(kv => kv.Key, kv => kv.Value),
+        };
+        var json = JsonSerializer.Serialize(dto);
+        await _settings.SetAsync(SettingsKey, json, sensitive: false, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UpdateCellAsync(LauncherCell cell, CancellationToken cancellationToken)
+    {
+        var state = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        var cells = new Dictionary<string, LauncherCell>(state.Cells, StringComparer.OrdinalIgnoreCase);
+        cells[cell.ComposedKey] = cell;
+        await SaveAsync(new LauncherState(cells, state.TabTitles), cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string?> LoadActiveTabAsync(CancellationToken cancellationToken)
+    {
+        var raw = await _settings.GetAsync(ActiveTabKey, cancellationToken).ConfigureAwait(false);
+        // Accept only known tab keys — anything else falls back to caller's default. Guards
+        // against a corrupted setting from manually-edited storage.
+        return LauncherKeyboardLayout.TabKeys.Contains(raw, StringComparer.OrdinalIgnoreCase) ? raw : null;
+    }
+
+    public Task SaveActiveTabAsync(string tabKey, CancellationToken cancellationToken)
+        => _settings.SetAsync(ActiveTabKey, tabKey, sensitive: false, cancellationToken);
+
+    public async Task<LauncherGeometry?> LoadGeometryAsync(CancellationToken cancellationToken)
+    {
+        var raw = await _settings.GetAsync(GeometryKey, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(raw)) return null;
+        try
+        {
+            var dto = JsonSerializer.Deserialize<GeometryDto>(raw);
+            if (dto is null) return null;
+            return new LauncherGeometry(dto.W, dto.H, dto.L, dto.T);
+        }
+        catch (JsonException) { return null; }
+    }
+
+    public Task SaveGeometryAsync(LauncherGeometry g, CancellationToken cancellationToken)
+    {
+        var json = JsonSerializer.Serialize(new GeometryDto(g.Width, g.Height, g.Left, g.Top));
+        return _settings.SetAsync(GeometryKey, json, sensitive: false, cancellationToken);
+    }
+
+    private sealed record GeometryDto(double W, double H, double L, double T);
+
+    public async Task UpdateTabTitleAsync(string tabKey, string title, CancellationToken cancellationToken)
+    {
+        var state = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        var titles = new Dictionary<string, string>(state.TabTitles, StringComparer.OrdinalIgnoreCase)
+        {
+            [tabKey] = title.Trim()
+        };
+        await SaveAsync(new LauncherState(state.Cells, titles), cancellationToken).ConfigureAwait(false);
+    }
+
+    private static void EnsureSlot(Dictionary<string, LauncherCell> cells, string tabKey, IEnumerable<string> keys)
+    {
+        foreach (var k in keys)
+        {
+            var composed = LauncherCell.ComposeKey(tabKey, k);
+            if (!cells.ContainsKey(composed)) cells[composed] = LauncherCell.Empty(tabKey, k);
+        }
+    }
+
+    private async Task TryMigrateLegacyAsync(Dictionary<string, LauncherCell> cells, CancellationToken cancellationToken)
+    {
+        var legacy = await _settings.GetAsync(LegacySettingsKey, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(legacy)) return;
+        try
+        {
+            var oldDtos = JsonSerializer.Deserialize<List<LegacyDto>>(legacy);
+            if (oldDtos is null) return;
+            // Drop the legacy entries onto the first user tab so they survive the upgrade.
+            const string defaultTab = "1";
+            foreach (var d in oldDtos)
+            {
+                if (string.IsNullOrEmpty(d.Key)) continue;
+                var cell = new LauncherCell(defaultTab, d.Key, d.Label ?? string.Empty,
+                    d.Path ?? string.Empty, d.Args ?? string.Empty);
+                cells[cell.ComposedKey] = cell;
+            }
+        }
+        catch (JsonException) { /* ignore corrupt legacy data */ }
+    }
+
+    private sealed record CellDto(string TabKey, string KeyChar, string? Label, string? Path, string? Args)
+    {
+        public bool? RunAsAdmin { get; init; }
+        public string? WindowMode { get; init; }
+        public string? WindowTitle { get; init; }
+        public string? ProcessName { get; init; }
+        public string? IconPath { get; init; }
+        public int? IconIndex { get; init; }
+    }
+    private sealed class StateDto
+    {
+        public List<CellDto>? Cells { get; set; }
+        public Dictionary<string, string>? TabTitles { get; set; }
+    }
+    private sealed record LegacyDto(string Key, string? Label, string? Path, string? Args);
+}
