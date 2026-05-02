@@ -117,6 +117,26 @@ public partial class App : Application
                     new ShareQ.Uploaders.PasteRs.PasteRsUploader(NewUploaderHttp(),
                         sp.GetService<ILogger<ShareQ.Uploaders.PasteRs.PasteRsUploader>>()));
 
+                // Shared folder uploader — no HTTP client, just file I/O. Per-uploader config
+                // store carries the target folder + optional URL prefix from Settings UI.
+                services.AddSingleton<ShareQ.PluginContracts.IUploader>(sp =>
+                    new ShareQ.Uploaders.SharedFolder.SharedFolderUploader(
+                        sp.GetRequiredService<ShareQ.PluginContracts.IPluginConfigStoreFactory>().Create("shared-folder"),
+                        sp.GetService<ILogger<ShareQ.Uploaders.SharedFolder.SharedFolderUploader>>()));
+
+                // URL shorteners — anonymous, no setup. Same operator (Memset) runs both is.gd
+                // and v.gd; we ship both so the user has a fallback when one rate-limits.
+                services.AddSingleton<ShareQ.PluginContracts.IUploader>(sp =>
+                    new ShareQ.Uploaders.IsGd.IsGdUploader(NewUploaderHttp(),
+                        sp.GetService<ILogger<ShareQ.Uploaders.IsGd.IsGdUploader>>()));
+                services.AddSingleton<ShareQ.PluginContracts.IUploader>(sp =>
+                    new ShareQ.Uploaders.Vgd.VgdUploader(NewUploaderHttp(),
+                        sp.GetService<ILogger<ShareQ.Uploaders.Vgd.VgdUploader>>()));
+                services.AddSingleton<ShareQ.PluginContracts.IUploader>(sp =>
+                    new ShareQ.Uploaders.Bitly.BitlyUploader(NewUploaderHttp(),
+                        sp.GetRequiredService<ShareQ.PluginContracts.IPluginConfigStoreFactory>().Create("bitly"),
+                        sp.GetService<ILogger<ShareQ.Uploaders.Bitly.BitlyUploader>>()));
+
                 // Keyed bundled uploaders. Each gets a per-id IPluginConfigStore so credentials
                 // (Imgur Client ID, ImgBB / Pastebin API keys, Gist PAT) live under the
                 // plugin.{id}.{key} namespace in ISettingsStore — sensitive values are DPAPI-

@@ -23,6 +23,7 @@ public sealed partial class UploadersViewModel : ObservableObject
         FileUploaders  = [];
         TextUploaders  = [];
         VideoUploaders = [];
+        UrlUploaders   = [];
         CustomUploaders = [];
         _ = LoadAsync();
         LoadCustomUploaders();
@@ -32,6 +33,7 @@ public sealed partial class UploadersViewModel : ObservableObject
     public ObservableCollection<UploaderSelectionItemViewModel> FileUploaders  { get; }
     public ObservableCollection<UploaderSelectionItemViewModel> TextUploaders  { get; }
     public ObservableCollection<UploaderSelectionItemViewModel> VideoUploaders { get; }
+    public ObservableCollection<UploaderSelectionItemViewModel> UrlUploaders   { get; }
 
     /// <summary>Read-only list of imported <c>.sxcu</c> files. Display-only: toggling them
     /// on/off goes through the per-category checkboxes above (custom uploaders surface there
@@ -47,6 +49,7 @@ public sealed partial class UploadersViewModel : ObservableObject
         await PopulateAsync(UploaderCapabilities.File,  FileUploaders).ConfigureAwait(true);
         await PopulateAsync(UploaderCapabilities.Text,  TextUploaders).ConfigureAwait(true);
         await PopulateAsync(UploaderCapabilities.Video, VideoUploaders).ConfigureAwait(true);
+        await PopulateAsync(UploaderCapabilities.Url,   UrlUploaders).ConfigureAwait(true);
     }
 
     public void LoadCustomUploaders()

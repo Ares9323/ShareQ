@@ -105,6 +105,7 @@ public sealed class UploadTask : IPipelineTask
             case "file":  category = UploaderCapabilities.File;  return true;
             case "text":  category = UploaderCapabilities.Text;  return true;
             case "video": category = UploaderCapabilities.Video; return true;
+            case "url":   category = UploaderCapabilities.Url;   return true;
             default:      category = UploaderCapabilities.None;  return false;
         }
     }

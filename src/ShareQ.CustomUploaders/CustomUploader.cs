@@ -43,10 +43,11 @@ public sealed class CustomUploader : IUploader
 
         // Pre-request templating: file name + payload-as-text are available before we have a
         // response. Headers / parameters / arguments / data all get pre-templated in one pass;
-        // post-templating happens once on the response URL. {input} is populated only when the
-        // uploader is text-capable (Capabilities & Text), otherwise treating arbitrary bytes
-        // as a UTF-8 string would yield mojibake — pass null and let the token render as empty.
-        var inputAsText = (Capabilities & UploaderCapabilities.Text) != 0
+        // post-templating happens once on the response URL. {input} is populated when the
+        // uploader is text- or URL-capable — both consume textual payloads (text content for
+        // Text, a URL string for Url). For binary uploaders we pass null so the token renders
+        // as empty rather than producing mojibake.
+        var inputAsText = (Capabilities & (UploaderCapabilities.Text | UploaderCapabilities.Url)) != 0
             ? Encoding.UTF8.GetString(request.Bytes)
             : null;
         var pre = new CustomUploaderTemplate(request.FileName, inputAsText);
@@ -254,10 +255,11 @@ public sealed class CustomUploader : IUploader
             "imageuploader"      => UploaderCapabilities.Image,
             "textuploader"       => UploaderCapabilities.Text,
             "fileuploader"       => UploaderCapabilities.File,
-            // URL shorteners / sharing services produce text URLs; route them as Text so they
-            // surface in the same destination picker the existing copy-link uploaders do.
-            "urlshortener"       => UploaderCapabilities.Text,
-            "urlsharingservice"  => UploaderCapabilities.Text,
+            // URL shorteners and URL-sharing services both consume a URL and produce a URL —
+            // the dedicated Url category routes them via the "Shorten clipboard URL" workflow
+            // instead of dumping the URL as a text file via the Text category.
+            "urlshortener"       => UploaderCapabilities.Url,
+            "urlsharingservice"  => UploaderCapabilities.Url,
             _                    => UploaderCapabilities.AnyFile,
         };
 }

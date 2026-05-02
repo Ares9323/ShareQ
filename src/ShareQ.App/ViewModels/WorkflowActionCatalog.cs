@@ -189,6 +189,12 @@ public static class WorkflowActionCatalog
             "Upload",
             DefaultConfigJson: "{\"category\":\"video\"}"),
 
+        new("shareq.upload",
+            "Shorten URL via selected URL shorteners",
+            "Run every URL shortener the user has selected (Settings → Uploaders → URL). is.gd / v.gd are bundled. Input must be a valid absolute URL — the shorteners reject anything else.",
+            "Upload",
+            DefaultConfigJson: "{\"category\":\"url\"}"),
+
         new("shareq.upload-clipboard-text",
             "Read text from clipboard",
             "Pulls the current text from the system clipboard and stages it as the workflow's payload (UTF-8 bytes, .txt extension). Pair with an Upload step (text category) to publish the content. Skips silently if the clipboard has no text.",

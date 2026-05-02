@@ -13,7 +13,13 @@ public enum UploaderCapabilities
     File  = 1 << 1,
     Text  = 1 << 2,
     Video = 1 << 3,
+    /// <summary>URL shortener — input is a URL (text), output is a shorter URL. Kept separate
+    /// from <see cref="Text"/> so an arbitrary text upload doesn't accidentally fan out to a
+    /// shortener that would mangle the content into a meaningless redirect link.</summary>
+    Url   = 1 << 4,
 
-    /// <summary>Generic file host — accepts any binary including images, video, and text.</summary>
+    /// <summary>Generic file host — accepts any binary including images, video, and text.
+    /// Excludes <see cref="Url"/> on purpose: a generic file host can hold a .txt with a URL
+    /// in it, but that's not the same as turning the URL itself into a shorter URL.</summary>
     AnyFile = Image | File | Text | Video,
 }

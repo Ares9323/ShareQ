@@ -10,6 +10,7 @@ public static class DefaultPipelineProfiles
     public const string RegionCaptureId     = "region-capture";
     public const string ManualUploadId      = "manual-upload";
     public const string UploadClipboardTextId = "upload-clipboard-text";
+    public const string ShortenClipboardUrlId = "shorten-clipboard-url";
     public const string ShowPopupId         = "show-popup";
     public const string ToggleIncognitoId   = "toggle-incognito";
     public const string ColorSamplerId      = "color-sampler";
@@ -108,6 +109,25 @@ public static class DefaultPipelineProfiles
             ],
             // No default hotkey — text upload is rarely a one-handed flow (you've usually got the
             // text already in the clipboard from elsewhere). User binds in Settings if desired.
+            IsBuiltIn: true),
+
+        new PipelineProfile(
+            Id: ShortenClipboardUrlId,
+            DisplayName: "Shorten clipboard URL",
+            Trigger: "hotkey:shorten-clipboard-url",
+            Steps:
+            [
+                // Same shape as upload-clipboard-text but routes through the Url category
+                // (is.gd / v.gd) instead of Text. Reuses the read-clipboard-text task because
+                // the input is still UTF-8 from the clipboard — the URL shortener uploaders
+                // validate it's a real URL and fail loudly if not.
+                new PipelineStep(UploadClipboardTextTaskId, Id: "read-clipboard-url"),
+                new PipelineStep(AddToHistoryTask.TaskId, Id: "add-to-history"),
+                new PipelineStep(UploadTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"category\":\"url\"}"), Id: "upload"),
+                new PipelineStep(UpdateItemUrlTask.TaskId),
+                new PipelineStep(CopyTextToClipboardTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"template\":\"{bag.upload_urls}\"}"), Id: "copy-url"),
+                new PipelineStep(NotifyToastTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"title\":\"ShareQ\",\"message\":\"Shortened → {bag.upload_url}\"}"), Id: "toast")
+            ],
             IsBuiltIn: true),
 
         new PipelineProfile(

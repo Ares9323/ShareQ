@@ -250,6 +250,16 @@
                                           Margin="0,12,0,0" />
                         </ScrollViewer>
                     </TabItem>
+                    <TabItem Header="URL" Style="{StaticResource UploaderTabItemStyle}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel Margin="0,12,0,0">
+                                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
+                                           Text="URL shorteners — take a URL on the clipboard and turn it into a shorter one. Use 'Shorten clipboard URL' workflow (Settings → Hotkeys) to bind a key." />
+                                <ItemsControl ItemsSource="{Binding Uploaders.UrlUploaders}"
+                                              ItemTemplate="{StaticResource UploaderRowTemplate}" />
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
 
                     <!-- Custom (.sxcu): import / open folder / per-file delete. ShareX-compatible
                          JSON files dropped into %LOCALAPPDATA%\ShareQ\custom-uploaders\ become

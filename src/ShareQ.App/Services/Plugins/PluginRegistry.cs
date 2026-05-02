@@ -51,7 +51,9 @@ public sealed class PluginRegistry : IUploaderResolver
         // generic "file" selection. Generic file hosts (Catbox / S3 / …) cover images / video /
         // text fine; specific image hosts (Imgur, etc.) only show up when the user has explicitly
         // opted in, so this fallback never silently changes their preference.
-        if (category != UploaderCapabilities.File)
+        // Url is excluded from the fallback — a file host can't shorten a URL, and silently
+        // dumping the URL as a text file would be a confusing surprise to the user.
+        if (category != UploaderCapabilities.File && category != UploaderCapabilities.Url)
         {
             return await ResolveStrictCategoryAsync(UploaderCapabilities.File, cancellationToken).ConfigureAwait(false);
         }
