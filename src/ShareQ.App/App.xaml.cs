@@ -1,3 +1,5 @@
+using System.IO;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Interop;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,20 +40,25 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Pull the .sxcu file path out of argv if present (Explorer file association invokes us
+        // with the path as argv[0] / argv[1] depending on how shell picked it). We only act on
+        // this once we know we're the primary; secondary instances forward it through the pipe.
+        var sxcuPath = e.Args.FirstOrDefault(a =>
+            !string.IsNullOrEmpty(a) && a.EndsWith(".sxcu", StringComparison.OrdinalIgnoreCase));
+
         var guard = new SingleInstanceGuard();
         if (!guard.IsPrimary)
         {
-            try { await guard.NotifyExistingInstanceAsync(CancellationToken.None); }
+            // Forward sxcu path to the running primary; otherwise just ask it to focus its UI.
+            var msg = sxcuPath is not null
+                ? SingleInstanceGuard.SxcuPrefix + Path.GetFullPath(sxcuPath)
+                : SingleInstanceGuard.ShowMessage;
+            try { await guard.NotifyExistingInstanceAsync(msg, CancellationToken.None); }
             catch { /* primary may have died */ }
             guard.Dispose();
             Shutdown();
             return;
         }
-
-        // Discover external plugins from disk before building the host so their types can be
-        // registered alongside built-in services. Errors per plugin are isolated.
-        var pluginLoader = new ShareQ.App.Services.Plugins.PluginLoader();
-        var loadedPlugins = new List<ShareQ.App.Services.Plugins.PluginDescriptor>();
 
         // Single shared sink — both the InMemoryLoggerProvider (registered with the host's
         // logging builder below) and the DebugViewModel (registered in DI) refer to the same
@@ -81,35 +88,94 @@ public partial class App : Application
                 services.AddShareQPlugins();
                 services.AddShareQEditor();
 
-                // Bundled plugins: registered as IUploader so the registry treats them like any
-                // other plugin. The same toggle on/off (in Settings → Plugins) applies.
-                services.AddSingleton<ShareQ.PluginContracts.IUploader, ShareQ.Uploaders.Catbox.CatboxUploader>();
-                services.AddSingleton<ShareQ.PluginContracts.IUploader, ShareQ.Uploaders.Litterbox.LitterboxUploader>();
-                services.AddSingleton<ShareQ.PluginContracts.IUploader, ShareQ.Uploaders.OneDrive.OneDriveUploader>();
-                services.AddSingleton<ShareQ.PluginContracts.IUploader, ShareQ.Uploaders.GoogleDrive.GoogleDriveUploader>();
+                // Uploader registration mirrors ShareX: popular services ship as compiled
+                // IUploader implementations in ShareQ.Uploaders (with config UI for keys when
+                // needed), and the long tail is covered by user-supplied ShareX-compatible .sxcu
+                // files under %LOCALAPPDATA%\ShareQ\custom-uploaders\.
+                services.AddSingleton<ShareQ.PluginContracts.IPluginConfigStoreFactory>(sp =>
+                    new ShareQ.App.Services.Plugins.HostPluginConfigStoreFactory(
+                        sp.GetRequiredService<ShareQ.Storage.Settings.ISettingsStore>()));
 
-                // External plugins (drop a folder under %LOCALAPPDATA%\ShareQ\plugins).
-                var pluginsRoot = ShareQ.App.Services.Plugins.PluginLoader.DefaultPluginsRoot;
-                loadedPlugins.AddRange(pluginLoader.LoadFromFolder(pluginsRoot, services,
-                    onError: (folder, ex) => System.Diagnostics.Debug.WriteLine($"[Plugins] failed to load {folder}: {ex.Message}")));
+                // Single OAuth flow service shared by every OAuth-capable uploader. Its HttpClient
+                // only ever talks to provider token endpoints — short-lived, no streaming — so a
+                // process-wide instance is fine (no socket exhaustion concerns at this volume).
+                services.AddSingleton<ShareQ.Uploaders.OAuth.OAuthFlowService>(sp =>
+                    new ShareQ.Uploaders.OAuth.OAuthFlowService(
+                        new HttpClient { Timeout = TimeSpan.FromSeconds(30) },
+                        sp.GetService<ILogger<ShareQ.Uploaders.OAuth.OAuthFlowService>>()));
+
+                // Bundled uploaders. One HttpClient per instance (5-min timeout, same shape as the
+                // .sxcu engine) — keeps the registration trivial without an IHttpClientFactory.
+                static HttpClient NewUploaderHttp() => new() { Timeout = TimeSpan.FromMinutes(5) };
+                services.AddSingleton<ShareQ.PluginContracts.IUploader>(sp =>
+                    new ShareQ.Uploaders.Catbox.CatboxUploader(NewUploaderHttp(),
+                        sp.GetService<ILogger<ShareQ.Uploaders.Catbox.CatboxUploader>>()));
+                services.AddSingleton<ShareQ.PluginContracts.IUploader>(sp =>
+                    new ShareQ.Uploaders.UguuSe.UguuSeUploader(NewUploaderHttp(),
+                        sp.GetService<ILogger<ShareQ.Uploaders.UguuSe.UguuSeUploader>>()));
+                services.AddSingleton<ShareQ.PluginContracts.IUploader>(sp =>
+                    new ShareQ.Uploaders.PasteRs.PasteRsUploader(NewUploaderHttp(),
+                        sp.GetService<ILogger<ShareQ.Uploaders.PasteRs.PasteRsUploader>>()));
+
+                // Keyed bundled uploaders. Each gets a per-id IPluginConfigStore so credentials
+                // (Imgur Client ID, ImgBB / Pastebin API keys, Gist PAT) live under the
+                // plugin.{id}.{key} namespace in ISettingsStore — sensitive values are DPAPI-
+                // encrypted by the underlying store. Settings UI walks IConfigurableUploader to
+                // render the form.
+                services.AddSingleton<ShareQ.PluginContracts.IUploader>(sp =>
+                    new ShareQ.Uploaders.Imgur.ImgurUploader(NewUploaderHttp(),
+                        sp.GetService<ILogger<ShareQ.Uploaders.Imgur.ImgurUploader>>()));
+                services.AddSingleton<ShareQ.PluginContracts.IUploader>(sp =>
+                    new ShareQ.Uploaders.ImgBB.ImgBBUploader(NewUploaderHttp(),
+                        sp.GetRequiredService<ShareQ.PluginContracts.IPluginConfigStoreFactory>().Create("imgbb"),
+                        sp.GetService<ILogger<ShareQ.Uploaders.ImgBB.ImgBBUploader>>()));
+                services.AddSingleton<ShareQ.PluginContracts.IUploader>(sp =>
+                    new ShareQ.Uploaders.Pastebin.PastebinUploader(NewUploaderHttp(),
+                        sp.GetRequiredService<ShareQ.PluginContracts.IPluginConfigStoreFactory>().Create("pastebin"),
+                        sp.GetService<ILogger<ShareQ.Uploaders.Pastebin.PastebinUploader>>()));
+                services.AddSingleton<ShareQ.PluginContracts.IUploader>(sp =>
+                    new ShareQ.Uploaders.Gist.GistUploader(NewUploaderHttp(),
+                        sp.GetRequiredService<ShareQ.PluginContracts.IPluginConfigStoreFactory>().Create("gist"),
+                        sp.GetService<ILogger<ShareQ.Uploaders.Gist.GistUploader>>()));
+
+                // OAuth-bundled uploaders. Each gets the shared OAuthFlowService for the sign-in
+                // dance + its own per-id IPluginConfigStore for tokens and per-account preferences.
+                services.AddSingleton<ShareQ.PluginContracts.IUploader>(sp =>
+                    new ShareQ.Uploaders.OneDrive.OneDriveUploader(NewUploaderHttp(),
+                        sp.GetRequiredService<ShareQ.PluginContracts.IPluginConfigStoreFactory>().Create("onedrive"),
+                        sp.GetRequiredService<ShareQ.Uploaders.OAuth.OAuthFlowService>(),
+                        sp.GetService<ILogger<ShareQ.Uploaders.OneDrive.OneDriveUploader>>()));
+                services.AddSingleton<ShareQ.PluginContracts.IUploader>(sp =>
+                    new ShareQ.Uploaders.GoogleDrive.GoogleDriveUploader(NewUploaderHttp(),
+                        sp.GetRequiredService<ShareQ.PluginContracts.IPluginConfigStoreFactory>().Create("googledrive"),
+                        sp.GetRequiredService<ShareQ.Uploaders.OAuth.OAuthFlowService>(),
+                        sp.GetService<ILogger<ShareQ.Uploaders.GoogleDrive.GoogleDriveUploader>>()));
+                services.AddSingleton<ShareQ.PluginContracts.IUploader>(sp =>
+                    new ShareQ.Uploaders.Dropbox.DropboxUploader(NewUploaderHttp(),
+                        sp.GetRequiredService<ShareQ.PluginContracts.IPluginConfigStoreFactory>().Create("dropbox"),
+                        sp.GetRequiredService<ShareQ.Uploaders.OAuth.OAuthFlowService>(),
+                        sp.GetService<ILogger<ShareQ.Uploaders.Dropbox.DropboxUploader>>()));
+
+                // Long-tail .sxcu loader. EnsureDefaults() copies any bundled .sxcu defaults the
+                // first time they're seen — currently empty since all our defaults are bundled
+                // uploaders, but kept for future additions.
+                ShareQ.App.Services.Plugins.CustomUploaderSeeding.EnsureDefaults();
+                ShareQ.CustomUploaders.CustomUploaderRegistry.RegisterFromFolder(
+                    ShareQ.CustomUploaders.CustomUploaderRegistry.DefaultFolder,
+                    services,
+                    onError: (file, ex) => System.Diagnostics.Debug.WriteLine($"[CustomUploaders] failed to load {file}: {ex.Message}"));
 
                 services.AddSingleton<ShareQ.App.Services.Plugins.PluginRegistry>(sp =>
                     new ShareQ.App.Services.Plugins.PluginRegistry(
                         sp.GetRequiredService<ShareQ.Storage.Settings.ISettingsStore>(),
-                        sp.GetServices<ShareQ.PluginContracts.IUploader>(),
-                        loadedPlugins));
+                        sp.GetServices<ShareQ.PluginContracts.IUploader>()));
                 services.AddSingleton<ShareQ.Plugins.IUploaderResolver>(sp =>
                     sp.GetRequiredService<ShareQ.App.Services.Plugins.PluginRegistry>());
-
-                // Host services exposed to every plugin (built-in + external).
-                services.AddSingleton<ShareQ.PluginContracts.IPluginConfigStoreFactory,
-                                      ShareQ.App.Services.Plugins.HostPluginConfigStoreFactory>();
-                services.AddSingleton<ShareQ.PluginContracts.IOAuthHelper,
-                                      ShareQ.App.Services.Plugins.HostOAuthHelper>();
 
                 // App-side pipeline tasks (registered as IPipelineTask alongside Pipeline's baked tasks).
                 services.AddSingleton<IPipelineTask, CopyImageToClipboardTask>();
                 services.AddSingleton<IPipelineTask, CopyTextToClipboardTask>();
+                services.AddSingleton<IPipelineTask, UploadClipboardTextTask>();
                 services.AddSingleton<IPipelineTask, NotifyToastTask>();
                 services.AddSingleton<IPipelineTask, OpenEditorBeforeUploadTask>();
                 services.AddSingleton<IPipelineTask, ToggleIncognitoTask>();
@@ -221,15 +287,34 @@ public partial class App : Application
         var window = _host.Services.GetRequiredService<MainWindow>();
         tray.Attach(window);
 
-        guard.AnotherInstanceStarted += (_, _) =>
+        guard.AnotherInstanceStarted += (_, message) =>
         {
             Dispatcher.Invoke(() =>
             {
+                // Always bring the main window forward — both for plain re-launches and for
+                // .sxcu opens, since the import dialog is owned by the main window.
                 if (!window.IsVisible) window.Show();
                 if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
                 window.Activate();
+
+                if (message.StartsWith(SingleInstanceGuard.SxcuPrefix, StringComparison.Ordinal))
+                {
+                    var path = message[SingleInstanceGuard.SxcuPrefix.Length..];
+                    HandleSxcuOpen(path, window);
+                }
             });
         };
+
+        // If the primary process itself was launched WITH a .sxcu path (first-ever invocation
+        // happens to be the file-association handler), surface the import dialog after the main
+        // window is up so the dialog has an Owner to centre on.
+        if (sxcuPath is not null)
+        {
+            // Fire-and-forget: dispatched at Loaded priority so it runs after the main window
+            // is rendered and can serve as the dialog's Owner. We don't need the operation handle.
+            _ = Dispatcher.BeginInvoke(new Action(() => HandleSxcuOpen(Path.GetFullPath(sxcuPath), window)),
+                System.Windows.Threading.DispatcherPriority.Loaded);
+        }
         guard.StartListening();
 
         window.Show();
@@ -300,6 +385,45 @@ public partial class App : Application
         ingestion.Start(helper.Handle);
     }
 
+
+    /// <summary>Show the import-confirmation dialog for a .sxcu file the user double-clicked
+    /// (or that came in via Explorer file association). On confirm we copy the file into the
+    /// custom-uploaders folder and tell the user to restart — adding an uploader at runtime
+    /// would mean re-rebuilding the DI graph, which isn't worth the complexity for a one-time
+    /// import flow.</summary>
+    private void HandleSxcuOpen(string path, Window owner)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                MessageBox.Show(owner, $"File not found:\n{path}", "ShareQ",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            var json = File.ReadAllText(path);
+            var config = ShareQ.CustomUploaders.CustomUploaderConfigLoader.Parse(json);
+            if (config is null || !ShareQ.CustomUploaders.CustomUploaderConfigLoader.IsValid(config))
+            {
+                MessageBox.Show(owner,
+                    $"This file isn't a valid .sxcu — it's missing the required Name or RequestURL fields.\n\n{path}",
+                    "ShareQ", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            var dlg = new ShareQ.App.Views.SxcuImportDialog(path, config) { Owner = owner };
+            if (dlg.ShowDialog() == true && dlg.InstalledPath is not null)
+            {
+                MessageBox.Show(owner,
+                    $"Installed to:\n{dlg.InstalledPath}\n\nRestart ShareQ to load the new uploader.",
+                    "ShareQ", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(owner, $"Couldn't open .sxcu file:\n{ex.Message}",
+                "ShareQ", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {

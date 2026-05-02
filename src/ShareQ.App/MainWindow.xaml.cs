@@ -21,17 +21,23 @@ public partial class MainWindow : FluentWindow
     private readonly ShareQ.App.Services.ScreenColorPickerService _screenSampler;
     private readonly ShareQ.Editor.Persistence.ColorRecentsStore _colorRecents;
     private readonly ShareQ.App.Services.SettingsBackupService _settingsBackup;
+    private readonly ShareQ.PluginContracts.IPluginConfigStoreFactory _pluginConfigFactory;
+    private readonly ShareQ.Uploaders.OAuth.OAuthFlowService _oauthFlowService;
 
     public MainWindow(SettingsViewModel viewModel,
         ShareQ.App.Services.ScreenColorPickerService screenSampler,
         ShareQ.Editor.Persistence.ColorRecentsStore colorRecents,
-        ShareQ.App.Services.SettingsBackupService settingsBackup)
+        ShareQ.App.Services.SettingsBackupService settingsBackup,
+        ShareQ.PluginContracts.IPluginConfigStoreFactory pluginConfigFactory,
+        ShareQ.Uploaders.OAuth.OAuthFlowService oauthFlowService)
     {
         InitializeComponent();
         DataContext = viewModel;
         _screenSampler = screenSampler;
         _colorRecents = colorRecents;
         _settingsBackup = settingsBackup;
+        _pluginConfigFactory = pluginConfigFactory;
+        _oauthFlowService = oauthFlowService;
         // Newly-added workflow: focus the inline name field and select its text so the user can
         // type the real name straight away. Defer to a low-priority dispatcher tick because the
         // edit-view's TextBox isn't realised until the visibility binding flips.
@@ -384,6 +390,145 @@ public partial class MainWindow : FluentWindow
         }
         // Push to recents so the colour shows up next time the user opens any picker.
         _ = _colorRecents.PushAsync(picked, System.Threading.CancellationToken.None);
+    }
+
+    private void OnSxcuAssociationCheckBoxLoaded(object sender, RoutedEventArgs e)
+    {
+        // Read live registry state every time the checkbox renders — the user might have
+        // changed the association from another tool (or another ShareQ install) since we last
+        // looked. Suppress the Click handler during this initial sync via the IsLoaded check.
+        if (sender is System.Windows.Controls.CheckBox cb)
+            cb.IsChecked = ShareQ.App.Services.SxcuFileAssociation.IsRegistered();
+    }
+
+    private void OnSxcuAssociationToggled(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.CheckBox cb) return;
+        try
+        {
+            if (cb.IsChecked == true)
+                ShareQ.App.Services.SxcuFileAssociation.Register();
+            else
+                ShareQ.App.Services.SxcuFileAssociation.Unregister();
+        }
+        catch (Exception ex)
+        {
+            // Roll the visual state back if the registry write failed (UAC-restricted user
+            // hive scenarios, antivirus interference) so the checkbox doesn't lie about state.
+            cb.IsChecked = ShareQ.App.Services.SxcuFileAssociation.IsRegistered();
+            System.Windows.MessageBox.Show(this,
+                $"Couldn't update file association:\n{ex.Message}",
+                "ShareQ", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    private void OnConfigureUploaderClicked(object sender, RoutedEventArgs e)
+    {
+        // The Tag carries the row's VM (set by the data-template binding); from there we get the
+        // backing IUploader and pair it with a per-id IPluginConfigStore. The dialog handles its
+        // own load + save, so all we do here is open it and ignore the result.
+        if (sender is not System.Windows.Controls.Control { Tag: UploaderSelectionItemViewModel row })
+            return;
+        var store = _pluginConfigFactory.Create(row.Id);
+        var dlg = new ShareQ.App.Views.UploaderConfigDialog(row.Uploader, store, _oauthFlowService) { Owner = this };
+        dlg.ShowDialog();
+    }
+
+    private void OnImportCustomUploaderClicked(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Import .sxcu file",
+            Filter = "ShareX custom uploader|*.sxcu|JSON|*.json|All files|*.*",
+            CheckFileExists = true,
+            Multiselect = true,
+        };
+        if (dlg.ShowDialog(this) != true) return;
+        var folder = ShareQ.CustomUploaders.CustomUploaderRegistry.DefaultFolder;
+        try
+        {
+            System.IO.Directory.CreateDirectory(folder);
+            var imported = 0;
+            foreach (var src in dlg.FileNames)
+            {
+                // Validate first so we don't litter the folder with garbage. Empty / malformed
+                // files surface a friendly error in the same dialog the user came from.
+                var json = System.IO.File.ReadAllText(src);
+                var cfg = ShareQ.CustomUploaders.CustomUploaderConfigLoader.Parse(json);
+                if (!ShareQ.CustomUploaders.CustomUploaderConfigLoader.IsValid(cfg))
+                {
+                    System.Windows.MessageBox.Show(this,
+                        $"'{System.IO.Path.GetFileName(src)}' is missing Name or RequestURL — skipping.",
+                        "ShareQ", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                    continue;
+                }
+                var dest = System.IO.Path.Combine(folder, System.IO.Path.GetFileName(src));
+                // Avoid clobbering an existing import: append a numeric suffix until the path is free.
+                var n = 1;
+                while (System.IO.File.Exists(dest))
+                {
+                    var name = System.IO.Path.GetFileNameWithoutExtension(src);
+                    var ext  = System.IO.Path.GetExtension(src);
+                    dest = System.IO.Path.Combine(folder, $"{name} ({n}){ext}");
+                    n++;
+                }
+                System.IO.File.Copy(src, dest);
+                imported++;
+            }
+            if (DataContext is SettingsViewModel vm) vm.Uploaders.LoadCustomUploaders();
+            if (imported > 0)
+            {
+                System.Windows.MessageBox.Show(this,
+                    $"Imported {imported} file(s). Restart ShareQ to make the new uploaders selectable above.",
+                    "ShareQ", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"Import failed: {ex.Message}",
+                "ShareQ", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    private void OnDeleteCustomUploaderClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Control { Tag: string filePath }) return;
+        if (!System.IO.File.Exists(filePath)) return;
+        var name = System.IO.Path.GetFileName(filePath);
+        var result = System.Windows.MessageBox.Show(this,
+            $"Delete '{name}'? Already-running uploads finish; this uploader stops being available after the next restart.",
+            "ShareQ", System.Windows.MessageBoxButton.OKCancel, System.Windows.MessageBoxImage.Warning,
+            System.Windows.MessageBoxResult.Cancel);
+        if (result != System.Windows.MessageBoxResult.OK) return;
+        try
+        {
+            System.IO.File.Delete(filePath);
+            if (DataContext is SettingsViewModel vm) vm.Uploaders.LoadCustomUploaders();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"Delete failed: {ex.Message}",
+                "ShareQ", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    private void OnOpenCustomUploadersFolderClicked(object sender, RoutedEventArgs e)
+    {
+        var folder = ShareQ.CustomUploaders.CustomUploaderRegistry.DefaultFolder;
+        try
+        {
+            System.IO.Directory.CreateDirectory(folder); // first run — create on demand
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = folder,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"Couldn't open folder: {ex.Message}",
+                "ShareQ", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
     }
 
     private async void OnExportSettingsClicked(object sender, RoutedEventArgs e)

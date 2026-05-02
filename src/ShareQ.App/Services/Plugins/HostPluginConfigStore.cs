@@ -3,30 +3,27 @@ using ShareQ.Storage.Settings;
 
 namespace ShareQ.App.Services.Plugins;
 
-/// <summary>
-/// Host implementation of <see cref="IPluginConfigStore"/>. Each plugin gets a namespaced view —
-/// keys are stored under <c>plugin.&lt;pluginId&gt;.&lt;key&gt;</c> in the shared settings table.
-/// Sensitive values are flagged so the underlying store encrypts them via DPAPI.
-/// </summary>
-public sealed class HostPluginConfigStore : IPluginConfigStore
+/// <summary>Concrete <see cref="IPluginConfigStore"/> backed by the global
+/// <see cref="ISettingsStore"/>. Namespaces every key under <c>plugin.{uploaderId}.{key}</c>
+/// so two uploaders can store the same logical key (e.g. both an <c>"api_key"</c>) without
+/// stepping on each other.</summary>
+internal sealed class HostPluginConfigStore : IPluginConfigStore
 {
     private readonly ISettingsStore _settings;
-    private readonly string _pluginId;
+    private readonly string _prefix;
 
-    public HostPluginConfigStore(ISettingsStore settings, string pluginId)
+    public HostPluginConfigStore(ISettingsStore settings, string uploaderId)
     {
         _settings = settings;
-        _pluginId = pluginId;
+        _prefix = $"plugin.{uploaderId}.";
     }
 
     public Task<string?> GetAsync(string key, CancellationToken cancellationToken)
-        => _settings.GetAsync(NamespacedKey(key), cancellationToken);
+        => _settings.GetAsync(_prefix + key, cancellationToken);
 
     public Task SetAsync(string key, string value, bool sensitive, CancellationToken cancellationToken)
-        => _settings.SetAsync(NamespacedKey(key), value, sensitive, cancellationToken);
+        => _settings.SetAsync(_prefix + key, value, sensitive, cancellationToken);
 
-    public Task<bool> RemoveAsync(string key, CancellationToken cancellationToken)
-        => _settings.RemoveAsync(NamespacedKey(key), cancellationToken);
-
-    private string NamespacedKey(string key) => $"plugin.{_pluginId}.{key}";
+    public async Task DeleteAsync(string key, CancellationToken cancellationToken)
+        => _ = await _settings.RemoveAsync(_prefix + key, cancellationToken).ConfigureAwait(false);
 }

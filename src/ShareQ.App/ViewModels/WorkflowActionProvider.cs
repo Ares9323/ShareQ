@@ -22,14 +22,12 @@ public sealed class WorkflowActionProvider
         _registry = registry;
     }
 
-    public async Task<IReadOnlyList<WorkflowActionDescriptor>> GetAllAsync(CancellationToken cancellationToken)
+    public Task<IReadOnlyList<WorkflowActionDescriptor>> GetAllAsync(CancellationToken cancellationToken)
     {
         var list = new List<WorkflowActionDescriptor>(WorkflowActionCatalog.All);
         foreach (var uploader in _registry.AllUploaders)
         {
-            if (!await _registry.IsEnabledAsync(uploader.Id, cancellationToken).ConfigureAwait(false)) continue;
-            // Embed the uploader id verbatim — they're already constrained to the regex used by
-            // PluginContracts (lower-case, dash-separated), no JSON-string escaping needed.
+            // Embed the uploader id verbatim — slug + hash format so JSON-string escaping isn't needed.
             var configJson = $"{{\"uploader\":\"{uploader.Id}\"}}";
             list.Add(new WorkflowActionDescriptor(
                 TaskId: "shareq.upload",
@@ -38,6 +36,6 @@ public sealed class WorkflowActionProvider
                 Category: "Upload",
                 DefaultConfigJson: configJson));
         }
-        return list;
+        return Task.FromResult<IReadOnlyList<WorkflowActionDescriptor>>(list);
     }
 }

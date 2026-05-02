@@ -20,6 +20,12 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\icon.ico" />
+    <!-- Default .sxcu files seeded into %LOCALAPPDATA%\ShareQ\custom-uploaders\ on first run.
+         CopyToOutputDirectory because we read them from disk at runtime — embedding as
+         AssemblyResource would force NavigationToString plumbing in the seed step. -->
+    <None Include="Assets\CustomUploaders\*.sxcu">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ShareQ.Core\ShareQ.Core.csproj" />
@@ -32,12 +38,8 @@
     <ProjectReference Include="..\ShareQ.Editor\ShareQ.Editor.csproj" />
     <ProjectReference Include="..\ShareQ.PluginContracts\ShareQ.PluginContracts.csproj" />
     <ProjectReference Include="..\ShareQ.Plugins\ShareQ.Plugins.csproj" />
+    <ProjectReference Include="..\ShareQ.CustomUploaders\ShareQ.CustomUploaders.csproj" />
+    <ProjectReference Include="..\ShareQ.Uploaders\ShareQ.Uploaders.csproj" />
     <ProjectReference Include="..\ShareQ.Updater\ShareQ.Updater.csproj" />
-    <!-- Bundled plugins: ship in the box. External plugins live only on disk under
-         %LOCALAPPDATA%\ShareQ\plugins\ and are loaded by PluginLoader at startup. -->
-    <ProjectReference Include="..\..\plugins\ShareQ.Uploaders.Catbox\ShareQ.Uploaders.Catbox.csproj" />
-    <ProjectReference Include="..\..\plugins\ShareQ.Uploaders.Litterbox\ShareQ.Uploaders.Litterbox.csproj" />
-    <ProjectReference Include="..\..\plugins\ShareQ.Uploaders.OneDrive\ShareQ.Uploaders.OneDrive.csproj" />
-    <ProjectReference Include="..\..\plugins\ShareQ.Uploaders.GoogleDrive\ShareQ.Uploaders.GoogleDrive.csproj" />
   </ItemGroup>
 </Project>

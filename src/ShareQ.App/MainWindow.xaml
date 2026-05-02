@@ -12,14 +12,11 @@
                  Background="{DynamicResource Surface2Brush}"
                  ExtendsContentIntoTitleBar="True">
     <ui:FluentWindow.InputBindings>
-        <!-- Esc routes to whichever inline-detail view is active. Each command's CanExecute is
-             gated on its mode flag (IsConfiguringPlugin / IsEditingWorkflow); WPF picks the first
-             KeyBinding whose CanExecute returns true. List the more specific modes first so they
-             take precedence. KeyBindings sit on the Window's command routing layer and fire
-             regardless of focus — unlike KeyDown handlers which require focus to be inside the
-             listening element. The inline rename TextBox swallows Esc (e.Handled=true) so it
-             doesn't bubble out and trigger these bindings while the user is still typing. -->
-        <KeyBinding Key="Escape" Command="{Binding BackFromConfigCommand}" />
+        <!-- Esc returns from the inline workflow-edit view to the list. CanExecute gating on
+             IsEditingWorkflow keeps the binding inert when no detail view is open.
+             KeyBindings sit on the Window's command routing layer and fire regardless of focus —
+             the inline rename TextBox swallows Esc (e.Handled=true) so it doesn't bubble out
+             while the user is still typing. -->
         <KeyBinding Key="Escape" Command="{Binding Hotkeys.BackToListCommand}" />
     </ui:FluentWindow.InputBindings>
     <Grid Background="{DynamicResource Surface2Brush}">
@@ -65,11 +62,6 @@
                            Content="Home"
                            Command="{Binding ShowHomeCommand}"
                            Appearance="{Binding IsHomeSelected, Converter={StaticResource BoolToAppearance}}" />
-                <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                           Margin="0,0,0,4"
-                           Content="Plugins"
-                           Command="{Binding ShowPluginsCommand}"
-                           Appearance="{Binding IsPluginsSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Margin="0,0,0,4"
                            Content="Uploaders"
@@ -147,220 +139,182 @@
                            Text="Hotkeys: Ctrl+Alt+R region · Ctrl+Shift+P picker · Ctrl+Alt+S record · Ctrl+Alt+G gif" />
             </StackPanel>
 
-            <!-- Plugins: list / configure inline detail. Single tab, two sub-views toggled by
-                 IsConfiguringPlugin. Same shape as Hotkeys & workflows. -->
-            <Grid Visibility="{Binding IsPluginsSelected, Converter={StaticResource BoolToVisibility}}">
-
-                <!-- ── LIST VIEW ──────────────────────────────────────────────────────────── -->
-                <ScrollViewer Visibility="{Binding IsConfiguringPlugin, Converter={StaticResource InverseBoolToVisibility}}"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel Margin="24,16,24,16">
-                        <TextBlock Text="Plugins" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
-                        <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
-                                   Text="Toggle plugins on or off. Built-in plugins ship with ShareQ. External plugins live under %LOCALAPPDATA%\ShareQ\plugins\." />
-                        <ItemsControl ItemsSource="{Binding Plugins}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type vm:PluginItemViewModel}">
-                                    <Border Margin="0,0,0,8" Padding="14,10" Background="{DynamicResource Surface1Brush}"
-                                            BorderBrush="#333" BorderThickness="1" CornerRadius="6">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13" />
-                                                    <Border Margin="8,0,0,0" Padding="6,1" Background="{DynamicResource Surface3Brush}" CornerRadius="3"
-                                                            VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding Badge}" Foreground="#BBB" FontSize="10" />
-                                                    </Border>
-                                                </StackPanel>
-                                                <TextBlock Text="{Binding Subtitle}" Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11"
-                                                           TextWrapping="Wrap" Margin="0,2,0,0" />
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
-                                                <ui:Button Content="Configure"
-                                                           Command="{Binding ConfigureCommand}"
-                                                           Visibility="{Binding HasConfig, Converter={StaticResource BoolToVisibility}}"
-                                                           Margin="0,0,4,0"
-                                                           ToolTip="Open this plugin's settings inline (sign-in, target folder, public/private, …)" />
-                                                <ui:Button Content="Uninstall"
-                                                           Command="{Binding UninstallCommand}"
-                                                           Visibility="{Binding CanUninstall, Converter={StaticResource BoolToVisibility}}" />
-                                            </StackPanel>
-                                            <ui:ToggleSwitch Grid.Column="2"
-                                                             IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                                                             VerticalAlignment="Center" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </ScrollViewer>
-
-                <!-- ── CONFIGURE DETAIL VIEW ───────────────────────────────────────────────── -->
-                <!-- DataContext is set on the inner StackPanel rather than the ScrollViewer so
-                     the ScrollViewer's Visibility binding still resolves against SettingsViewModel
-                     (parent DataContext). Setting it on the ScrollViewer would re-root the binding
-                     scope to ConfiguringPlugin, where IsConfiguringPlugin doesn't exist — the
-                     binding would fall back to Visible and the panel would always render. -->
-                <ScrollViewer Visibility="{Binding IsConfiguringPlugin, Converter={StaticResource BoolToVisibility}}"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel Margin="24,16,24,16" DataContext="{Binding ConfiguringPlugin}">
-                        <Grid Margin="0,0,0,12">
+            <!-- Uploaders -->
+            <Grid Visibility="{Binding IsUploadersSelected, Converter={StaticResource BoolToVisibility}}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid.Resources>
+                    <!-- Shared row template: checkbox + "Configure…" button (only shown for
+                         IConfigurableUploader / IOAuthUploader). Reused across all 4 category tabs;
+                         only the ItemsSource changes. -->
+                    <DataTemplate x:Key="UploaderRowTemplate" DataType="{x:Type vm:UploaderSelectionItemViewModel}">
+                        <Grid Margin="0,2">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <ui:Button Grid.Column="0" Content="← Back"
-                                       Command="{Binding DataContext.BackFromConfigCommand, RelativeSource={RelativeSource AncestorType=ui:FluentWindow}}"
-                                       VerticalAlignment="Center"
-                                       ToolTip="Back to the plugin list (Esc)" />
-                            <TextBlock Grid.Column="1" Text="{Binding DisplayName}"
-                                       FontSize="16" FontWeight="SemiBold"
-                                       VerticalAlignment="Center" Margin="12,0,0,0" />
+                            <CheckBox Grid.Column="0"
+                                      Content="{Binding DisplayName}"
+                                      IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                      VerticalAlignment="Center" />
+                            <ui:Button Grid.Column="1"
+                                       Content="Configure…"
+                                       Padding="10,2"
+                                       Click="OnConfigureUploaderClicked"
+                                       Tag="{Binding}"
+                                       Visibility="{Binding IsConfigurable, Converter={StaticResource BoolToVisibility}}" />
                         </Grid>
+                    </DataTemplate>
 
-                        <!-- Auth section: visible only when the plugin implements IAuthenticatedUploader -->
-                        <Border Background="{DynamicResource Surface3Brush}" BorderBrush="#444" BorderThickness="1" CornerRadius="4"
-                                Padding="12,10" Margin="0,0,0,16"
-                                Visibility="{Binding SupportsAuth, Converter={StaticResource BoolToVisibility}}">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                    <TextBlock Text="Account" FontWeight="SemiBold" FontSize="12" />
-                                    <TextBlock Text="{Binding AuthStatus}" Foreground="#BBB" FontSize="11" />
-                                </StackPanel>
-                                <ui:Button Grid.Column="1" Content="Sign in"  Margin="0,0,4,0"
-                                           Command="{Binding SignInCommand}" />
-                                <ui:Button Grid.Column="2" Content="Sign out"
-                                           Command="{Binding SignOutCommand}" />
-                            </Grid>
-                        </Border>
-
-                        <!-- Settings list — auto-generated from IConfigurableUploader.GetSettings() -->
-                        <ItemsControl ItemsSource="{Binding Settings}">
-                            <ItemsControl.Resources>
-                                <DataTemplate DataType="{x:Type vm:PluginSettingBoolRowViewModel}">
-                                    <Border Margin="0,0,0,8" Padding="12,8" Background="{DynamicResource Surface1Brush}"
-                                            BorderBrush="#333" BorderThickness="1" CornerRadius="4">
+                    <!-- Tab header style: dark-theme matched, accent underline on selected, no
+                         default chrome from WPF's classic TabItem template. Plain TextBlock-style
+                         look so the section feels like the rest of ShareQ's Fluent-ish settings. -->
+                    <Style x:Key="UploaderTabItemStyle" TargetType="TabItem">
+                        <Setter Property="Foreground" Value="{DynamicResource AccentForegroundDarkBrush}" />
+                        <Setter Property="FontWeight" Value="SemiBold" />
+                        <Setter Property="Padding" Value="14,8" />
+                        <Setter Property="Margin" Value="0,0,2,0" />
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="Cursor" Value="Hand" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="TabItem">
+                                    <Border x:Name="Bd" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
                                         <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="12" />
-                                                <TextBlock Text="{Binding Description}" Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11"
-                                                           TextWrapping="Wrap" Margin="0,2,0,0" />
-                                            </StackPanel>
-                                            <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Value, Mode=TwoWay}"
-                                                             VerticalAlignment="Center" />
+                                            <ContentPresenter ContentSource="Header"
+                                                              HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center" />
+                                            <Border x:Name="Indicator"
+                                                    Height="2"
+                                                    VerticalAlignment="Bottom"
+                                                    Background="{DynamicResource AccentBackgroundBrush}"
+                                                    Visibility="Collapsed" />
                                         </Grid>
                                     </Border>
-                                </DataTemplate>
-                                <DataTemplate DataType="{x:Type vm:PluginSettingDropdownRowViewModel}">
-                                    <Border Margin="0,0,0,8" Padding="12,8" Background="{DynamicResource Surface1Brush}"
-                                            BorderBrush="#333" BorderThickness="1" CornerRadius="4">
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="12" />
-                                            <TextBlock Text="{Binding Description}" Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11"
-                                                       TextWrapping="Wrap" Margin="0,2,0,6" />
-                                            <Grid>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface3Brush}" />
+                                            <Setter Property="Foreground" Value="White" />
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Indicator" Property="Visibility" Value="Visible" />
+                                            <Setter Property="Foreground" Value="White" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Grid.Resources>
+
+                <!-- Header: title + subtitle, sit above the tab strip. -->
+                <StackPanel Grid.Row="0" Margin="24,16,24,8">
+                    <TextBlock Text="Uploaders" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap"
+                               Text="Pick which uploaders to use per content type. Multiple selections upload the same file to all of them; the resulting URLs end up on the clipboard, one per line." />
+                </StackPanel>
+
+                <!-- Tabbed body: 4 category tabs (Image / File / Text / Video) + Custom (.sxcu).
+                     TabControl has Background=Transparent + BorderThickness=0 so it inherits the
+                     section background; per-tab styling is in UploaderTabItemStyle above. -->
+                <TabControl Grid.Row="1" Margin="24,0,24,16"
+                            Background="Transparent" BorderThickness="0" Padding="0">
+                    <TabItem Header="Image" Style="{StaticResource UploaderTabItemStyle}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Uploaders.ImageUploaders}"
+                                          ItemTemplate="{StaticResource UploaderRowTemplate}"
+                                          Margin="0,12,0,0" />
+                        </ScrollViewer>
+                    </TabItem>
+                    <TabItem Header="File" Style="{StaticResource UploaderTabItemStyle}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Uploaders.FileUploaders}"
+                                          ItemTemplate="{StaticResource UploaderRowTemplate}"
+                                          Margin="0,12,0,0" />
+                        </ScrollViewer>
+                    </TabItem>
+                    <TabItem Header="Text" Style="{StaticResource UploaderTabItemStyle}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Uploaders.TextUploaders}"
+                                          ItemTemplate="{StaticResource UploaderRowTemplate}"
+                                          Margin="0,12,0,0" />
+                        </ScrollViewer>
+                    </TabItem>
+                    <TabItem Header="Video" Style="{StaticResource UploaderTabItemStyle}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Uploaders.VideoUploaders}"
+                                          ItemTemplate="{StaticResource UploaderRowTemplate}"
+                                          Margin="0,12,0,0" />
+                        </ScrollViewer>
+                    </TabItem>
+
+                    <!-- Custom (.sxcu): import / open folder / per-file delete. ShareX-compatible
+                         JSON files dropped into %LOCALAPPDATA%\ShareQ\custom-uploaders\ become
+                         destinations on next restart and surface in the Image/File/Text/Video
+                         tabs above based on their declared DestinationType. -->
+                    <TabItem Header="Custom (.sxcu)" Style="{StaticResource UploaderTabItemStyle}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel Margin="0,12,0,0">
+                                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
+                                           Text="ShareX-compatible declarative uploaders. Each .sxcu file becomes its own destination — toggle them on/off in the category tabs after a restart." />
+
+                                <ItemsControl ItemsSource="{Binding Uploaders.CustomUploaders}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:CustomUploaderListItemViewModel}">
+                                            <Grid Margin="0,2">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
-                                                <ComboBox Grid.Column="0"
-                                                          ItemsSource="{Binding Options}"
-                                                          SelectedValue="{Binding SelectedValue, Mode=TwoWay}"
-                                                          SelectedValuePath="Value"
-                                                          DisplayMemberPath="Display" />
-                                                <ui:Button Grid.Column="1" Content="Refresh" Margin="6,0,0,0"
-                                                           Command="{Binding RefreshOptionsCommand}"
-                                                           Visibility="{Binding IsAsyncLoaded, Converter={StaticResource BoolToVisibility}}"
-                                                           IsEnabled="{Binding IsLoadingOptions, Converter={StaticResource InverseBool}}" />
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="{Binding DisplayName}" Foreground="White" />
+                                                    <TextBlock Text="{Binding Subtitle}" Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" />
+                                                </StackPanel>
+                                                <ui:Button Grid.Column="1"
+                                                           Content="Delete"
+                                                           Appearance="Danger"
+                                                           Padding="8,2"
+                                                           Click="OnDeleteCustomUploaderClicked"
+                                                           Tag="{Binding FilePath}"
+                                                           VerticalAlignment="Center" />
                                             </Grid>
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.Resources>
-                        </ItemsControl>
-                    </StackPanel>
-                </ScrollViewer>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" Margin="0,8,0,12"
+                                           Text="No custom uploaders loaded yet."
+                                           Visibility="{Binding Uploaders.HasNoCustomUploaders, Converter={StaticResource BoolToVisibility}}" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <ui:Button Content="Import .sxcu…" Padding="14,4" Margin="0,0,8,0" Click="OnImportCustomUploaderClicked" />
+                                    <ui:Button Content="Open folder" Padding="14,4" Click="OnOpenCustomUploadersFolderClicked" />
+                                </StackPanel>
+
+                                <!-- File association toggle: writes per-user HKCU\Software\Classes
+                                     entries (no admin) so .sxcu files double-clicked from Explorer
+                                     open through ShareQ and trigger the import flow. Reversible
+                                     from the same checkbox. Will be replaced by Velopack-managed
+                                     install-time registration once we ship a packaged release. -->
+                                <Border Background="{DynamicResource Surface3Brush}" CornerRadius="4" Padding="12" Margin="0,16,0,0">
+                                    <StackPanel>
+                                        <CheckBox x:Name="SxcuAssociationCheckBox"
+                                                  Content="Set ShareQ as the default app for .sxcu files"
+                                                  Loaded="OnSxcuAssociationCheckBoxLoaded"
+                                                  Click="OnSxcuAssociationToggled" />
+                                        <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}"
+                                                   FontSize="11" TextWrapping="Wrap" Margin="22,4,0,0"
+                                                   Text="When on, double-clicking a .sxcu file in Explorer opens ShareQ and prompts you to install it. Per-user only — doesn't touch system-wide settings or need admin rights." />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+                </TabControl>
             </Grid>
-
-            <!-- Uploaders -->
-            <ScrollViewer Visibility="{Binding IsUploadersSelected, Converter={StaticResource BoolToVisibility}}"
-                          VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Margin="24,16,24,16">
-                    <TextBlock Text="Uploaders" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
-                    <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
-                               Text="Pick which uploaders to use per content type. Multiple selections upload the same file to all of them; the resulting URLs end up on the clipboard, one per line." />
-
-                    <TextBlock Text="Image uploaders" FontWeight="SemiBold" Margin="0,4,0,4" />
-                    <ItemsControl ItemsSource="{Binding Uploaders.ImageUploaders}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type vm:UploaderSelectionItemViewModel}">
-                                <CheckBox Content="{Binding DisplayName}"
-                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                          IsEnabled="{Binding IsPluginEnabled}"
-                                          ToolTip="{Binding DisabledTooltip}"
-                                          Margin="0,2" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-
-                    <TextBlock Text="File uploaders" FontWeight="SemiBold" Margin="0,16,0,4" />
-                    <ItemsControl ItemsSource="{Binding Uploaders.FileUploaders}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type vm:UploaderSelectionItemViewModel}">
-                                <CheckBox Content="{Binding DisplayName}"
-                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                          IsEnabled="{Binding IsPluginEnabled}"
-                                          ToolTip="{Binding DisabledTooltip}"
-                                          Margin="0,2" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-
-                    <TextBlock Text="Text uploaders" FontWeight="SemiBold" Margin="0,16,0,4" />
-                    <ItemsControl ItemsSource="{Binding Uploaders.TextUploaders}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type vm:UploaderSelectionItemViewModel}">
-                                <CheckBox Content="{Binding DisplayName}"
-                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                          IsEnabled="{Binding IsPluginEnabled}"
-                                          ToolTip="{Binding DisabledTooltip}"
-                                          Margin="0,2" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-
-                    <TextBlock Text="Video uploaders" FontWeight="SemiBold" Margin="0,16,0,4" />
-                    <ItemsControl ItemsSource="{Binding Uploaders.VideoUploaders}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type vm:UploaderSelectionItemViewModel}">
-                                <CheckBox Content="{Binding DisplayName}"
-                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                          IsEnabled="{Binding IsPluginEnabled}"
-                                          ToolTip="{Binding DisabledTooltip}"
-                                          Margin="0,2" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </ScrollViewer>
 
             <!-- Hotkeys & workflows: single tab with two sub-views toggled by IsEditingWorkflow.
                  List view (default) shows every hotkey-able workflow grouped by built-in / custom.

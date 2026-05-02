@@ -1,8 +1,8 @@
-# OAuth client credentials for uploader plugins. The committed Secrets.cs holds empty placeholder
-# values (so CI / fresh clones build); developers create Secrets.Local.cs alongside it with the
-# real values and the .csproj swaps them in via a conditional Compile Remove on Secrets.cs.
-plugins/ShareQ.Uploaders.GoogleDrive/Secrets.Local.cs
-plugins/ShareQ.Uploaders.OneDrive/Secrets.Local.cs
+# OAuth client credentials for built-in uploaders. The committed Secrets.cs holds empty
+# placeholder values (so CI / fresh clones build); maintainers create Secrets.Local.cs in the
+# same folder with the real Client IDs / Secrets, and the .csproj swaps them in via a
+# conditional Compile Remove on Secrets.cs when the Local file exists.
+src/ShareQ.Uploaders/Secrets.Local.cs
 
 # Build output
 [Bb]in/

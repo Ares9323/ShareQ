@@ -1,21 +1,16 @@
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShareQ.App.Services;
 using ShareQ.App.Services.Plugins;
-using ShareQ.PluginContracts;
 
 namespace ShareQ.App.ViewModels;
 
 public sealed partial class SettingsViewModel : ObservableObject
 {
-    private readonly PluginRegistry _registry;
-    private readonly IPluginConfigStoreFactory _configFactory;
     private readonly AutostartService _autostart;
 
     public SettingsViewModel(
         PluginRegistry registry,
-        IPluginConfigStoreFactory configFactory,
         AutostartService autostart,
         UploadersViewModel uploaders,
         HotkeysViewModel hotkeys,
@@ -25,8 +20,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         CategoriesViewModel categories,
         DebugViewModel debug)
     {
-        _registry = registry;
-        _configFactory = configFactory;
         _autostart = autostart;
         Theme = theme;
         Categories = categories;
@@ -49,12 +42,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         Hotkeys = hotkeys;
         Capture = capture;
         Workflows = workflows;
-        Plugins = [];
         AppVersion = typeof(SettingsViewModel).Assembly.GetName().Version?.ToString() ?? "dev";
-        _ = LoadPluginsAsync();
+        // Hold a reference so DI doesn't garbage-collect the registry singleton through this VM.
+        _ = registry;
     }
 
-    public ObservableCollection<PluginItemViewModel> Plugins { get; }
     public UploadersViewModel Uploaders { get; }
     public HotkeysViewModel Hotkeys { get; }
     public CaptureDefaultsViewModel Capture { get; }
@@ -62,16 +54,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     public ThemeViewModel Theme { get; }
     public CategoriesViewModel Categories { get; }
     public DebugViewModel Debug { get; }
-
-    /// <summary>Non-null while the user is in the Plugins → Configure detail view. Drives the
-    /// list/detail toggle in the Plugins XAML; cleared by <see cref="BackFromConfigCommand"/>.
-    /// Same shape as Hotkeys' edit-view pattern — single tab, two sub-views.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsConfiguringPlugin))]
-    [NotifyCanExecuteChangedFor(nameof(BackFromConfigCommand))]
-    private PluginConfigViewModel? _configuringPlugin;
-
-    public bool IsConfiguringPlugin => ConfiguringPlugin is not null;
 
     [ObservableProperty]
     private SettingsTab _selectedTab = SettingsTab.Home;
@@ -91,7 +73,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     public bool IsHomeSelected      => SelectedTab == SettingsTab.Home;
-    public bool IsPluginsSelected   => SelectedTab == SettingsTab.Plugins;
     public bool IsUploadersSelected => SelectedTab == SettingsTab.Uploaders;
     public bool IsHotkeysSelected   => SelectedTab == SettingsTab.Hotkeys;
     public bool IsCaptureSelected   => SelectedTab == SettingsTab.Capture;
@@ -106,7 +87,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnSelectedTabChanged(SettingsTab value)
     {
         OnPropertyChanged(nameof(IsHomeSelected));
-        OnPropertyChanged(nameof(IsPluginsSelected));
         OnPropertyChanged(nameof(IsUploadersSelected));
         OnPropertyChanged(nameof(IsHotkeysSelected));
         OnPropertyChanged(nameof(IsCaptureSelected));
@@ -120,7 +100,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand] private void ShowHome()      => SelectedTab = SettingsTab.Home;
-    [RelayCommand] private void ShowPlugins()   => SelectedTab = SettingsTab.Plugins;
     [RelayCommand] private void ShowUploaders() => SelectedTab = SettingsTab.Uploaders;
     [RelayCommand] private void ShowHotkeys()   => SelectedTab = SettingsTab.Hotkeys;
     [RelayCommand] private void ShowCapture()   => SelectedTab = SettingsTab.Capture;
@@ -129,33 +108,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand] private void ShowSettings()   => SelectedTab = SettingsTab.Settings;
     [RelayCommand] private void ShowDebug()     => SelectedTab = SettingsTab.Debug;
     [RelayCommand] private void ShowAbout()     => SelectedTab = SettingsTab.About;
-
-    /// <summary>Open the inline configure view for a plugin. Called by
-    /// <see cref="PluginItemViewModel"/> via the openConfig callback wired up in
-    /// <see cref="LoadPluginsAsync"/>.</summary>
-    public async Task OpenPluginConfigAsync(PluginConfigViewModel vm)
-    {
-        ConfiguringPlugin = vm;
-        await vm.LoadAsync(CancellationToken.None).ConfigureAwait(true);
-    }
-
-    private bool CanGoBackFromConfig() => IsConfiguringPlugin;
-
-    [RelayCommand(CanExecute = nameof(CanGoBackFromConfig))]
-    private void BackFromConfig() => ConfiguringPlugin = null;
-
-    private async Task LoadPluginsAsync()
-    {
-        Plugins.Clear();
-        foreach (var descriptor in _registry.AllDescriptors())
-        {
-            var enabled = await _registry.IsEnabledAsync(descriptor.Id, CancellationToken.None).ConfigureAwait(true);
-            var uploader = _registry.GetUploader(descriptor.Id);
-            Plugins.Add(new PluginItemViewModel(
-                descriptor, enabled, _registry, uploader, _configFactory,
-                openConfig: vm => _ = OpenPluginConfigAsync(vm)));
-        }
-    }
 }
 
-public enum SettingsTab { Home, Plugins, Uploaders, Hotkeys, Capture, Theme, Categories, Settings, Debug, About }
+public enum SettingsTab { Home, Uploaders, Hotkeys, Capture, Theme, Categories, Settings, Debug, About }

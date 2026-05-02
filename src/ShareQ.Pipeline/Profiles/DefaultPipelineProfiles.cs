@@ -9,6 +9,7 @@ public static class DefaultPipelineProfiles
     public const string OnClipboardId       = "on-clipboard";
     public const string RegionCaptureId     = "region-capture";
     public const string ManualUploadId      = "manual-upload";
+    public const string UploadClipboardTextId = "upload-clipboard-text";
     public const string ShowPopupId         = "show-popup";
     public const string ToggleIncognitoId   = "toggle-incognito";
     public const string ColorSamplerId      = "color-sampler";
@@ -32,6 +33,7 @@ public static class DefaultPipelineProfiles
     public const string RecordScreenTaskId         = "shareq.record-screen";
     public const string OpenScreenshotFolderTaskId = "shareq.open-screenshot-folder";
     public const string OpenLauncherMenuTaskId     = "shareq.open-launcher-menu";
+    public const string UploadClipboardTextTaskId  = "shareq.upload-clipboard-text";
 
     // Task IDs from ShareQ.Plugins.
     public const string UploadTaskId = "shareq.upload";
@@ -85,6 +87,27 @@ public static class DefaultPipelineProfiles
                 new PipelineStep(CopyTextToClipboardTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"template\":\"{bag.upload_urls}\"}"), Id: "copy-url"),
                 new PipelineStep(NotifyToastTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"title\":\"ShareQ\",\"message\":\"Uploaded\"}"), Id: "toast")
             ],
+            IsBuiltIn: true),
+
+        new PipelineProfile(
+            Id: UploadClipboardTextId,
+            DisplayName: "Upload clipboard text",
+            Trigger: "hotkey:upload-clipboard-text",
+            Steps:
+            [
+                // Mirrors region-capture but for text: pull text from clipboard → bag, upload to
+                // text-category destinations (paste.rs / Pastebin / Gist / OneDrive / GoogleDrive
+                // / Dropbox), copy resulting URL back to clipboard, toast. Lets the user grab any
+                // selection (Ctrl+C anywhere) and turn it into a shareable link with one hotkey.
+                new PipelineStep(UploadClipboardTextTaskId, Id: "read-clipboard-text"),
+                new PipelineStep(AddToHistoryTask.TaskId, Id: "add-to-history"),
+                new PipelineStep(UploadTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"category\":\"text\"}"), Id: "upload"),
+                new PipelineStep(UpdateItemUrlTask.TaskId),
+                new PipelineStep(CopyTextToClipboardTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"template\":\"{bag.upload_urls}\"}"), Id: "copy-url"),
+                new PipelineStep(NotifyToastTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"title\":\"ShareQ\",\"message\":\"Uploaded text → {bag.upload_url}\"}"), Id: "toast")
+            ],
+            // No default hotkey — text upload is rarely a one-handed flow (you've usually got the
+            // text already in the clipboard from elsewhere). User binds in Settings if desired.
             IsBuiltIn: true),
 
         new PipelineProfile(
