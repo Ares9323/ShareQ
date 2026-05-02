@@ -8,6 +8,9 @@ public static class DefaultPipelineProfiles
     // Profile / workflow ids
     public const string OnClipboardId       = "on-clipboard";
     public const string RegionCaptureId     = "region-capture";
+    public const string ActiveWindowCaptureId = "active-window-capture";
+    public const string ActiveMonitorCaptureId = "active-monitor-capture";
+    public const string WebpageCaptureId       = "webpage-capture";
     public const string ManualUploadId      = "manual-upload";
     public const string UploadClipboardTextId = "upload-clipboard-text";
     public const string ShortenClipboardUrlId = "shorten-clipboard-url";
@@ -31,6 +34,9 @@ public static class DefaultPipelineProfiles
     public const string ColorPickerTaskId          = "shareq.color-picker";
     public const string CopyColorAsHexTaskId       = "shareq.copy-color-hex";
     public const string CaptureRegionTaskId        = "shareq.capture-region";
+    public const string CaptureActiveWindowTaskId  = "shareq.capture-active-window";
+    public const string CaptureActiveMonitorTaskId = "shareq.capture-active-monitor";
+    public const string CaptureWebpageTaskId       = "shareq.capture-webpage";
     public const string RecordScreenTaskId         = "shareq.record-screen";
     public const string OpenScreenshotFolderTaskId = "shareq.open-screenshot-folder";
     public const string OpenLauncherMenuTaskId     = "shareq.open-launcher-menu";
@@ -74,6 +80,78 @@ public static class DefaultPipelineProfiles
                 new PipelineStep(NotifyToastTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"title\":\"ShareQ\",\"message\":\"Saved {bag.local_path}\"}"), Id: "toast")
             ],
             Hotkey: new HotkeyBinding(Win | Shift, 0x53),  // Win+Shift+S
+            IsBuiltIn: true),
+
+        new PipelineProfile(
+            Id: ActiveWindowCaptureId,
+            DisplayName: "Active window capture",
+            Trigger: "hotkey:active-window",
+            Steps:
+            [
+                // Same shape as region-capture but the first step picks the foreground window's
+                // bounds (DWM extended-frame-bounds aware) instead of opening the overlay. Every
+                // downstream step is identical so user customisations to either profile carry the
+                // same intent.
+                new PipelineStep(CaptureActiveWindowTaskId, Id: "capture-active-window"),
+                new PipelineStep(OpenEditorBeforeUploadTaskId, Enabled: false, Id: "open-editor"),
+                new PipelineStep(SaveToFileTask.TaskId, Id: "save"),
+                new PipelineStep(AddToHistoryTask.TaskId, Id: "add-to-history"),
+                new PipelineStep(CopyImageToClipboardTaskId, Id: "copy-image"),
+                new PipelineStep(UploadTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"category\":\"image\"}"), Id: "upload"),
+                new PipelineStep(UpdateItemUrlTask.TaskId),
+                new PipelineStep(CopyTextToClipboardTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"template\":\"{bag.upload_urls}\"}"), Id: "copy-url"),
+                new PipelineStep(NotifyToastTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"title\":\"ShareQ\",\"message\":\"Saved {bag.local_path}\"}"), Id: "toast")
+            ],
+            // No default hotkey — Print Screen + Alt is Windows' built-in active-window screenshot
+            // and we don't want to step on it. The user assigns one in Settings if they want it
+            // routed through ShareQ's pipeline (editor / upload / etc.) instead of just the clipboard.
+            IsBuiltIn: true),
+
+        new PipelineProfile(
+            Id: ActiveMonitorCaptureId,
+            DisplayName: "Active monitor capture",
+            Trigger: "hotkey:active-monitor",
+            Steps:
+            [
+                // Active monitor = the screen the cursor is currently on. Useful as a hotkey on
+                // multi-monitor setups so the user doesn't have to alt-tab into the right monitor's
+                // app first; on single-monitor it degrades to a fullscreen of the only screen.
+                new PipelineStep(CaptureActiveMonitorTaskId, Id: "capture-active-monitor"),
+                new PipelineStep(OpenEditorBeforeUploadTaskId, Enabled: false, Id: "open-editor"),
+                new PipelineStep(SaveToFileTask.TaskId, Id: "save"),
+                new PipelineStep(AddToHistoryTask.TaskId, Id: "add-to-history"),
+                new PipelineStep(CopyImageToClipboardTaskId, Id: "copy-image"),
+                new PipelineStep(UploadTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"category\":\"image\"}"), Id: "upload"),
+                new PipelineStep(UpdateItemUrlTask.TaskId),
+                new PipelineStep(CopyTextToClipboardTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"template\":\"{bag.upload_urls}\"}"), Id: "copy-url"),
+                new PipelineStep(NotifyToastTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"title\":\"ShareQ\",\"message\":\"Saved {bag.local_path}\"}"), Id: "toast")
+            ],
+            // No default hotkey — leaves the keymap budget free; the user binds one in Settings
+            // if they live with a multi-monitor rig.
+            IsBuiltIn: true),
+
+        new PipelineProfile(
+            Id: WebpageCaptureId,
+            DisplayName: "Webpage capture",
+            Trigger: "menu:webpage",
+            Steps:
+            [
+                // The capture task either prompts for a URL (interactive, default) or reads it
+                // from its own config (set in the workflow editor for "snapshot example.com on
+                // demand" flows). Resulting PNG is full-page (CDP captureBeyondViewport).
+                new PipelineStep(CaptureWebpageTaskId, Id: "capture-webpage"),
+                new PipelineStep(OpenEditorBeforeUploadTaskId, Enabled: false, Id: "open-editor"),
+                new PipelineStep(SaveToFileTask.TaskId, Id: "save"),
+                new PipelineStep(AddToHistoryTask.TaskId, Id: "add-to-history"),
+                new PipelineStep(CopyImageToClipboardTaskId, Id: "copy-image"),
+                new PipelineStep(UploadTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"category\":\"image\"}"), Id: "upload"),
+                new PipelineStep(UpdateItemUrlTask.TaskId),
+                new PipelineStep(CopyTextToClipboardTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"template\":\"{bag.upload_urls}\"}"), Id: "copy-url"),
+                new PipelineStep(NotifyToastTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"title\":\"ShareQ\",\"message\":\"Captured {bag.window_title}\"}"), Id: "toast")
+            ],
+            // No default hotkey — webpage capture is mostly tray-driven (you've got the URL in
+            // hand, you click "Webpage…"). The user binds one in Settings if they want it on
+            // muscle memory.
             IsBuiltIn: true),
 
         new PipelineProfile(

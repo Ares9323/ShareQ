@@ -78,6 +78,45 @@ public sealed class CaptureCoordinator
         await RunPipelineAsync(region, ItemSource.CaptureMonitor, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Run the webpage-capture workflow. Doesn't pre-fill any payload — the workflow's
+    /// first step opens the URL prompt dialog and renders the page in a hidden WebView2.</summary>
+    public async Task CaptureWebpageAsync(CancellationToken cancellationToken)
+    {
+        var profile = await _profiles.GetAsync(DefaultPipelineProfiles.WebpageCaptureId, cancellationToken).ConfigureAwait(false);
+        if (profile is null)
+        {
+            _logger.LogWarning("webpage-capture profile not found; aborting");
+            return;
+        }
+        var ctx = new PipelineContext(_services);
+        await _executor.RunAsync(profile, ctx, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Capture the currently-foreground window as PNG. Reads <c>GetForegroundWindow</c>
+    /// after a short tick (so a tray-menu launch has time to dismiss the popup and let the previous
+    /// window regain focus) plus the user-configured <c>capture.delay_seconds</c>. Skips own-process
+    /// windows so a Settings dialog or the tray menu itself never become the target.</summary>
+    public async Task CaptureActiveWindowAsync(CancellationToken cancellationToken)
+    {
+        // 50ms gives the menu time to close and Windows time to restore the previous foreground;
+        // without it the active window briefly is ShareQ itself when launched from the tray.
+        await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken).ConfigureAwait(false);
+        await ApplyDelayAsync(cancellationToken).ConfigureAwait(false);
+
+        var snapshot = WindowEnumeration.GetForegroundWindowSnapshot(excludeProcessId: Environment.ProcessId);
+        if (snapshot is null)
+        {
+            _logger.LogInformation("Active window: no eligible foreground window (own process / minimised / cloaked)");
+            return;
+        }
+
+        _logger.LogInformation("Active window: capturing '{Title}' at ({X}, {Y}) {W}×{H} px",
+            snapshot.Title, snapshot.X, snapshot.Y, snapshot.Width, snapshot.Height);
+        var region = new CaptureRegion(snapshot.X, snapshot.Y, snapshot.Width, snapshot.Height,
+            string.IsNullOrEmpty(snapshot.Title) ? "Active window" : snapshot.Title);
+        await RunPipelineAsync(region, ItemSource.CaptureWindow, cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task ApplyDelayAsync(CancellationToken cancellationToken)
     {
         var raw = await _settings.GetAsync(DelayKey, cancellationToken).ConfigureAwait(false);

@@ -70,6 +70,24 @@ public static class WorkflowActionCatalog
             "Show the region selection overlay and capture the chosen rectangle. Skipped automatically when a payload is already in the bag (e.g. fullscreen / monitor entry-points).",
             "Capture"),
 
+        new("shareq.capture-active-window",
+            "Capture active window",
+            "Snapshot the currently-foreground window using DWM extended-frame-bounds (no resize-border padding). Honours the global capture delay; own-process windows are skipped so Settings / popup never become the target.",
+            "Capture",
+            IntParameter: new IntParameter("delay_seconds", "Delay (s)", 0, 0, 30)),
+
+        new("shareq.capture-active-monitor",
+            "Capture active monitor",
+            "Snapshot the monitor currently under the mouse cursor — useful as a hotkey on multi-monitor setups. On single-monitor it just captures the whole screen.",
+            "Capture",
+            IntParameter: new IntParameter("delay_seconds", "Delay (s)", 0, 0, 30)),
+
+        new("shareq.capture-webpage",
+            "Capture webpage",
+            "Render a URL in a hidden WebView2 and grab a full-page PNG (everything below the fold included). Leave URL empty to be prompted at runtime; set it for fully-automated 'snapshot example.com' workflows. Login-walled pages won't render protected content.",
+            "Capture",
+            StringParameters: [new StringParameter("url", "URL", string.Empty, Placeholder: "https://example.com (leave empty to prompt)")]),
+
         new("shareq.record-screen",
             "Start/stop screen recording (mp4)",
             "Toggle FFmpeg-driven screen recording in mp4 format. First invocation starts, second stops and produces the file.",

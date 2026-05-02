@@ -51,10 +51,14 @@ public sealed class TrayIconService : IDisposable
         capture.Items.Add(BuildMenuItem("Fullscreen",
             () => Run<CaptureCoordinator>(c => _ = c.CaptureFullscreenAsync(CancellationToken.None))));
         capture.Items.Add(BuildMonitorSubmenu());
+        capture.Items.Add(BuildMenuItem("Active window",
+            () => Run<CaptureCoordinator>(c => _ = c.CaptureActiveWindowAsync(CancellationToken.None))));
         capture.Items.Add(BuildMenuItem("Region\tCtrl+Alt+R",
             () => Run<CaptureCoordinator>(c => _ = c.CaptureRegionAsync(CancellationToken.None))));
         capture.Items.Add(BuildMenuItem("Last region",
             () => Run<CaptureCoordinator>(c => _ = c.CaptureLastRegionAsync(CancellationToken.None))));
+        capture.Items.Add(BuildMenuItem("Webpage…",
+            () => Run<CaptureCoordinator>(c => _ = c.CaptureWebpageAsync(CancellationToken.None))));
         capture.Items.Add(new Separator());
         capture.Items.Add(BuildMenuItem("Screen recording\tCtrl+Alt+S",
             () => Run<Services.Recording.RecordingCoordinator>(c => _ = c.ToggleAsync(ShareQ.Capture.Recording.RecordingFormat.Mp4, CancellationToken.None))));

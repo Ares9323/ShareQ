@@ -320,6 +320,40 @@
                                                    Text="When on, double-clicking a .sxcu file in Explorer opens ShareQ and prompts you to install it. Per-user only — doesn't touch system-wide settings or need admin rights." />
                                     </StackPanel>
                                 </Border>
+
+                                <!-- Explorer right-click → "Upload with ShareQ" verb. Per-user
+                                     HKCU\Software\Classes\*\shell\ShareQ entry, fully reversible.
+                                     On Windows 11 the verb appears under "Show more options"
+                                     (Microsoft hides third-party verbs by default in the new menu). -->
+                                <Border Background="{DynamicResource Surface3Brush}" CornerRadius="4" Padding="12" Margin="0,8,0,0">
+                                    <StackPanel>
+                                        <CheckBox x:Name="ExplorerContextMenuCheckBox"
+                                                  Content="Show 'Upload with ShareQ' in the Explorer right-click menu"
+                                                  Loaded="OnExplorerContextMenuCheckBoxLoaded"
+                                                  Click="OnExplorerContextMenuToggled" />
+                                        <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}"
+                                                   FontSize="11" TextWrapping="Wrap" Margin="22,4,0,0"
+                                                   Text="Adds an 'Upload with ShareQ' entry to the right-click menu on every file. On Windows 11 you'll find it under 'Show more options'. The entry is always visible — clicking it forwards the file to a running ShareQ, or starts one in tray-only mode if not running." />
+
+                                        <!-- Workflow selector: which pipeline profile the verb runs.
+                                             Default 'Manual upload' uploads to first compatible
+                                             destination + copies link, but the user can pick e.g.
+                                             a custom 'Save to disk + copy markdown' workflow they
+                                             built in Hotkeys & workflows. -->
+                                        <Grid Margin="22,12,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Run workflow:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <ComboBox Grid.Column="1" x:Name="ExplorerContextMenuWorkflowCombo"
+                                                      Loaded="OnExplorerContextMenuWorkflowComboLoaded"
+                                                      SelectionChanged="OnExplorerContextMenuWorkflowChanged"
+                                                      DisplayMemberPath="DisplayName"
+                                                      SelectedValuePath="Id" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </ScrollViewer>
                     </TabItem>

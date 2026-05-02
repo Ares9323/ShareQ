@@ -119,6 +119,34 @@ public static class WindowEnumeration
         windows.Add(new WindowEntry(handle, rect, isWindow, title));
     }
 
+    /// <summary>Snapshot of the current foreground window (DWM extended-frame-bounds aware, so the
+    /// invisible Win10/11 resize border is excluded). Returns <c>null</c> when there's no foreground
+    /// window, when it's cloaked, or when its rect collapses to nothing (e.g. minimised). Also
+    /// rejects any window owned by <paramref name="excludeProcessId"/> so the caller can ignore
+    /// itself when the entry point is a tray menu (the menu briefly owns the foreground).</summary>
+    public static WindowSnapshot? GetForegroundWindowSnapshot(int? excludeProcessId = null)
+    {
+        var hwnd = GetForegroundWindow();
+        if (hwnd == IntPtr.Zero) return null;
+
+        if (excludeProcessId is int pidToSkip)
+        {
+            // Threadid return value isn't useful here — we only care about pid; suppress CA1806
+            // by discarding it explicitly.
+            _ = GetWindowThreadProcessId(hwnd, out var pid);
+            if ((int)pid == pidToSkip) return null;
+        }
+
+        if (!IsWindowVisible(hwnd)) return null;
+        if (IsWindowCloaked(hwnd)) return null;
+
+        var rect = GetWindowRectangle(hwnd);
+        if (rect.Width <= 0 || rect.Height <= 0) return null;
+
+        var title = GetWindowTitle(hwnd);
+        return new WindowSnapshot(title, rect.X, rect.Y, rect.Width, rect.Height);
+    }
+
     /// <summary>Find the visible window/child rect at the given screen-pixel point. FirstOrDefault
     /// matching honours the build order: deepest children first within the topmost window, then
     /// down through z-order — so a child of an occluded window never beats the foreground app.</summary>
@@ -210,6 +238,12 @@ public static class WindowEnumeration
     private struct POINT { public int X, Y; }
 
     private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

@@ -224,12 +224,13 @@ public sealed partial class WorkflowsViewModel : ObservableObject
         foreach (var profile in DefaultPipelineProfiles.All)
         {
             await _seeder.ResetToDefaultsAsync(profile.Id, CancellationToken.None).ConfigureAwait(true);
-            // Re-emit the hotkey so the runtime hook re-registers with the default binding.
-            if (profile.Hotkey is { } binding)
-                _hotkeys.NotifyHotkeyRemoved(profile.Id); // unregister first; the next event will rebind
-            // Now read back and emit Changed with the actual binding to register fresh. Simpler:
-            // just kick the routine via ClearAsync→re-bind isn't worth the dance, so trigger a
-            // synthetic Changed event ourselves with the seeded values.
+            // Always unregister first — the user might have bound a hotkey to a profile whose
+            // default is unbound (e.g. ActiveWindowCapture). Without this their custom binding
+            // would survive in the runtime hook even after the DB row got reset to null, leaving
+            // a "ghost" hotkey active for a workflow whose definition no longer mentions it.
+            _hotkeys.NotifyHotkeyRemoved(profile.Id);
+            // Re-register only when the default profile actually has a binding. Profiles with
+            // no default hotkey stay unbound after reset, matching what the user sees in the UI.
             if (profile.Hotkey is { } b)
                 _hotkeys.NotifyHotkeyRebound(profile.Id, (ShareQ.Hotkeys.HotkeyModifiers)b.Modifiers, b.VirtualKey);
         }

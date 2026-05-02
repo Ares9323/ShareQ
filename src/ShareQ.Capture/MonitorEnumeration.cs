@@ -25,6 +25,29 @@ public static class MonitorEnumeration
         return list;
     }
 
+    /// <summary>The monitor currently under the mouse cursor — what ShareX calls "active monitor".
+    /// Falls back to the primary monitor when the cursor sits in a gap between monitors (rare on
+    /// modern desktop layouts but possible with mismatched resolutions). Returns <c>null</c> only
+    /// if no monitors are detected at all.</summary>
+    public static MonitorInfo? GetMonitorUnderCursor()
+    {
+        if (!GetCursorPos(out var pt)) pt = new POINT { X = 0, Y = 0 };
+        var monitors = Enumerate();
+        if (monitors.Count == 0) return null;
+        foreach (var m in monitors)
+        {
+            if (pt.X >= m.X && pt.X < m.X + m.Width && pt.Y >= m.Y && pt.Y < m.Y + m.Height) return m;
+        }
+        return monitors.FirstOrDefault(m => m.IsPrimary) ?? monitors[0];
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X, Y; }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out POINT lpPoint);
+
     private delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData);
 
     [StructLayout(LayoutKind.Sequential)]

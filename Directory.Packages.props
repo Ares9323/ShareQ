@@ -39,5 +39,9 @@
 
     <!-- QR code generation (used by the QR pipeline task + Show QR window) -->
     <PackageVersion Include="QRCoder" Version="1.6.0" />
+
+    <!-- Headless browser used by the webpage-capture pipeline task. The runtime ships with
+         Windows 11 / Edge; on Win10 it lazy-installs on first use via the Evergreen runtime. -->
+    <PackageVersion Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
   </ItemGroup>
 </Project>

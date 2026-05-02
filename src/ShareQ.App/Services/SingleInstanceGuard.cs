@@ -25,6 +25,11 @@ public sealed class SingleInstanceGuard : IDisposable
     /// <summary>Prefix for "open a .sxcu file in the primary instance" messages — followed by
     /// the absolute file path. Kept here so producers / consumers stay in sync.</summary>
     public const string SxcuPrefix = "sxcu:";
+    /// <summary>Prefix for "upload this file via the primary instance" messages — used by the
+    /// Explorer context-menu entry, which runs <c>shareq.exe --upload "&lt;path&gt;"</c> from a
+    /// brand-new process. The secondary forwards the absolute path here so the primary triggers
+    /// its ManualUpload pipeline without relaunching the whole shell.</summary>
+    public const string UploadPrefix = "upload:";
 
     private readonly Mutex _mutex;
     private readonly bool _isPrimary;

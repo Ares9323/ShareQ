@@ -23,13 +23,20 @@ public partial class MainWindow : FluentWindow
     private readonly ShareQ.App.Services.SettingsBackupService _settingsBackup;
     private readonly ShareQ.PluginContracts.IPluginConfigStoreFactory _pluginConfigFactory;
     private readonly ShareQ.Uploaders.OAuth.OAuthFlowService _oauthFlowService;
+    private readonly ShareQ.Pipeline.Profiles.IPipelineProfileStore _profileStore;
+    private readonly ShareQ.Storage.Settings.ISettingsStore _settingsStore;
+    // Set true during the initial Loaded sync so SelectionChanged doesn't immediately overwrite
+    // the persisted value with the default-selected item.
+    private bool _suppressContextMenuWorkflowChange;
 
     public MainWindow(SettingsViewModel viewModel,
         ShareQ.App.Services.ScreenColorPickerService screenSampler,
         ShareQ.Editor.Persistence.ColorRecentsStore colorRecents,
         ShareQ.App.Services.SettingsBackupService settingsBackup,
         ShareQ.PluginContracts.IPluginConfigStoreFactory pluginConfigFactory,
-        ShareQ.Uploaders.OAuth.OAuthFlowService oauthFlowService)
+        ShareQ.Uploaders.OAuth.OAuthFlowService oauthFlowService,
+        ShareQ.Pipeline.Profiles.IPipelineProfileStore profileStore,
+        ShareQ.Storage.Settings.ISettingsStore settingsStore)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -38,6 +45,8 @@ public partial class MainWindow : FluentWindow
         _settingsBackup = settingsBackup;
         _pluginConfigFactory = pluginConfigFactory;
         _oauthFlowService = oauthFlowService;
+        _profileStore = profileStore;
+        _settingsStore = settingsStore;
         // Newly-added workflow: focus the inline name field and select its text so the user can
         // type the real name straight away. Defer to a low-priority dispatcher tick because the
         // edit-view's TextBox isn't realised until the visibility binding flips.
@@ -418,6 +427,72 @@ public partial class MainWindow : FluentWindow
             cb.IsChecked = ShareQ.App.Services.SxcuFileAssociation.IsRegistered();
             System.Windows.MessageBox.Show(this,
                 $"Couldn't update file association:\n{ex.Message}",
+                "ShareQ", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    private void OnExplorerContextMenuCheckBoxLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.CheckBox cb)
+            cb.IsChecked = ShareQ.App.Services.ExplorerContextMenuRegistration.IsRegistered();
+    }
+
+    private void OnExplorerContextMenuToggled(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.CheckBox cb) return;
+        try
+        {
+            if (cb.IsChecked == true)
+                ShareQ.App.Services.ExplorerContextMenuRegistration.Register();
+            else
+                ShareQ.App.Services.ExplorerContextMenuRegistration.Unregister();
+        }
+        catch (Exception ex)
+        {
+            cb.IsChecked = ShareQ.App.Services.ExplorerContextMenuRegistration.IsRegistered();
+            System.Windows.MessageBox.Show(this,
+                $"Couldn't update Explorer menu entry:\n{ex.Message}",
+                "ShareQ", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>Populate the workflow combo with every pipeline profile (built-in + user-defined)
+    /// then select the one currently persisted in settings. We list everything because the user
+    /// might genuinely want a "Save to disk" or "Pin to screen" workflow as their context-menu
+    /// action — it's their machine, no need to second-guess which profiles are upload-shaped.</summary>
+    private async void OnExplorerContextMenuWorkflowComboLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.ComboBox combo) return;
+        try
+        {
+            var profiles = await _profileStore.ListAsync(System.Threading.CancellationToken.None);
+            var stored = await _settingsStore.GetAsync(App.ExplorerContextMenuWorkflowKey, System.Threading.CancellationToken.None);
+            _suppressContextMenuWorkflowChange = true;
+            combo.ItemsSource = profiles;
+            combo.SelectedValue = string.IsNullOrEmpty(stored)
+                ? ShareQ.Pipeline.Profiles.DefaultPipelineProfiles.ManualUploadId
+                : stored;
+            // If the stored id no longer exists (profile deleted), fall back to manual-upload so
+            // the combo always shows a real selection rather than blank.
+            if (combo.SelectedValue is null)
+                combo.SelectedValue = ShareQ.Pipeline.Profiles.DefaultPipelineProfiles.ManualUploadId;
+        }
+        finally
+        {
+            _suppressContextMenuWorkflowChange = false;
+        }
+    }
+
+    private async void OnExplorerContextMenuWorkflowChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_suppressContextMenuWorkflowChange) return;
+        if (sender is not System.Windows.Controls.ComboBox combo) return;
+        if (combo.SelectedValue is not string id || string.IsNullOrEmpty(id)) return;
+        try { await _settingsStore.SetAsync(App.ExplorerContextMenuWorkflowKey, id, sensitive: false, System.Threading.CancellationToken.None); }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this,
+                $"Couldn't save workflow choice:\n{ex.Message}",
                 "ShareQ", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
         }
     }

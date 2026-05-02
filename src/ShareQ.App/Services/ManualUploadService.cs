@@ -33,7 +33,15 @@ public sealed class ManualUploadService
         _logger = logger;
     }
 
-    public async Task UploadFileAsync(string path, CancellationToken cancellationToken)
+    public Task UploadFileAsync(string path, CancellationToken cancellationToken)
+        => UploadFileToProfileAsync(path, DefaultPipelineProfiles.ManualUploadId, cancellationToken);
+
+    /// <summary>Read <paramref name="path"/> from disk and run it through the named pipeline
+    /// profile instead of the default <c>manual-upload</c>. Lets the Explorer context-menu entry
+    /// (and any future Settings-driven entry point) target a user-chosen workflow — e.g. "upload
+    /// to Imgur and copy markdown" instead of just "upload to default destination". Falls back to
+    /// <c>manual-upload</c> if the profile id is unknown so a stale setting doesn't dead-end.</summary>
+    public async Task UploadFileToProfileAsync(string path, string profileId, CancellationToken cancellationToken)
     {
         if (!File.Exists(path)) { _logger.LogWarning("UploadFile: '{Path}' not found", path); return; }
         var bytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
@@ -47,6 +55,7 @@ public sealed class ManualUploadService
             kind: KindForExtension(ext),
             source: ItemSource.Manual,
             searchText: fileName,
+            profileId: profileId,
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -62,6 +71,7 @@ public sealed class ManualUploadService
             kind: snapshot.Kind,
             source: ItemSource.Manual,
             searchText: snapshot.SearchText,
+            profileId: DefaultPipelineProfiles.ManualUploadId,
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -75,13 +85,19 @@ public sealed class ManualUploadService
             kind: ItemKind.Text,
             source: ItemSource.Manual,
             searchText: text.Length <= 200 ? text : text[..200],
+            profileId: DefaultPipelineProfiles.ManualUploadId,
             cancellationToken).ConfigureAwait(false);
     }
 
     private async Task RunPipelineAsync(
-        byte[] bytes, string extension, ItemKind kind, ItemSource source, string searchText, CancellationToken cancellationToken)
+        byte[] bytes, string extension, ItemKind kind, ItemSource source, string searchText, string profileId, CancellationToken cancellationToken)
     {
-        var profile = await _profiles.GetAsync(DefaultPipelineProfiles.ManualUploadId, cancellationToken).ConfigureAwait(false);
+        var profile = await _profiles.GetAsync(profileId, cancellationToken).ConfigureAwait(false);
+        if (profile is null && profileId != DefaultPipelineProfiles.ManualUploadId)
+        {
+            _logger.LogWarning("RunPipeline: profile '{Id}' not found, falling back to manual-upload", profileId);
+            profile = await _profiles.GetAsync(DefaultPipelineProfiles.ManualUploadId, cancellationToken).ConfigureAwait(false);
+        }
         if (profile is null)
         {
             _logger.LogWarning("manual-upload profile not found; aborting");

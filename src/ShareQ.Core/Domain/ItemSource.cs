@@ -7,6 +7,7 @@ public enum ItemSource
     CaptureWindow,
     CaptureFullscreen,
     CaptureMonitor,
+    CaptureWebpage,
     CaptureRecording,
     /// <summary>User-driven upload (file picker, "upload from clipboard", text editor).</summary>
     Manual,

@@ -46,13 +46,31 @@ public partial class App : Application
         var sxcuPath = e.Args.FirstOrDefault(a =>
             !string.IsNullOrEmpty(a) && a.EndsWith(".sxcu", StringComparison.OrdinalIgnoreCase));
 
+        // --upload <path>: Explorer context-menu entry uses this. We don't validate the file
+        // exists here (the upload pipeline will surface its own error); we just thread the path
+        // through to the primary instance or handle it ourselves below.
+        string? uploadPath = null;
+        for (var i = 0; i < e.Args.Length - 1; i++)
+        {
+            if (string.Equals(e.Args[i], "--upload", StringComparison.OrdinalIgnoreCase))
+            {
+                uploadPath = e.Args[i + 1];
+                break;
+            }
+        }
+
         var guard = new SingleInstanceGuard();
         if (!guard.IsPrimary)
         {
-            // Forward sxcu path to the running primary; otherwise just ask it to focus its UI.
-            var msg = sxcuPath is not null
-                ? SingleInstanceGuard.SxcuPrefix + Path.GetFullPath(sxcuPath)
-                : SingleInstanceGuard.ShowMessage;
+            // Priority: upload (most specific) → sxcu → bare relaunch. Each prefix routes the
+            // payload to the matching handler in the primary's AnotherInstanceStarted listener.
+            string msg;
+            if (uploadPath is not null)
+                msg = SingleInstanceGuard.UploadPrefix + Path.GetFullPath(uploadPath);
+            else if (sxcuPath is not null)
+                msg = SingleInstanceGuard.SxcuPrefix + Path.GetFullPath(sxcuPath);
+            else
+                msg = SingleInstanceGuard.ShowMessage;
             try { await guard.NotifyExistingInstanceAsync(msg, CancellationToken.None); }
             catch { /* primary may have died */ }
             guard.Dispose();
@@ -210,6 +228,10 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, CopyColorAsLinearTask>();
                 services.AddSingleton<IPipelineTask, CopyColorAsBgraTask>();
                 services.AddSingleton<IPipelineTask, CaptureRegionTask>();
+                services.AddSingleton<IPipelineTask, CaptureActiveWindowTask>();
+                services.AddSingleton<IPipelineTask, CaptureActiveMonitorTask>();
+                services.AddSingleton<IPipelineTask, CaptureWebpageTask>();
+                services.AddSingleton<WebpageCaptureService>();
                 services.AddSingleton<IPipelineTask, RecordScreenTask>();
                 services.AddSingleton<IPipelineTask, OpenScreenshotFolderTask>();
                 services.AddSingleton<IPipelineTask, PasteHistoryItemTask>();
@@ -322,6 +344,11 @@ public partial class App : Application
                     var path = message[SingleInstanceGuard.SxcuPrefix.Length..];
                     HandleSxcuOpen(path, window);
                 }
+                else if (message.StartsWith(SingleInstanceGuard.UploadPrefix, StringComparison.Ordinal))
+                {
+                    var path = message[SingleInstanceGuard.UploadPrefix.Length..];
+                    HandleUploadOpen(path);
+                }
             });
         };
 
@@ -335,9 +362,20 @@ public partial class App : Application
             _ = Dispatcher.BeginInvoke(new Action(() => HandleSxcuOpen(Path.GetFullPath(sxcuPath), window)),
                 System.Windows.Threading.DispatcherPriority.Loaded);
         }
+        // Same idea for --upload: cold-start from the Explorer context-menu — the user clicked
+        // "Upload with ShareQ" and ShareQ wasn't running yet. Process the file then sit in the
+        // tray; popping the Settings window unsolicited would feel wrong for a one-shot upload.
+        if (uploadPath is not null)
+        {
+            _ = Dispatcher.BeginInvoke(new Action(() => HandleUploadOpen(Path.GetFullPath(uploadPath))),
+                System.Windows.Threading.DispatcherPriority.Loaded);
+        }
         guard.StartListening();
 
-        window.Show();
+        // Cold-start from the context menu (--upload) is silent: tray-only, no Settings popup.
+        // Sxcu still wants the main window because the import dialog needs an Owner.
+        var startSilent = uploadPath is not null && sxcuPath is null;
+        if (!startSilent) window.Show();
         window.Closing += (sender, args) =>
         {
             args.Cancel = true;
@@ -444,6 +482,54 @@ public partial class App : Application
                 "ShareQ", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
+
+    /// <summary>Route a file path from the Explorer "Upload with ShareQ" verb through the
+    /// pipeline profile chosen by the user in Settings (default <c>manual-upload</c>). Lets the
+    /// context-menu entry trigger any user-visible workflow — e.g. "save to local folder", "upload
+    /// to Imgur and copy link", or a custom-built profile. Fire-and-forget; the workflow's own
+    /// toast/clipboard steps handle user feedback.</summary>
+    private void HandleUploadOpen(string path)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                MessageBox.Show($"File not found:\n{path}", "ShareQ",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            var manual = _host?.Services.GetService(typeof(ManualUploadService)) as ManualUploadService;
+            if (manual is null)
+            {
+                MessageBox.Show("ShareQ isn't fully initialised yet — try again in a moment.",
+                    "ShareQ", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            var settings = _host?.Services.GetService(typeof(ShareQ.Storage.Settings.ISettingsStore)) as ShareQ.Storage.Settings.ISettingsStore;
+            _ = Task.Run(async () =>
+            {
+                // Resolve the profile id off the UI thread (settings reads hit SQLite). Empty / null
+                // → default profile, same fallback ManualUploadService applies for unknown ids.
+                var profileId = settings is null
+                    ? ShareQ.Pipeline.Profiles.DefaultPipelineProfiles.ManualUploadId
+                    : (await settings.GetAsync(ExplorerContextMenuWorkflowKey, CancellationToken.None).ConfigureAwait(false))
+                        is { Length: > 0 } stored
+                            ? stored
+                            : ShareQ.Pipeline.Profiles.DefaultPipelineProfiles.ManualUploadId;
+                await manual.UploadFileToProfileAsync(path, profileId, CancellationToken.None).ConfigureAwait(false);
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Couldn't start upload:\n{ex.Message}",
+                "ShareQ", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>Settings key carrying the pipeline profile id triggered by the Explorer
+    /// "Upload with ShareQ" verb. Empty / unset → <c>manual-upload</c>. Kept here so the App
+    /// handler and the Settings UI stay in sync.</summary>
+    public const string ExplorerContextMenuWorkflowKey = "explorer.context_menu.workflow";
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
