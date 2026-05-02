@@ -497,6 +497,58 @@ public partial class MainWindow : FluentWindow
         }
     }
 
+    /// <summary>WPF Hyperlink → default browser. Used by all the About-tab links (repo +
+    /// inspiration credits). UseShellExecute=true so http(s) is resolved by the user's default
+    /// browser rather than trying to launch the URL as an executable.</summary>
+    private void OnHyperlinkClicked(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = e.Uri.AbsoluteUri,
+                UseShellExecute = true,
+            });
+        }
+        catch { /* best-effort: a missing default browser shouldn't crash Settings */ }
+        e.Handled = true;
+    }
+
+    private async void OnCheckForUpdatesClicked(object sender, RoutedEventArgs e)
+    {
+        // Resolve via Application.Current — avoids dragging another constructor parameter for a
+        // single-button handler. The service is a singleton so always the same instance.
+        var app = (App)System.Windows.Application.Current;
+        var updater = (ShareQ.Updater.UpdaterService?)app.Services?.GetService(typeof(ShareQ.Updater.UpdaterService));
+        if (updater is null) return;
+
+        CheckForUpdatesButton.IsEnabled = false;
+        UpdateStatusText.Text = "Checking…";
+        UpdateStatusText.Visibility = System.Windows.Visibility.Visible;
+        try
+        {
+            var outcome = await updater.CheckInteractivelyAsync(System.Threading.CancellationToken.None);
+            UpdateStatusText.Text = outcome.Kind switch
+            {
+                ShareQ.Updater.CheckOutcomeKind.NotInstalled => "Updates only work from an installed copy (current build is dev / portable-extracted).",
+                ShareQ.Updater.CheckOutcomeKind.AlreadyLatest => "You're on the latest version.",
+                ShareQ.Updater.CheckOutcomeKind.UpdateFound => $"Version {outcome.Version} available — opening confirmation…",
+                ShareQ.Updater.CheckOutcomeKind.Failed => $"Check failed: {outcome.ErrorMessage}",
+                _ => "Unknown result.",
+            };
+            // The UpdateAvailable event already fired and queued the toast; surface the install
+            // dialog here too so the user who just clicked "Check" doesn't have to chase the toast.
+            if (outcome.Kind == ShareQ.Updater.CheckOutcomeKind.UpdateFound && outcome.Info is not null)
+            {
+                await App.PromptInstallUpdateAsync(updater, outcome.Info);
+            }
+        }
+        finally
+        {
+            CheckForUpdatesButton.IsEnabled = true;
+        }
+    }
+
     private void OnConfigureUploaderClicked(object sender, RoutedEventArgs e)
     {
         // The Tag carries the row's VM (set by the data-template binding); from there we get the

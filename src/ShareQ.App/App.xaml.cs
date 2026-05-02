@@ -271,6 +271,10 @@ public partial class App : Application
                 services.AddSingleton<CaptureCoordinator>();
                 services.AddSingleton<ManualUploadService>();
                 services.AddSingleton<IToastNotifier, WpfToastNotifier>();
+                // Velopack-backed self-update. Disabled at runtime (IsAvailable=false) when the
+                // app isn't running from a Velopack-managed install — no harm, just shows the
+                // "Check for updates" button as disabled in Settings.
+                services.AddSingleton<ShareQ.Updater.UpdaterService>();
                 services.AddSingleton<AutostartService>();
                 services.AddSingleton<PinToScreenLauncher>();
                 services.AddSingleton<EditorLauncher>();
@@ -331,6 +335,24 @@ public partial class App : Application
         var tray = _host.Services.GetRequiredService<TrayIconService>();
         var window = _host.Services.GetRequiredService<MainWindow>();
         tray.Attach(window);
+
+        // Self-update: subscribe to UpdateAvailable for the toast, then fire one silent check on
+        // startup. Click on the toast launches the same flow as the Settings button — a simple
+        // confirm dialog that can either install + restart now or defer until next launch.
+        // Wired AFTER tray creation so the closure-captured tray reference is non-null on first use.
+        var updater = _host.Services.GetRequiredService<ShareQ.Updater.UpdaterService>();
+        updater.UpdateAvailable += (_, args) =>
+        {
+            Dispatcher.Invoke(() =>
+            {
+                tray.ShowToast(
+                    "ShareQ update available",
+                    $"Version {args.Version} is ready. Click to install.",
+                    onClick: () => _ = PromptInstallUpdateAsync(updater, args.Info));
+            });
+        };
+        // Fire-and-forget — silent check, errors logged inside the service.
+        _ = Task.Run(() => updater.CheckSilentlyAsync(CancellationToken.None));
 
         guard.AnotherInstanceStarted += (_, message) =>
         {
@@ -533,6 +555,27 @@ public partial class App : Application
     /// "Upload with ShareQ" verb. Empty / unset → <c>manual-upload</c>. Kept here so the App
     /// handler and the Settings UI stay in sync.</summary>
     public const string ExplorerContextMenuWorkflowKey = "explorer.context_menu.workflow";
+
+    /// <summary>Show a confirm dialog for an available update. OK → download + apply + restart.
+    /// Cancel → leave it for the next launch (Velopack will offer it again on the next silent
+    /// check). Used by both the toast click and the Settings → "Check for updates" button.</summary>
+    internal static async Task PromptInstallUpdateAsync(ShareQ.Updater.UpdaterService updater, Velopack.UpdateInfo info)
+    {
+        var version = info.TargetFullRelease.Version.ToString();
+        var choice = MessageBox.Show(
+            $"ShareQ {version} is available.\n\nDownload and restart now?",
+            "Update ShareQ",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Information,
+            MessageBoxResult.OK);
+        if (choice != MessageBoxResult.OK) return;
+        try { await updater.DownloadAndRestartAsync(info, CancellationToken.None).ConfigureAwait(true); }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Update failed:\n{ex.Message}", "ShareQ",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {

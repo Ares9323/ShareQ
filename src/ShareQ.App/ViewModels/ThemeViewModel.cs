@@ -23,6 +23,32 @@ public sealed partial class ThemeViewModel : ObservableObject
         _theme.Changed += (_, _) => SyncFromService();
     }
 
+    /// <summary>Curated presets the user can apply from the dropdown. The first entry is the
+    /// "Custom (current values)" sentinel — selecting it is a no-op so opening the tab doesn't
+    /// clobber the user's colours.</summary>
+    public IReadOnlyList<ThemePreset> Presets => ThemePresets.All;
+
+    [ObservableProperty]
+    private ThemePreset _selectedPreset = ThemePresets.Custom;
+
+    partial void OnSelectedPresetChanged(ThemePreset value)
+    {
+        // Sentinel "Custom" → leave the user's hex values alone; the dropdown can re-snap to it
+        // any time without side effects. Real preset → push every field at once with apply
+        // suppressed, then a single TryApply at the end persists + paints in one go.
+        if (value is null || ReferenceEquals(value, ThemePresets.Custom)) return;
+        _suppressApply = true;
+        AccentBackgroundHex = value.AccentBackgroundHex;
+        AccentForegroundHex = value.AccentForegroundHex;
+        AccentBackgroundDarkHex = value.AccentBackgroundDarkHex;
+        AccentForegroundDarkHex = value.AccentForegroundDarkHex;
+        Surface1Hex = value.Surface1Hex;
+        Surface2Hex = value.Surface2Hex;
+        Surface3Hex = value.Surface3Hex;
+        _suppressApply = false;
+        TryApply();
+    }
+
     [ObservableProperty]
     private string _accentBackgroundHex = "#751C8B";
 

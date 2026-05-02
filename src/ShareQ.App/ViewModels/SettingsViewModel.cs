@@ -56,10 +56,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     public DebugViewModel Debug { get; }
 
     [ObservableProperty]
-    private SettingsTab _selectedTab = SettingsTab.Home;
+    private SettingsTab _selectedTab = SettingsTab.Hotkeys;
 
-    /// <summary>Bound to the Home-tab "Run ShareQ when Windows starts" checkbox. Reads / writes
-    /// HKCU Run via <see cref="AutostartService"/>. Constructor seeds it from the current
+    /// <summary>Bound to the Settings-tab "Run ShareQ when Windows starts" checkbox. Reads /
+    /// writes HKCU Run via <see cref="AutostartService"/>. Constructor seeds it from the current
     /// registry value (no flicker), then user toggles propagate immediately.</summary>
     [ObservableProperty]
     private bool _startWithWindows;
@@ -72,7 +72,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         _autostart.SetEnabled(value);
     }
 
-    public bool IsHomeSelected      => SelectedTab == SettingsTab.Home;
     public bool IsUploadersSelected => SelectedTab == SettingsTab.Uploaders;
     public bool IsHotkeysSelected   => SelectedTab == SettingsTab.Hotkeys;
     public bool IsCaptureSelected   => SelectedTab == SettingsTab.Capture;
@@ -86,7 +85,6 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnSelectedTabChanged(SettingsTab value)
     {
-        OnPropertyChanged(nameof(IsHomeSelected));
         OnPropertyChanged(nameof(IsUploadersSelected));
         OnPropertyChanged(nameof(IsHotkeysSelected));
         OnPropertyChanged(nameof(IsCaptureSelected));
@@ -99,7 +97,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (value == SettingsTab.Hotkeys) _ = Hotkeys.ReloadAsync();
     }
 
-    [RelayCommand] private void ShowHome()      => SelectedTab = SettingsTab.Home;
     [RelayCommand] private void ShowUploaders() => SelectedTab = SettingsTab.Uploaders;
     [RelayCommand] private void ShowHotkeys()   => SelectedTab = SettingsTab.Hotkeys;
     [RelayCommand] private void ShowCapture()   => SelectedTab = SettingsTab.Capture;
@@ -110,4 +107,4 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand] private void ShowAbout()     => SelectedTab = SettingsTab.About;
 }
 
-public enum SettingsTab { Home, Uploaders, Hotkeys, Capture, Theme, Categories, Settings, Debug, About }
+public enum SettingsTab { Uploaders, Hotkeys, Capture, Theme, Categories, Settings, Debug, About }

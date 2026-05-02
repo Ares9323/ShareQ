@@ -47,5 +47,11 @@
     <!-- Headless browser used by the webpage-capture pipeline task. The runtime ships with
          Windows 11 / Edge; on Win10 it lazy-installs on first use via the Evergreen runtime. -->
     <PackageVersion Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
+
+    <!-- Velopack: installer + portable + delta auto-update. Used by ShareQ.Updater (runtime
+         hooks + UpdateManager) and indirectly by ShareQ.App (Main has to call VelopackApp.Run
+         before WPF starts so install/uninstall hooks intercept the right way). The CLI tool
+         `vpk` is pinned in .config/dotnet-tools.json so CI builds use the same version. -->
+    <PackageVersion Include="Velopack" Version="0.0.1053" />
   </ItemGroup>
 </Project>

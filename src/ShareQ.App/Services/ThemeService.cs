@@ -29,7 +29,7 @@ public sealed class ThemeService
     private const string Surface1Key = "theme.surface_1";
     private const string Surface2Key = "theme.surface_2";
     private const string Surface3Key = "theme.surface_3";
-    public static readonly Color DefaultBackground = (Color)ColorConverter.ConvertFromString("#751C8B")!;
+    public static readonly Color DefaultBackground = (Color)ColorConverter.ConvertFromString("#6BA780")!;
     public static readonly Color DefaultForeground = Colors.White;
     /// <summary>Default for the dim subtext colour — captions, age labels, kind/source rows in
     /// the clipboard list, swatch descriptions in the theme tab. One global control over how
@@ -38,9 +38,9 @@ public sealed class ThemeService
     /// <summary>Default for the "dark accent" — used as the canvas / inactive surface in the
     /// launcher overlay (cell background, inactive tab headers). Sits low on the value axis so
     /// the brighter accent reads on top of it without contrast issues. Picked to pair with the
-    /// default purple accent so the launcher's "active vs ambient" tabs read as the same hue
-    /// family out of the box.</summary>
-    public static readonly Color DefaultAccentDark = (Color)ColorConverter.ConvertFromString("#371242")!;
+    /// default green accent (matches the SVG logo's brand colour) so the launcher's
+    /// "active vs ambient" tabs read as the same hue family out of the box.</summary>
+    public static readonly Color DefaultAccentDark = (Color)ColorConverter.ConvertFromString("#314D3B")!;
     /// <summary>Three neutral surface colours, ordered darkest → lightest. Surface1 is for the
     /// deepest backgrounds (input backgrounds, list rows), Surface2 for the standard window
     /// chrome (popup body, launcher card), Surface3 for elevated panels (drag handles, group
@@ -159,6 +159,13 @@ public sealed class ThemeService
         app.Resources["AccentBackgroundBrush"] = bgBrush;
         app.Resources["AccentForegroundBrush"] = fgBrush;
 
+        // Lighter accent variants for hyperlinks / muted highlights / anywhere the primary
+        // accent reads too saturated against dark surfaces. Re-uses the same Lighten helper as
+        // the WPF-UI Secondary/Tertiary derivation, so all "lighter accent" elements stay in
+        // family no matter which accent the user picks.
+        var accentLighterBrush = new SolidColorBrush(Lighten(_bg, 0.30)); accentLighterBrush.Freeze();
+        app.Resources["AccentBackgroundLightBrush"] = accentLighterBrush;
+
         // Accent dark — separate user-tunable colour used by surfaces that aren't the primary
         // accent but still want to follow the theme: launcher cells, inactive tab headers,
         // anywhere that needs an "ambient" accent-tinted dark. Also derive a slightly-lighter
@@ -198,6 +205,15 @@ public sealed class ThemeService
         app.Resources["TextControlBackgroundPointerOver"] = surface3Brush;
         app.Resources["TextControlBackgroundFocused"] = surface3Brush;
         app.Resources["TextControlBackgroundDisabled"] = surface3Brush;
+
+        // Focused border / underline accent for input controls. WPF-UI's TextBox + ComboBox
+        // templates pick these up via StaticResource, which means they latch on at app start —
+        // we have to replace the brush instance in App.Resources for live retheming to actually
+        // repaint a focused field. Without this the input keeps the OLD accent border until
+        // restart even though every other accent-using control has already updated.
+        app.Resources["TextControlBorderBrushFocused"] = bgBrush;
+        app.Resources["TextControlElevationBorderFocusedBrush"] = bgBrush;
+        app.Resources["AccentControlElevationBorderBrush"] = bgBrush;
 
         // Default-appearance ui:Button surfaces — anything NOT marked Appearance=Primary/Danger
         // resolves Background through ButtonBackground. ComboBox / TimePicker / DatePicker
@@ -260,7 +276,6 @@ public sealed class ThemeService
         app.Resources["AccentButtonForeground"] = fgBrush;
         app.Resources["AccentButtonForegroundPointerOver"] = fgBrush;
         app.Resources["AccentButtonForegroundPressed"] = fgBrush;
-        app.Resources["AccentControlElevationBorderBrush"] = bgBrush;
 
         // ToggleSwitch ON-state track — this is what changes when a switch toggles to ON.
         app.Resources["ToggleSwitchFillOn"] = bgBrush;

@@ -33,7 +33,7 @@
         </ContextMenu>
     </Window.Resources>
     <Border Background="{DynamicResource Surface2Brush}" CornerRadius="8"
-            BorderBrush="#404040" BorderThickness="1">
+            BorderBrush="{DynamicResource AccentBackgroundLightBrush}" BorderThickness="1">
         <!-- Outer wrapper grid: holds the main content + the resize thumb. The thumb sits on the
              outer card's bottom-right corner (not buried inside the inner padding) and only
              appears in drag mode — the launcher is a one-shot ephemeral overlay outside drag
@@ -144,7 +144,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <Border Grid.Row="2" Height="12" />
+            <Border Grid.Row="2" Height="8" /> <!-- gap between the function keys and the tab strip -->
 
             <ItemsControl x:Name="TabStrip" Grid.Row="3">
                 <ItemsControl.ItemsPanel>
@@ -188,7 +188,7 @@
                     CornerRadius="6"
                     Margin="-3,0,-3,-3" />
 
-            <ItemsControl x:Name="Row1Host" Grid.Row="4" Margin="0,0,0,4">
+            <ItemsControl x:Name="Row1Host" Grid.Row="4" Margin="0,4,0,0">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <UniformGrid Columns="10" Rows="1" />
@@ -237,7 +237,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <ItemsControl x:Name="Row2Host" Grid.Row="5" Margin="0,0,0,4">
+            <ItemsControl x:Name="Row2Host" Grid.Row="5" Margin="0,0,0,0">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <UniformGrid Columns="10" Rows="1" />

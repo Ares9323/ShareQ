@@ -5,6 +5,10 @@
     <AssemblyName>ShareQ.Updater</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Velopack" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\ShareQ.Core\ShareQ.Core.csproj" />
   </ItemGroup>
 </Project>

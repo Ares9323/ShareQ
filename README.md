@@ -102,7 +102,7 @@ See [`docs/Improvements.md`](docs/Improvements.md) for the full feature-parity t
 | **M4** | Plugin loader + Imgur uploader + upload pipeline | ✅ done (replaced DLL plugin loader with bundled-class architecture + `.sxcu` for the long tail) |
 | **M5** | OneDrive uploader + main window timeline + plugin manager UI | ✅ done (extended to OneDrive + GoogleDrive + Dropbox + 7 more) |
 | **M6** | Screen recorder + Beautify + Watermark/Step counter | 🟡 recorder done; Beautify / Watermark deferred to image-effects pass |
-| **M7** | Velopack packaging + GitHub auto-update + release v0.1.0 | ⚪ not started |
+| **M7** | Velopack packaging + GitHub auto-update + release v0.1.0 | 🟡 packaging + updater wired; first release tag still pending |
 
 After M7, the next themed passes (rough order):
 1. Image effects framework (resize / blur / borders / sepia / watermark)
@@ -128,6 +128,18 @@ dotnet run --project src/ShareQ.App
 For the OAuth uploaders (OneDrive / Google Drive / Dropbox / Imgur user-mode) to work without per-user setup, register apps with each provider following [`docs/RegisterAppGuide.md`](docs/RegisterAppGuide.md), then create `src/ShareQ.Uploaders/Secrets.Local.cs` (gitignored) with the constants documented inside `src/ShareQ.Uploaders/Secrets.cs`. Without `Secrets.Local.cs` the OAuth uploaders surface "isn't configured in this build" — the rest of ShareQ runs fine.
 
 User data lives at `%LOCALAPPDATA%\ShareQ\` (SQLite + custom-uploaders + recordings). Delete that folder to reset to defaults.
+
+## Releases
+
+Distribution is built with [Velopack](https://velopack.io): every release ships both an installer (`ShareQ-win-Setup.exe`) and a portable zip (`ShareQ-win-Portable.zip`). The in-app updater (Settings → About → "Check for updates") fetches delta packages from GitHub Releases — only the differences between versions are downloaded.
+
+To cut a release (maintainer):
+
+1. Open the **Actions** tab → **Release** workflow → **Run workflow**.
+2. Type the new semantic version (e.g. `0.1.0`) and tick "prerelease" if applicable.
+3. The workflow builds, packs with `vpk`, and uploads a published GitHub Release with all assets.
+
+The `vpk` CLI is pinned in [`.config/dotnet-tools.json`](.config/dotnet-tools.json) — `dotnet tool restore` installs the same version locally for testing the pack step before pushing a tag.
 
 ## Acknowledgements
 

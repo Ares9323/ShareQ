@@ -11,6 +11,10 @@ src/ShareQ.Uploaders/Secrets.Local.cs
 [Ll]og/
 [Ll]ogs/
 
+# Velopack release artifacts (Setup.exe / Portable.zip / .nupkg / RELEASES). The CI workflow
+# uploads these to GitHub Releases — no need to commit them.
+[Rr]eleases/
+
 # .NET / Visual Studio / Rider / VSCode local state
 .vs/
 .idea/

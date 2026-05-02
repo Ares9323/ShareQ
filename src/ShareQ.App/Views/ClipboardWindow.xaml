@@ -14,7 +14,7 @@
         ShowInTaskbar="False"
         ResizeMode="CanResize">
     <Border Background="{DynamicResource Surface2Brush}" CornerRadius="8"
-            BorderBrush="#404040" BorderThickness="1">
+            BorderBrush="{DynamicResource AccentBackgroundLightBrush}" BorderThickness="1">
         <Grid>
             <Grid Margin="14">
                 <Grid.RowDefinitions>

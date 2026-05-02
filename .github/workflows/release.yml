@@ -1,0 +1,110 @@
+name: Release
+
+# Manual-only — never auto-fires on push or tag. The user runs it from the Actions tab when
+# they're ready to cut a release; the version input becomes the tag, the Velopack package
+# version, and the GitHub Release name. Keeps releases deliberate; CI on push stays free.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Semantic version without leading v (e.g. 0.1.0). Becomes the tag, Velopack package version, and Release name.'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark the GitHub Release as pre-release.'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write    # Needed for `vpk upload github` (creates the Release + uploads assets).
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history so vpk delta-pack can compare against previous releases. Without it the
+          # first delta after a shallow clone would either be missing or full-size.
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Restore .NET tools (vpk)
+        run: dotnet tool restore
+
+      - name: Restore solution
+        run: dotnet restore ShareQ.sln
+
+      - name: Build solution (Release)
+        run: dotnet build ShareQ.sln --configuration Release --no-restore
+
+      # Self-contained publish: ships the .NET runtime alongside ShareQ so end-users don't need
+      # the SDK / runtime installed. ReadyToRun trimming off — the asset stays bigger but the
+      # build is reliable across uploaders / pipeline tasks that use reflection (Velopack, ZXing).
+      # -p:Version is what Settings → About reads via Assembly.GetName().Version. Without this
+       # the in-app "Version" line stays at 1.0.0.0 regardless of which Velopack version we
+       # ship, which is confusing as hell when triaging update bugs. Velopack uses --packVersion
+       # below for the package metadata; we keep both in lockstep via the same input.
+      - name: Publish ShareQ.App
+        run: >
+          dotnet publish src/ShareQ.App/ShareQ.App.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:Version=${{ github.event.inputs.version }}
+          -p:PublishSingleFile=false
+          -p:PublishReadyToRun=false
+          -o publish
+
+      # vpk pack produces:
+      #   - ShareQ-win-Setup.exe       — installer (self-extracting, installs to %LocalAppData%)
+      #   - ShareQ-win-Portable.zip    — portable extract-anywhere build
+      #   - ShareQ-<ver>-full.nupkg    — Velopack release artifact (delta + full update payloads)
+      #   - RELEASES                   — Velopack catalog file the in-app updater fetches
+      # Channel "win" is the canonical Windows channel — keep it stable so existing installs
+      # keep finding updates.
+      - name: Pack with Velopack
+        run: >
+          dotnet vpk pack
+          --packId ShareQ
+          --packVersion ${{ github.event.inputs.version }}
+          --packDir publish
+          --mainExe ShareQ.exe
+          --packTitle "ShareQ"
+          --packAuthors "ShareQ contributors"
+          --channel win
+
+      # vpk upload github creates a draft Release on the supplied tag and uploads every artifact
+      # in Releases\. The user reviews + publishes from the GitHub UI — keeps "I want to release"
+      # an explicit final click instead of an automatic-on-merge surprise.
+      - name: Upload to GitHub Releases (draft)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          dotnet vpk upload github
+          --repoUrl https://github.com/${{ github.repository }}
+          --tag v${{ github.event.inputs.version }}
+          --releaseName "ShareQ ${{ github.event.inputs.version }}"
+          --publish
+          --channel win
+          ${{ github.event.inputs.prerelease == 'true' && '--pre' || '' }}
+
+      - name: Upload artifacts (debug copy)
+        uses: actions/upload-artifact@v4
+        with:
+          name: velopack-${{ github.event.inputs.version }}
+          path: Releases/
