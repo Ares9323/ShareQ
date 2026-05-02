@@ -17,6 +17,7 @@
     <PackageReference Include="H.NotifyIcon.Wpf" />
     <PackageReference Include="WPF-UI" />
     <PackageReference Include="QRCoder" />
+    <PackageReference Include="ZXing.Net" />
     <PackageReference Include="Microsoft.Web.WebView2" />
   </ItemGroup>
   <ItemGroup>

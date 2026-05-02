@@ -24,6 +24,55 @@
              (Capture / Clipboard / Upload / Tools / Custom). Promoted here so both sections
              render an identical strip without duplicating the template. Plain TextBlock-style
              look with a 2px accent underline on selected. -->
+        <!-- Hotkey chip rendered as a clickable button: shows the current binding (or "Click
+             to set hotkey…" when unbound) and opens the rebind dialog on click. Replaces the
+             previous "Border + separate Rebind button" combo so the whole chip is the affordance,
+             which matches what users naturally try first anyway. Hover lifts the background,
+             pressed dims it; cursor flips to Hand to advertise the click target. -->
+        <Style x:Key="HotkeyChipButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource Surface3Brush}" />
+            <Setter Property="BorderBrush" Value="#444" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <!-- Default Foreground = the bright "active hotkey" colour. The DataTrigger below
+                 dims it to AccentForegroundDarkBrush when IsAssigned=false, so unbound rows
+                 read as a faded "Click to set hotkey…" placeholder instead of competing with
+                 real shortcuts. Both states still flip to white on hover for affordance. -->
+            <Setter Property="Foreground" Value="#DDD" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="3">
+                            <TextBlock Text="{TemplateBinding Content}"
+                                       FontFamily="Consolas" FontSize="12"
+                                       Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBackgroundBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.75" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsAssigned}" Value="False">
+                    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundDarkBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <Style x:Key="UploaderTabItemStyle" TargetType="TabItem">
             <Setter Property="Foreground" Value="{DynamicResource AccentForegroundDarkBrush}" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -388,22 +437,20 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
                                                FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
-                                    <Border Grid.Column="1" Padding="8,3" Background="{DynamicResource Surface3Brush}"
-                                            BorderBrush="#444" BorderThickness="1" CornerRadius="3"
-                                            Margin="0,0,8,0" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding BindingDisplay}" FontFamily="Consolas"
-                                                   FontSize="12" Foreground="#DDD" />
-                                    </Border>
+                                    <!-- Chip is the rebind affordance — clicking it opens the
+                                         capture dialog. When unbound the text reads
+                                         "Click to set hotkey…" so the action is self-explanatory. -->
+                                    <Button Grid.Column="1" Style="{StaticResource HotkeyChipButtonStyle}"
+                                            Content="{Binding BindingDisplay}"
+                                            Command="{Binding RebindCommand}"
+                                            Margin="0,0,8,0"
+                                            ToolTip="Click to assign / change / clear the hotkey" />
                                     <ui:Button Grid.Column="2" Content="Edit"
                                                Command="{Binding OpenInWorkflowsCommand}"
-                                               Margin="0,0,4,0"
                                                ToolTip="Open this workflow's step list" />
-                                    <ui:Button Grid.Column="3" Content="Rebind"
-                                               Command="{Binding RebindCommand}" />
                                 </Grid>
                             </Border>
                         </DataTemplate>
@@ -519,28 +566,21 @@
                                     FontSize="13"
                                     Margin="0,0,0,16" />
 
-                        <!-- Inline rebind: same chip + Rebind button as the list view, so the
-                             user can change the keybind without bouncing back to the list. The
-                             VM's Rebind callback refreshes the list so the chip up there matches
-                             once the user clicks Back. Hidden when no workflow is selected (e.g.
-                             during initial load before SelectedWorkflow lands). -->
+                        <!-- Inline rebind: same chip used in the list view. Click it to open the
+                             capture dialog (Reset / Clear are inside that dialog). Hidden when
+                             no workflow is selected (e.g. during initial load). -->
                         <StackPanel Margin="0,0,0,16"
                                     Visibility="{Binding Hotkeys.EditingWorkflowHotkey, Converter={StaticResource NotNullToVisibility}}">
                             <TextBlock Text="Hotkey" FontWeight="SemiBold" Margin="0,0,0,4" />
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <Border Grid.Column="0" Padding="10,5" Background="{DynamicResource Surface3Brush}"
-                                        BorderBrush="#444" BorderThickness="1" CornerRadius="3"
-                                        Margin="0,0,8,0" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Hotkeys.EditingWorkflowHotkey.BindingDisplay}"
-                                               FontFamily="Consolas" FontSize="12" Foreground="#DDD" />
-                                </Border>
-                                <ui:Button Grid.Column="1" Content="Rebind" HorizontalAlignment="Left"
-                                           Command="{Binding Hotkeys.EditingWorkflowHotkey.RebindCommand}" />
-                            </Grid>
+                            <!-- DataContext nailed to the EditingWorkflowHotkey VM so the chip
+                                 style's IsAssigned DataTrigger resolves against the right object
+                                 (otherwise it'd look up IsAssigned on the root VM and never fire). -->
+                            <Button DataContext="{Binding Hotkeys.EditingWorkflowHotkey}"
+                                    Style="{StaticResource HotkeyChipButtonStyle}"
+                                    HorizontalAlignment="Left"
+                                    Content="{Binding BindingDisplay}"
+                                    Command="{Binding RebindCommand}"
+                                    ToolTip="Click to assign / change / clear the hotkey" />
                         </StackPanel>
 
                         <Grid Margin="0,8,0,4">

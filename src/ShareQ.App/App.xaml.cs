@@ -231,6 +231,9 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, CaptureActiveWindowTask>();
                 services.AddSingleton<IPipelineTask, CaptureActiveMonitorTask>();
                 services.AddSingleton<IPipelineTask, CaptureWebpageTask>();
+                services.AddSingleton<IPipelineTask, CaptureSelectedExplorerFileTask>();
+                services.AddSingleton<IPipelineTask, QrReadTask>();
+                services.AddSingleton<QrReaderService>();
                 services.AddSingleton<WebpageCaptureService>();
                 services.AddSingleton<IPipelineTask, RecordScreenTask>();
                 services.AddSingleton<IPipelineTask, OpenScreenshotFolderTask>();

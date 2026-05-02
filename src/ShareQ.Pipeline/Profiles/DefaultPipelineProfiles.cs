@@ -11,6 +11,7 @@ public static class DefaultPipelineProfiles
     public const string ActiveWindowCaptureId = "active-window-capture";
     public const string ActiveMonitorCaptureId = "active-monitor-capture";
     public const string WebpageCaptureId       = "webpage-capture";
+    public const string UploadSelectedFileId   = "upload-selected-file";
     public const string ManualUploadId      = "manual-upload";
     public const string UploadClipboardTextId = "upload-clipboard-text";
     public const string ShortenClipboardUrlId = "shorten-clipboard-url";
@@ -22,6 +23,7 @@ public static class DefaultPipelineProfiles
     public const string RecordScreenGifId   = "record-screen-gif";
     public const string OpenScreenshotFolderId = "open-screenshot-folder";
     public const string OpenLauncherId         = "open-launcher";
+    public const string QrReadFromRegionId     = "qr-read-from-region";
 
     // Task IDs whose implementations live in ShareQ.App (resolved at runtime by the registry).
     public const string CopyImageToClipboardTaskId = "shareq.copy-image-to-clipboard";
@@ -37,6 +39,8 @@ public static class DefaultPipelineProfiles
     public const string CaptureActiveWindowTaskId  = "shareq.capture-active-window";
     public const string CaptureActiveMonitorTaskId = "shareq.capture-active-monitor";
     public const string CaptureWebpageTaskId       = "shareq.capture-webpage";
+    public const string CaptureSelectedExplorerFileTaskId = "shareq.capture-selected-explorer-file";
+    public const string QrReadTaskId               = "shareq.qr-read";
     public const string RecordScreenTaskId         = "shareq.record-screen";
     public const string OpenScreenshotFolderTaskId = "shareq.open-screenshot-folder";
     public const string OpenLauncherMenuTaskId     = "shareq.open-launcher-menu";
@@ -69,6 +73,7 @@ public static class DefaultPipelineProfiles
         [UploadClipboardTextId]   = "Upload",
         [ShortenClipboardUrlId]   = "Upload",
         [ManualUploadId]          = "Upload",
+        [UploadSelectedFileId]    = "Upload",
 
         [OnClipboardId]           = "Clipboard",
         [ShowPopupId]             = "Clipboard",
@@ -78,6 +83,7 @@ public static class DefaultPipelineProfiles
         [ColorPickerId]           = "Tools",
         [OpenScreenshotFolderId]  = "Tools",
         [OpenLauncherId]          = "Tools",
+        [QrReadFromRegionId]      = "Tools",
     };
 
     private static IReadOnlyList<PipelineProfile> BuildAll() =>
@@ -219,6 +225,26 @@ public static class DefaultPipelineProfiles
             IsBuiltIn: true),
 
         new PipelineProfile(
+            Id: UploadSelectedFileId,
+            DisplayName: "Upload selected file",
+            Trigger: "hotkey:upload-selected-file",
+            Steps:
+            [
+                // CaptureSelectedExplorerFile pulls the path from the foreground Explorer window
+                // via Shell.Application COM, loads its bytes into the bag, and the rest of the
+                // chain mirrors manual-upload. Hotkey-driven flow: user has a file selected,
+                // hits the combo, file goes up, link lands on the clipboard.
+                new PipelineStep(CaptureSelectedExplorerFileTaskId, Id: "capture-selected"),
+                new PipelineStep(AddToHistoryTask.TaskId, Id: "add-to-history"),
+                new PipelineStep(UploadTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"category\":\"file\"}"), Id: "upload"),
+                new PipelineStep(UpdateItemUrlTask.TaskId),
+                new PipelineStep(CopyTextToClipboardTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"template\":\"{bag.upload_urls}\"}"), Id: "copy-url"),
+                new PipelineStep(NotifyToastTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"title\":\"ShareQ\",\"message\":\"Uploaded → {bag.upload_url}\"}"), Id: "toast")
+            ],
+            // No default hotkey — user binds in Settings if they want it on muscle memory.
+            IsBuiltIn: true),
+
+        new PipelineProfile(
             Id: ShortenClipboardUrlId,
             DisplayName: "Shorten clipboard URL",
             Trigger: "hotkey:shorten-clipboard-url",
@@ -317,6 +343,24 @@ public static class DefaultPipelineProfiles
                 new PipelineStep(OpenScreenshotFolderTaskId, Id: "open-screenshot-folder")
             ],
             // No default hotkey — user assigns one if desired.
+            IsBuiltIn: true),
+
+        new PipelineProfile(
+            Id: QrReadFromRegionId,
+            DisplayName: "QR — read from screen region",
+            Trigger: "hotkey:qr-read",
+            Steps:
+            [
+                // Region picker → ZXing decode → text replaces image payload → clipboard +
+                // toast. Aborts mid-pipeline if no QR is found so the empty-payload trail
+                // doesn't poison the history / clipboard with junk.
+                new PipelineStep(CaptureRegionTaskId, Id: "capture-region"),
+                new PipelineStep(QrReadTaskId, Id: "qr-read"),
+                new PipelineStep(AddToHistoryTask.TaskId, Id: "add-to-history"),
+                new PipelineStep(CopyTextToClipboardTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"template\":\"{bag.qr_text}\"}"), Id: "copy-text"),
+                new PipelineStep(NotifyToastTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"title\":\"ShareQ\",\"message\":\"QR → {bag.qr_text}\"}"), Id: "toast")
+            ],
+            // No default hotkey — user binds in Settings if they want it on muscle memory.
             IsBuiltIn: true),
 
         new PipelineProfile(

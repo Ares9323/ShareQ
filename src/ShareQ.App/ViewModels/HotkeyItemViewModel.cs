@@ -41,8 +41,18 @@ public sealed partial class HotkeyItemViewModel : ObservableObject
     [ObservableProperty]
     private string _bindingDisplay = string.Empty;
 
+    /// <summary>True when the workflow has an actual hotkey bound. False = unbound (the chip
+    /// shows "Click to set hotkey…"). Bound to a DataTrigger in HotkeyChipButtonStyle so the
+    /// chip foreground dims for unbound rows — otherwise the placeholder text would visually
+    /// compete with real shortcuts and the user can't tell at a glance which workflows are live.</summary>
+    [ObservableProperty]
+    private bool _isAssigned;
+
     private void UpdateBindingDisplay(HotkeyDefinition def)
-        => BindingDisplay = HotkeyDisplay.Format(def.Modifiers, def.VirtualKey);
+    {
+        BindingDisplay = HotkeyDisplay.Format(def.Modifiers, def.VirtualKey);
+        IsAssigned = def.Modifiers != HotkeyModifiers.None || def.VirtualKey != 0;
+    }
 
     [RelayCommand]
     private async Task Rebind()

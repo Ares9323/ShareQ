@@ -9,7 +9,7 @@ public static class HotkeyDisplay
 {
     public static string Format(HotkeyModifiers modifiers, uint virtualKey)
     {
-        if (modifiers == HotkeyModifiers.None && virtualKey == 0) return "Not assigned";
+        if (modifiers == HotkeyModifiers.None && virtualKey == 0) return "Click to set hotkey…";
         var sb = new StringBuilder();
         if ((modifiers & HotkeyModifiers.Control) != 0) Append(sb, "Ctrl");
         if ((modifiers & HotkeyModifiers.Alt) != 0) Append(sb, "Alt");

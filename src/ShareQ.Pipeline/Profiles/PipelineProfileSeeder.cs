@@ -15,6 +15,22 @@ public sealed class PipelineProfileSeeder
 
     public async Task SeedAsync(CancellationToken cancellationToken)
     {
+        // Built-ins that have disappeared from DefaultPipelineProfiles.All (e.g. a feature like
+        // OCR was tried, persisted, then dropped from the codebase) get DEMOTED to custom rather
+        // than deleted: a user might have customised the steps and we don't want to silently
+        // throw their work away. After the demotion the orphan shows up under the "Custom" tab,
+        // where the user can either keep it or remove it manually with the trash icon.
+        // Real customs (IsBuiltIn=false) are never touched — they're already under user control.
+        var defaultIds = new HashSet<string>(DefaultPipelineProfiles.All.Select(p => p.Id), StringComparer.Ordinal);
+        var existingProfiles = await _store.ListAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var existing in existingProfiles)
+        {
+            if (!existing.IsBuiltIn) continue;
+            if (defaultIds.Contains(existing.Id)) continue;
+            await _store.UpsertAsync(existing with { IsBuiltIn = false }, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("Pipeline profile {Id} demoted to custom (no longer a built-in default).", existing.Id);
+        }
+
         // The profile in DB is the source of truth (user-edited steps must survive restarts), so
         // we only insert defaults when the profile is missing entirely. Older installs may have
         // a profile row predating the Hotkey / IsBuiltIn fields — for those we run a non-

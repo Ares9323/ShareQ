@@ -219,6 +219,18 @@ public static class WorkflowActionCatalog
             "Capture",
             DefaultConfigJson: null),
 
+        new("shareq.capture-selected-explorer-file",
+            "Capture selected Explorer file",
+            "Reads the file currently selected in the foreground Explorer window (via Shell.Application COM) and stages its bytes as the workflow's payload. Aborts silently when no Explorer is foreground or nothing is selected; only takes the first file on multi-selection.",
+            "Capture",
+            DefaultConfigJson: null),
+
+        new("shareq.qr-read",
+            "QR — read code from image",
+            "Decodes the first QR code found in the current image payload (ZXing.Net, QR_CODE only, AutoRotate + TryHarder enabled). Replaces the payload with the decoded UTF-8 text and flips the extension to .txt. Aborts the workflow when no QR is found — pair with capture-region to build a 'screenshot QR → clipboard text' flow.",
+            "Tools",
+            DefaultConfigJson: null),
+
         new("shareq.update-item-url",
             "Update item URL",
             "Persists the upload URL on the history item so the popup shows it. Auto-injected after upload — not user-picked.",

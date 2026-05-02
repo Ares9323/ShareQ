@@ -66,17 +66,47 @@ public sealed class NotifyToastTask : IPipelineTask
             message = ExpandPlaceholders(template, context);
 
             if (context.Bag.TryGetValue(PipelineBagKeys.ItemId, out var rawId) && rawId is long itemId
-                && context.Bag.TryGetValue(PipelineBagKeys.NewItem, out var rawItem) && rawItem is NewItem item
-                && item.Kind == ItemKind.Image)
+                && context.Bag.TryGetValue(PipelineBagKeys.NewItem, out var rawItem) && rawItem is NewItem item)
             {
-                onClick = () =>
+                if (item.Kind == ItemKind.Image)
                 {
-                    Application.Current.Dispatcher.InvokeAsync(async () =>
+                    onClick = () =>
                     {
-                        try { await _editorLauncher.OpenAsync(itemId, CancellationToken.None).ConfigureAwait(true); }
-                        catch (Exception ex) { _logger.LogError(ex, "Toast→editor open failed for item {Id}", itemId); }
-                    });
-                };
+                        Application.Current.Dispatcher.InvokeAsync(async () =>
+                        {
+                            try { await _editorLauncher.OpenAsync(itemId, CancellationToken.None).ConfigureAwait(true); }
+                            catch (Exception ex) { _logger.LogError(ex, "Toast→editor open failed for item {Id}", itemId); }
+                        });
+                    };
+                }
+                else if (item.Kind == ItemKind.Text)
+                {
+                    // Text payload: if it parses as an http(s) URL — typical for QR-decoded
+                    // links — clicking the toast opens it in the default browser. Anything else
+                    // (plain text, a hash, an SSID, a TOTP secret) leaves the toast non-clickable;
+                    // the text is already on the clipboard so there's no useful "open editor"
+                    // affordance for raw strings.
+                    var textBytes = item.Payload.ToArray();
+                    var maybeUrl = textBytes.Length > 0 && textBytes.Length < 4096
+                        ? System.Text.Encoding.UTF8.GetString(textBytes).Trim()
+                        : string.Empty;
+                    if (Uri.TryCreate(maybeUrl, UriKind.Absolute, out var parsed)
+                        && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps))
+                    {
+                        onClick = () =>
+                        {
+                            try
+                            {
+                                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                                {
+                                    FileName = parsed.AbsoluteUri,
+                                    UseShellExecute = true,
+                                });
+                            }
+                            catch (Exception ex) { _logger.LogError(ex, "Toast→browser open failed for {Url}", parsed.AbsoluteUri); }
+                        };
+                    }
+                }
             }
         }
 
