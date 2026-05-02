@@ -51,6 +51,35 @@ public static class DefaultPipelineProfiles
 
     public static IReadOnlyList<PipelineProfile> All { get; } = BuildAll();
 
+    /// <summary>Per-built-in category label used to group the Hotkeys list. Custom workflows
+    /// (and any built-in not listed here) fall back to <see cref="DefaultCategory"/>. Kept in this
+    /// file so the catalog and the categorisation stay literally next to each other — easier to
+    /// remember to update both when adding a new built-in profile.</summary>
+    public const string DefaultCategory = "Other";
+
+    public static readonly IReadOnlyDictionary<string, string> CategoriesById = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [RegionCaptureId]         = "Capture",
+        [ActiveWindowCaptureId]   = "Capture",
+        [ActiveMonitorCaptureId]  = "Capture",
+        [WebpageCaptureId]        = "Capture",
+        [RecordScreenMp4Id]       = "Capture",
+        [RecordScreenGifId]       = "Capture",
+
+        [UploadClipboardTextId]   = "Upload",
+        [ShortenClipboardUrlId]   = "Upload",
+        [ManualUploadId]          = "Upload",
+
+        [OnClipboardId]           = "Clipboard",
+        [ShowPopupId]             = "Clipboard",
+        [ToggleIncognitoId]       = "Clipboard",
+
+        [ColorSamplerId]          = "Tools",
+        [ColorPickerId]           = "Tools",
+        [OpenScreenshotFolderId]  = "Tools",
+        [OpenLauncherId]          = "Tools",
+    };
+
     private static IReadOnlyList<PipelineProfile> BuildAll() =>
     [
         new PipelineProfile(
@@ -133,7 +162,7 @@ public static class DefaultPipelineProfiles
         new PipelineProfile(
             Id: WebpageCaptureId,
             DisplayName: "Webpage capture",
-            Trigger: "menu:webpage",
+            Trigger: "hotkey:webpage",
             Steps:
             [
                 // The capture task either prompts for a URL (interactive, default) or reads it

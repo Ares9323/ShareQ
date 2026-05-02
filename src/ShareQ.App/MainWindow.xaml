@@ -19,6 +19,49 @@
              while the user is still typing. -->
         <KeyBinding Key="Escape" Command="{Binding Hotkeys.BackToListCommand}" />
     </ui:FluentWindow.InputBindings>
+    <ui:FluentWindow.Resources>
+        <!-- Tab-strip styling shared by Uploaders (Image / File / Text / …) and Hotkeys
+             (Capture / Clipboard / Upload / Tools / Custom). Promoted here so both sections
+             render an identical strip without duplicating the template. Plain TextBlock-style
+             look with a 2px accent underline on selected. -->
+        <Style x:Key="UploaderTabItemStyle" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource AccentForegroundDarkBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="Margin" Value="0,0,2,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <ContentPresenter ContentSource="Header"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center" />
+                                <Border x:Name="Indicator"
+                                        Height="2"
+                                        VerticalAlignment="Bottom"
+                                        Background="{DynamicResource AccentBackgroundBrush}"
+                                        Visibility="Collapsed" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface3Brush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Indicator" Property="Visibility" Value="Visible" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </ui:FluentWindow.Resources>
     <Grid Background="{DynamicResource Surface2Brush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -168,46 +211,8 @@
                         </Grid>
                     </DataTemplate>
 
-                    <!-- Tab header style: dark-theme matched, accent underline on selected, no
-                         default chrome from WPF's classic TabItem template. Plain TextBlock-style
-                         look so the section feels like the rest of ShareQ's Fluent-ish settings. -->
-                    <Style x:Key="UploaderTabItemStyle" TargetType="TabItem">
-                        <Setter Property="Foreground" Value="{DynamicResource AccentForegroundDarkBrush}" />
-                        <Setter Property="FontWeight" Value="SemiBold" />
-                        <Setter Property="Padding" Value="14,8" />
-                        <Setter Property="Margin" Value="0,0,2,0" />
-                        <Setter Property="Background" Value="Transparent" />
-                        <Setter Property="BorderThickness" Value="0" />
-                        <Setter Property="Cursor" Value="Hand" />
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="TabItem">
-                                    <Border x:Name="Bd" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
-                                        <Grid>
-                                            <ContentPresenter ContentSource="Header"
-                                                              HorizontalAlignment="Center"
-                                                              VerticalAlignment="Center" />
-                                            <Border x:Name="Indicator"
-                                                    Height="2"
-                                                    VerticalAlignment="Bottom"
-                                                    Background="{DynamicResource AccentBackgroundBrush}"
-                                                    Visibility="Collapsed" />
-                                        </Grid>
-                                    </Border>
-                                    <ControlTemplate.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface3Brush}" />
-                                            <Setter Property="Foreground" Value="White" />
-                                        </Trigger>
-                                        <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="Indicator" Property="Visibility" Value="Visible" />
-                                            <Setter Property="Foreground" Value="White" />
-                                        </Trigger>
-                                    </ControlTemplate.Triggers>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                    </Style>
+                    <!-- Tab header style is shared with Hotkeys; declared once on the Window so
+                         both sections render an identical strip. See FluentWindow.Resources. -->
                 </Grid.Resources>
 
                 <!-- Header: title + subtitle, sit above the tab strip. -->
@@ -367,10 +372,46 @@
             <Grid Visibility="{Binding IsHotkeysSelected, Converter={StaticResource BoolToVisibility}}">
 
                 <!-- ── LIST VIEW ──────────────────────────────────────────────────────────── -->
-                <ScrollViewer Visibility="{Binding Hotkeys.IsEditingWorkflow, Converter={StaticResource InverseBoolToVisibility}}"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel Margin="24,16,24,16">
+                <Grid Visibility="{Binding Hotkeys.IsEditingWorkflow, Converter={StaticResource InverseBoolToVisibility}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.Resources>
+                        <!-- Shared row template for every category tab + Custom. Identical to the
+                             pre-tabs flat-list row so muscle memory carries over. -->
+                        <DataTemplate x:Key="HotkeyRowTemplate" DataType="{x:Type vm:HotkeyItemViewModel}">
+                            <Border Margin="0,0,0,8" Padding="14,10" Background="{DynamicResource Surface1Brush}"
+                                    BorderBrush="#333" BorderThickness="1" CornerRadius="6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
+                                               FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                                    <Border Grid.Column="1" Padding="8,3" Background="{DynamicResource Surface3Brush}"
+                                            BorderBrush="#444" BorderThickness="1" CornerRadius="3"
+                                            Margin="0,0,8,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding BindingDisplay}" FontFamily="Consolas"
+                                                   FontSize="12" Foreground="#DDD" />
+                                    </Border>
+                                    <ui:Button Grid.Column="2" Content="Edit"
+                                               Command="{Binding OpenInWorkflowsCommand}"
+                                               Margin="0,0,4,0"
+                                               ToolTip="Open this workflow's step list" />
+                                    <ui:Button Grid.Column="3" Content="Rebind"
+                                               Command="{Binding RebindCommand}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </Grid.Resources>
+
+                    <!-- Header: title + Reset all + subtitle, sit above the tab strip (mirrors
+                         the Uploaders section layout for visual consistency). -->
+                    <StackPanel Grid.Row="0" Margin="24,16,24,8">
                         <Grid Margin="0,0,0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -382,84 +423,58 @@
                                        Command="{Binding Hotkeys.Workflows.ResetAllToDefaultsCommand}"
                                        ToolTip="Reset every built-in workflow to its default steps and hotkey. Asks for confirmation; custom workflows are not touched." />
                         </Grid>
-                        <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
+                        <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap"
                                    Text="Click Rebind on a row to set a new key combo (Reset / Clear are inside the rebind dialog). Click Edit to open the workflow's step list." />
-
-                        <TextBlock Text="Built-in workflows" FontSize="13" FontWeight="SemiBold" Foreground="#BBB"
-                                   Margin="0,0,0,6" />
-                        <ItemsControl ItemsSource="{Binding Hotkeys.BuiltInItems}" Margin="0,0,0,16">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type vm:HotkeyItemViewModel}">
-                                    <Border Margin="0,0,0,8" Padding="14,10" Background="{DynamicResource Surface1Brush}"
-                                            BorderBrush="#333" BorderThickness="1" CornerRadius="6">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
-                                                       FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
-                                            <Border Grid.Column="1" Padding="8,3" Background="{DynamicResource Surface3Brush}"
-                                                    BorderBrush="#444" BorderThickness="1" CornerRadius="3"
-                                                    Margin="0,0,8,0" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding BindingDisplay}" FontFamily="Consolas"
-                                                           FontSize="12" Foreground="#DDD" />
-                                            </Border>
-                                            <ui:Button Grid.Column="2" Content="Edit"
-                                                       Command="{Binding OpenInWorkflowsCommand}"
-                                                       Margin="0,0,4,0"
-                                                       ToolTip="Open this workflow's step list" />
-                                            <ui:Button Grid.Column="3" Content="Rebind"
-                                                       Command="{Binding RebindCommand}" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <TextBlock Text="Custom workflows" FontSize="13" FontWeight="SemiBold" Foreground="#BBB"
-                                   Margin="0,0,0,6" />
-                        <TextBlock Text="(none yet — click + Add custom workflow below to create one)"
-                                   Foreground="#666" FontSize="11" FontStyle="Italic"
-                                   Visibility="{Binding Hotkeys.CustomItems.Count, Converter={StaticResource ZeroToVisibility}}"
-                                   Margin="0,0,0,8" />
-                        <ItemsControl ItemsSource="{Binding Hotkeys.CustomItems}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type vm:HotkeyItemViewModel}">
-                                    <Border Margin="0,0,0,8" Padding="14,10" Background="{DynamicResource Surface1Brush}"
-                                            BorderBrush="#333" BorderThickness="1" CornerRadius="6">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
-                                                       FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
-                                            <Border Grid.Column="1" Padding="8,3" Background="{DynamicResource Surface3Brush}"
-                                                    BorderBrush="#444" BorderThickness="1" CornerRadius="3"
-                                                    Margin="0,0,8,0" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding BindingDisplay}" FontFamily="Consolas"
-                                                           FontSize="12" Foreground="#DDD" />
-                                            </Border>
-                                            <ui:Button Grid.Column="2" Content="Edit"
-                                                       Command="{Binding OpenInWorkflowsCommand}"
-                                                       Margin="0,0,4,0"
-                                                       ToolTip="Open this workflow's step list" />
-                                            <ui:Button Grid.Column="3" Content="Rebind"
-                                                       Command="{Binding RebindCommand}" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <ui:Button Content="+ Add custom workflow" HorizontalAlignment="Left" Margin="0,4,0,0"
-                                   Command="{Binding Hotkeys.AddCustomWorkflowCommand}" />
                     </StackPanel>
-                </ScrollViewer>
+
+                    <!-- Tabbed body: 4 built-in category tabs + Custom. Same UploaderTabItemStyle
+                         the Uploaders section uses, so the strip looks unified across Settings. -->
+                    <TabControl Grid.Row="1" Margin="24,0,24,16"
+                                Background="Transparent" BorderThickness="0" Padding="0">
+                        <TabItem Header="Capture" Style="{StaticResource UploaderTabItemStyle}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding Hotkeys.CaptureItems}"
+                                              ItemTemplate="{StaticResource HotkeyRowTemplate}"
+                                              Margin="0,12,0,0" />
+                            </ScrollViewer>
+                        </TabItem>
+                        <TabItem Header="Clipboard" Style="{StaticResource UploaderTabItemStyle}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding Hotkeys.ClipboardItems}"
+                                              ItemTemplate="{StaticResource HotkeyRowTemplate}"
+                                              Margin="0,12,0,0" />
+                            </ScrollViewer>
+                        </TabItem>
+                        <TabItem Header="Upload" Style="{StaticResource UploaderTabItemStyle}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding Hotkeys.UploadItems}"
+                                              ItemTemplate="{StaticResource HotkeyRowTemplate}"
+                                              Margin="0,12,0,0" />
+                            </ScrollViewer>
+                        </TabItem>
+                        <TabItem Header="Tools" Style="{StaticResource UploaderTabItemStyle}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding Hotkeys.ToolsItems}"
+                                              ItemTemplate="{StaticResource HotkeyRowTemplate}"
+                                              Margin="0,12,0,0" />
+                            </ScrollViewer>
+                        </TabItem>
+                        <TabItem Header="Custom" Style="{StaticResource UploaderTabItemStyle}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel Margin="0,12,0,0">
+                                    <TextBlock Text="(none yet — click + Add custom workflow below to create one)"
+                                               Foreground="#666" FontSize="11" FontStyle="Italic"
+                                               Visibility="{Binding Hotkeys.CustomItems.Count, Converter={StaticResource ZeroToVisibility}}"
+                                               Margin="0,0,0,8" />
+                                    <ItemsControl ItemsSource="{Binding Hotkeys.CustomItems}"
+                                                  ItemTemplate="{StaticResource HotkeyRowTemplate}" />
+                                    <ui:Button Content="+ Add custom workflow" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                               Command="{Binding Hotkeys.AddCustomWorkflowCommand}" />
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
+                    </TabControl>
+                </Grid>
 
                 <!-- ── EDIT VIEW ──────────────────────────────────────────────────────────── -->
                 <!-- Esc handling lives on the Window (PreviewKeyDown there) so it fires regardless
@@ -503,6 +518,30 @@
                                     Padding="10,8"
                                     FontSize="13"
                                     Margin="0,0,0,16" />
+
+                        <!-- Inline rebind: same chip + Rebind button as the list view, so the
+                             user can change the keybind without bouncing back to the list. The
+                             VM's Rebind callback refreshes the list so the chip up there matches
+                             once the user clicks Back. Hidden when no workflow is selected (e.g.
+                             during initial load before SelectedWorkflow lands). -->
+                        <StackPanel Margin="0,0,0,16"
+                                    Visibility="{Binding Hotkeys.EditingWorkflowHotkey, Converter={StaticResource NotNullToVisibility}}">
+                            <TextBlock Text="Hotkey" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Padding="10,5" Background="{DynamicResource Surface3Brush}"
+                                        BorderBrush="#444" BorderThickness="1" CornerRadius="3"
+                                        Margin="0,0,8,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Hotkeys.EditingWorkflowHotkey.BindingDisplay}"
+                                               FontFamily="Consolas" FontSize="12" Foreground="#DDD" />
+                                </Border>
+                                <ui:Button Grid.Column="1" Content="Rebind" HorizontalAlignment="Left"
+                                           Command="{Binding Hotkeys.EditingWorkflowHotkey.RebindCommand}" />
+                            </Grid>
+                        </StackPanel>
 
                         <Grid Margin="0,8,0,4">
                             <Grid.ColumnDefinitions>

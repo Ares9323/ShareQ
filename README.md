@@ -75,7 +75,7 @@ See [`docs/Improvements.md`](docs/Improvements.md) for the full feature-parity t
 - **No installer / no auto-update yet.** Velopack packaging + GitHub Releases auto-update is the M7 milestone — not done.
 - **No image effects framework** (resize / blur / sepia / watermark / borders) — pencilled in as the next major editor pass.
 - **No SharedFolder / FTP / SFTP / S3 / Azure / B2 uploaders** — backlog (FTP+SharedFolder are next; cloud-storage providers come after).
-- **No OCR / scrolling capture / Explorer context menu / image combiner / hash checker / metadata viewer** — backlog.
+- **No scrolling capture / image combiner / hash checker / metadata viewer** — backlog. (Explorer context menu shipped; OCR was tried via Windows.Media.Ocr and dropped — too unreliable on dark themes / low contrast for the maintenance cost.)
 - **Bundled OAuth client IDs aren't shipped** in the public source. Maintainers create `src/ShareQ.Uploaders/Secrets.Local.cs` with their own credentials (gitignored). End users of a public release get zero-friction sign-in; users building from source themselves will see "isn't configured in this build" until they either drop in their own keys or paste credentials in the Configure dialog.
 - **No i18n** — UI is English only.
 - **No CLI / scripting interface** — everything runs through hotkeys + workflows.
@@ -108,11 +108,9 @@ After M7, the next themed passes (rough order):
 1. Image effects framework (resize / blur / borders / sepia / watermark)
 2. SharedFolder + FTP/FTPS/SFTP uploaders
 3. Cloud storage uploaders (S3 / Azure Blob / Backblaze B2 / Google Cloud / Cloudflare R2)
-4. OCR (Windows OCR API or Tesseract)
-5. Scrolling capture
-6. Explorer context menu integration
-7. CLI for scripting
-8. i18n
+4. Scrolling capture
+5. CLI for scripting
+6. i18n
 
 See [`docs/Improvements.md`](docs/Improvements.md) for the granular feature-parity checklist.
 
