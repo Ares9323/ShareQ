@@ -83,4 +83,57 @@ public class PipelineProfileSeederTests
         Assert.Equal(expected.DisplayName, loaded!.DisplayName);
         Assert.Equal(expected.Steps.Count, loaded.Steps.Count);
     }
+
+    [Fact]
+    public async Task SeedAsync_DemotesOrphanedBuiltInToCustom()
+    {
+        // A built-in that has been removed from DefaultPipelineProfiles.All (e.g. OCR was tried
+        // then dropped) must be DEMOTED to custom rather than deleted, so a user who customised
+        // its steps doesn't silently lose their work. After demotion the profile remains in DB
+        // with IsBuiltIn=false — surfacing under the "Custom" tab where the user can keep or
+        // remove it manually.
+        await using var fx = await new TempPipelineDatabaseFixture().InitializeAsync();
+        var (seeder, store) = Build(fx);
+        var orphan = new PipelineProfile(
+            Id: "ghost-builtin",
+            DisplayName: "Ghost workflow",
+            Trigger: "hotkey:ghost",
+            Steps: new[] { new PipelineStep("user.modified.step") },
+            IsBuiltIn: true);
+        await store.UpsertAsync(orphan, CancellationToken.None);
+
+        await seeder.SeedAsync(CancellationToken.None);
+
+        var loaded = await store.GetAsync("ghost-builtin", CancellationToken.None);
+        Assert.NotNull(loaded);
+        Assert.False(loaded!.IsBuiltIn);
+        // Steps preserved verbatim — we only flip the metadata flag, never touch the user's work.
+        Assert.Single(loaded.Steps);
+        Assert.Equal("user.modified.step", loaded.Steps[0].TaskId);
+    }
+
+    [Fact]
+    public async Task SeedAsync_LeavesUserCustomProfilesUntouched()
+    {
+        // Real customs (IsBuiltIn=false) must never be demoted-again or otherwise modified by the
+        // GC pass — they're already under user control. Sanity check guarding against an off-by-
+        // one in the orphan filter.
+        await using var fx = await new TempPipelineDatabaseFixture().InitializeAsync();
+        var (seeder, store) = Build(fx);
+        var customProfile = new PipelineProfile(
+            Id: "custom-user-thing",
+            DisplayName: "My workflow",
+            Trigger: "hotkey:my-thing",
+            Steps: new[] { new PipelineStep("anything") },
+            IsBuiltIn: false);
+        await store.UpsertAsync(customProfile, CancellationToken.None);
+
+        await seeder.SeedAsync(CancellationToken.None);
+
+        var loaded = await store.GetAsync("custom-user-thing", CancellationToken.None);
+        Assert.NotNull(loaded);
+        Assert.False(loaded!.IsBuiltIn);
+        Assert.Equal("My workflow", loaded.DisplayName);
+        Assert.Single(loaded.Steps);
+    }
 }
