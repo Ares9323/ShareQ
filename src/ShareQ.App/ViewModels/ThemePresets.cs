@@ -46,7 +46,7 @@ public static class ThemePresets
         AccentForegroundLightHex: "#FFFFFF",
         AccentForegroundDarkHex: "#7592AE",
         AccentBackgroundLightHex: "#2B5278",
-        AccentBackgroundDarkHex: "#1A324B",
+        AccentBackgroundDarkHex: "#142F4B",
         AccentDangerHex: "#A04040",
         Surface1Hex: "#111820",
         Surface2Hex: "#17212B",
@@ -57,7 +57,7 @@ public static class ThemePresets
         AccentForegroundLightHex: "#FFFFFF",
         AccentForegroundDarkHex: "#AD75AE",
         AccentBackgroundLightHex: "#782B78",
-        AccentBackgroundDarkHex: "#210E1F",
+        AccentBackgroundDarkHex: "#511A4C",
         AccentDangerHex: "#993355",
         Surface1Hex: "#20111F",
         Surface2Hex: "#2B172B",
@@ -68,7 +68,7 @@ public static class ThemePresets
         AccentForegroundLightHex: "#FFFFFF",
         AccentForegroundDarkHex: "#7FAE75",
         AccentBackgroundLightHex: "#38782B",
-        AccentBackgroundDarkHex: "#0F210E",
+        AccentBackgroundDarkHex: "#194C16",
         AccentDangerHex: "#8F2720",
         Surface1Hex: "#132011",
         Surface2Hex: "#1B2B17",
@@ -79,7 +79,7 @@ public static class ThemePresets
         AccentForegroundLightHex: "#FFFFFF",
         AccentForegroundDarkHex: "#AE7575",
         AccentBackgroundLightHex: "#782B2B",
-        AccentBackgroundDarkHex: "#210E0E",
+        AccentBackgroundDarkHex: "#541E1E",
         AccentDangerHex: "#A02727",
         Surface1Hex: "#201111",
         Surface2Hex: "#2B1717",
@@ -89,8 +89,8 @@ public static class ThemePresets
         Name: "Cleric Gold",
         AccentForegroundLightHex: "#F4F0EB",
         AccentForegroundDarkHex: "#AE9B75",
-        AccentBackgroundLightHex: "#786430",
-        AccentBackgroundDarkHex: "#211C0E",
+        AccentBackgroundLightHex: "#9A803E",
+        AccentBackgroundDarkHex: "#745F22",
         AccentDangerHex: "#952A2A",
         Surface1Hex: "#201D11",
         Surface2Hex: "#2B2417",
@@ -100,12 +100,23 @@ public static class ThemePresets
         Name: "Bard Rouge",
         AccentForegroundLightHex: "#F4F0EB",
         AccentForegroundDarkHex: "#AE75A4",
-        AccentBackgroundLightHex: "#782B68",
-        AccentBackgroundDarkHex: "#210E1D",
-        AccentDangerHex: "#952A2A",
-        Surface1Hex: "#20111D",
-        Surface2Hex: "#2B1728",
-        Surface3Hex: "#391E34");
+        AccentBackgroundLightHex: "#9D428B",
+        AccentBackgroundDarkHex: "#803671",
+        AccentDangerHex: "#952A4A",
+        Surface1Hex: "#3F2239",
+        Surface2Hex: "#4B2747",
+        Surface3Hex: "#61325D");
 
-    public static readonly IReadOnlyList<ThemePreset> All = [Custom, Default, BardRouge, ClericGold, DruidGreen, SorcererPurple, WarlockRed, WizardBlue];
+    public static readonly ThemePreset BurnMyEyes = new(
+        Name: "Burn My Eyes",
+        AccentForegroundLightHex: "#000000",
+        AccentForegroundDarkHex: "#232323",
+        AccentBackgroundLightHex: "#B7E5C7",
+        AccentBackgroundDarkHex: "#6BA780",
+        AccentDangerHex: "#ED5C52",
+        Surface1Hex: "#C9C9C9",
+        Surface2Hex: "#E4E4E4",
+        Surface3Hex: "#FFFFFF");
+
+    public static readonly IReadOnlyList<ThemePreset> All = [Custom, Default, BardRouge, ClericGold, DruidGreen, SorcererPurple, WarlockRed, WizardBlue, BurnMyEyes];
 }

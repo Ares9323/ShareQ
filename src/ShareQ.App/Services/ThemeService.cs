@@ -156,6 +156,12 @@ public sealed class ThemeService
 
         var bgBrush = new SolidColorBrush(_bg); bgBrush.Freeze();
         var fgBrush = new SolidColorBrush(_fg); fgBrush.Freeze();
+        // Hoisted up so the SystemColors.* overrides below (which need the dim foreground and
+        // the dark accent) can resolve them. The matching app.Resources["AccentForeground*"]
+        // assignments still happen further down where the rest of the secondary-text family
+        // lives — moving them too would scatter the per-key writes across two blocks.
+        var fgDarkBrush = new SolidColorBrush(_fgDark); fgDarkBrush.Freeze();
+        var darkBrush = new SolidColorBrush(_dark); darkBrush.Freeze();
 
         // Lighter / darker shades for hover/pressed states. WPF-UI v4 uses three accent variants
         // (Primary > Secondary > Tertiary) where Secondary is slightly lighter and Tertiary
@@ -198,7 +204,6 @@ public sealed class ThemeService
         // accent but still want to follow the theme: launcher cells, inactive tab headers,
         // anywhere that needs an "ambient" accent-tinted dark. Also derive a slightly-lighter
         // shade for borders so the launcher gets a coherent tone with one user setting.
-        var darkBrush = new SolidColorBrush(_dark); darkBrush.Freeze();
         var darkBorderBrush = new SolidColorBrush(Lighten(_dark, 0.15)); darkBorderBrush.Freeze();
         app.Resources["AccentBackgroundDarkColor"] = _dark;
         app.Resources["AccentBackgroundDarkBrush"] = darkBrush;
@@ -253,12 +258,136 @@ public sealed class ThemeService
         app.Resources["ComboBoxBackground"] = surface3Brush;
         app.Resources["ComboBoxBackgroundPointerOver"] = surface3Brush;
         app.Resources["ComboBoxBackgroundFocused"] = surface3Brush;
+        // ComboBox popup body — WPF-UI v4 uses ComboBoxDropDownBackground (extracted from the
+        // packed dll). The earlier "ComboBoxPopupBackground" guess was wrong, which is why the
+        // dropdown kept the dark default until now. Routed to Surface2 so the popup floats one
+        // shade above the textbox face (Surface3) for a card-on-surface read.
+        app.Resources["ComboBoxDropDownBackground"] = surface2Brush;
+        app.Resources["ComboBoxItemBackground"] = surface2Brush;
+        app.Resources["ComboBoxItemBackgroundPointerOver"] = surface3Brush;
+        app.Resources["ComboBoxItemBackgroundSelected"] = surface3Brush;
+        app.Resources["ComboBoxItemBackgroundSelectedPointerOver"] = surface3Brush;
+        app.Resources["ComboBoxItemBackgroundSelectedDisabled"] = surface3Brush;
+        app.Resources["ComboBoxItemBackgroundDisabled"] = surface2Brush;
+        // ContextMenu chrome (right-click + tray menus). Same dll-string source as the ComboBox
+        // family above. Routing to Surface2 keeps tray + right-click popups consistent with the
+        // window body; the per-item style in TrayIconService still maps submenu chrome to
+        // Surface3 via SystemColors.MenuBrushKey.
+        app.Resources["ContextMenuBackground"] = surface2Brush;
+        app.Resources["ContextMenuBorderBrush"] = darkBorderBrush;
+
+        // SystemColors.* overrides at the App level — needed so submenu Popups (hosted in a
+        // separate HwndSource) resolve them. The TrayIconService also adds them inside the
+        // MenuItem Style.Resources scope, but Popup resource lookup is finicky and sometimes
+        // skips the Style.Resources scope entirely; the App-level pin guarantees the chrome
+        // brush is found regardless. Submenu chrome → Surface3 (one shade above the main menu
+        // body), main menu chrome → Surface2 (set on the ContextMenu itself in TrayIconService).
+        app.Resources[SystemColors.MenuBrushKey] = surface3Brush;
+        app.Resources[SystemColors.MenuBarBrushKey] = surface2Brush;
+        app.Resources[SystemColors.MenuTextBrushKey] = fgBrush;
+        app.Resources[SystemColors.MenuHighlightBrushKey] = darkBrush;
+        app.Resources[SystemColors.HighlightBrushKey] = darkBrush;
+        app.Resources[SystemColors.HighlightTextBrushKey] = fgBrush;
+        app.Resources[SystemColors.ControlBrushKey] = surface3Brush;
+        app.Resources[SystemColors.ControlLightBrushKey] = surface3Brush;
+        app.Resources[SystemColors.ControlDarkBrushKey] = surface2Brush;
+        app.Resources[SystemColors.WindowBrushKey] = surface2Brush;
+        app.Resources[SystemColors.WindowTextBrushKey] = fgBrush;
+        app.Resources[SystemColors.GrayTextBrushKey] = fgDarkBrush;
+        app.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = darkBrush;
+        app.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = fgBrush;
+        // Generic Fluent v2 surface keys WPF-UI templates fall back to for popup chrome
+        // (flyouts, autosuggest dropdowns, the date/time pickers' calendar). Routing them all
+        // to Surface2 keeps every floating surface consistent with the window body.
+        app.Resources["SolidBackgroundFillColorBaseBrush"] = surface2Brush;
+        app.Resources["SolidBackgroundFillColorSecondaryBrush"] = surface2Brush;
+        app.Resources["SolidBackgroundFillColorTertiaryBrush"] = surface3Brush;
+        app.Resources["SolidBackgroundFillColorQuarternaryBrush"] = surface3Brush;
+        app.Resources["AcrylicBackgroundFillColorDefaultBrush"] = surface2Brush;
+        app.Resources["AcrylicBackgroundFillColorBaseBrush"] = surface2Brush;
+        // Fluent v2 "layer" brushes — WPF-UI v4 uses these as the canonical popup chrome
+        // (verified by string-extracting Wpf.Ui.dll). LayerFillColorDefaultBrush is what
+        // ContextMenu / Flyout / AutoSuggest dropdowns resolve to when their explicit Bg key
+        // doesn't override; pinning it to Surface2 makes the catch-all match the rest of the
+        // popup family.
+        app.Resources["LayerFillColorDefaultBrush"] = surface2Brush;
+        app.Resources["LayerFillColorAltBrush"] = surface3Brush;
+        app.Resources["LayerOnAcrylicFillColorDefaultBrush"] = surface2Brush;
+        app.Resources["LayerOnAccentAcrylicFillColorDefaultBrush"] = surface2Brush;
+        app.Resources["LayerOnMicaBaseAltFillColorDefaultBrush"] = surface2Brush;
+        app.Resources["LayerOnMicaBaseAltFillColorSecondaryBrush"] = surface3Brush;
 
         // Dim subtext tone — captions, age / kind / source on clipboard rows, swatch
         // descriptions, etc. One global handle for "secondary text on dark surfaces".
-        var fgDarkBrush = new SolidColorBrush(_fgDark); fgDarkBrush.Freeze();
+        // (fgDarkBrush is hoisted at the top of the method for the SystemColors block.)
         app.Resources["AccentForegroundDarkColor"] = _fgDark;
         app.Resources["AccentForegroundDarkBrush"] = fgDarkBrush;
+
+        // Re-key WPF-UI v4's body-text brushes to follow the user's foreground colours. Without
+        // this, every TextBlock that doesn't set Foreground explicitly inherits the dark.baml
+        // default (white) — invisible the moment the user picks light surfaces. Primary text
+        // takes AccentForegroundLight (the same colour the user already chose for "text on
+        // accent"); secondary / tertiary / disabled fall to AccentForegroundDark (the dim tone).
+        // Same DynamicResource path the WPF-UI templates use, so the change propagates live.
+        app.Resources["TextFillColorPrimaryBrush"] = fgBrush;
+        app.Resources["TextFillColorSecondaryBrush"] = fgDarkBrush;
+        app.Resources["TextFillColorTertiaryBrush"] = fgDarkBrush;
+        app.Resources["TextFillColorDisabledBrush"] = fgDarkBrush;
+
+        // TextBox / RichTextBox / PasswordBox glyph color — bound by template via
+        // TextControlForeground (NOT TextFillColor*), so the hex inputs in the Theme tab kept
+        // rendering white text on a light Surface3 even after the TextFillColor* overrides above.
+        // All four states resolve to fgBrush so the typed text reads against the chosen surface
+        // tone whatever theme the user picks.
+        app.Resources["TextControlForeground"] = fgBrush;
+        app.Resources["TextControlForegroundPointerOver"] = fgBrush;
+        app.Resources["TextControlForegroundFocused"] = fgBrush;
+        app.Resources["TextControlForegroundDisabled"] = fgDarkBrush;
+        app.Resources["TextControlPlaceholderForeground"] = fgDarkBrush;
+        app.Resources["TextControlPlaceholderForegroundPointerOver"] = fgDarkBrush;
+        app.Resources["TextControlPlaceholderForegroundFocused"] = fgDarkBrush;
+        app.Resources["TextControlPlaceholderForegroundDisabled"] = fgDarkBrush;
+
+        // Default ui:Button label colour — same problem as TextBox: not a TextFillColor* consumer,
+        // so the non-Primary sidebar buttons stayed white even when the user picked a light theme.
+        // ButtonForeground is the WPF-UI v4 key the default Button template binds to via
+        // DynamicResource; the four states track fgBrush except Disabled which dims to fgDarkBrush
+        // so the affordance still reads as inactive.
+        app.Resources["ButtonForeground"] = fgBrush;
+        app.Resources["ButtonForegroundPointerOver"] = fgBrush;
+        app.Resources["ButtonForegroundPressed"] = fgBrush;
+        app.Resources["ButtonForegroundDisabled"] = fgDarkBrush;
+
+        // ComboBox label / chosen-item glyph color — same family of overrides for the closed
+        // picker face. The dropdown items inside the popup are styled separately
+        // (ComboBoxItemForeground) but they currently inherit through TextFillColorPrimaryBrush
+        // already, so just the closed-state face needs the explicit nudge.
+        app.Resources["ComboBoxForeground"] = fgBrush;
+        app.Resources["ComboBoxForegroundPointerOver"] = fgBrush;
+        app.Resources["ComboBoxForegroundFocused"] = fgBrush;
+        app.Resources["ComboBoxForegroundDisabled"] = fgDarkBrush;
+        app.Resources["ComboBoxItemForeground"] = fgBrush;
+        app.Resources["ComboBoxItemForegroundPointerOver"] = fgBrush;
+        app.Resources["ComboBoxItemForegroundSelected"] = fgBrush;
+        app.Resources["ComboBoxItemForegroundSelectedPointerOver"] = fgBrush;
+
+        // NavigationView sidebar item label — selected items use AccentForegroundLight (same as
+        // every other accent-on-accent surface — it's the colour the user already picked for
+        // "text on accent"), unselected items follow the standard fgBrush so they stay readable
+        // on the chrome surface.
+        app.Resources["NavigationViewItemForeground"] = fgBrush;
+        app.Resources["NavigationViewItemForegroundPointerOver"] = fgBrush;
+        app.Resources["NavigationViewItemForegroundPressed"] = fgBrush;
+        app.Resources["NavigationViewItemForegroundSelected"] = fgBrush;
+        app.Resources["NavigationViewItemForegroundSelectedPointerOver"] = fgBrush;
+        app.Resources["NavigationViewItemForegroundSelectedPressed"] = fgBrush;
+        app.Resources["NavigationViewItemForegroundDisabled"] = fgDarkBrush;
+
+        // ToggleSwitch knob / off-state stroke — dark.baml binds them to ControlStrokeColor*
+        // which keeps a near-white tone; without the override the switch knob disappears against
+        // a light surface. Routing them to fgDarkBrush gives a visible, theme-consistent edge.
+        app.Resources["ControlStrongFillColorDefaultBrush"] = fgDarkBrush;
+        app.Resources["ControlStrongStrokeColorDefaultBrush"] = fgDarkBrush;
 
         // WPF-UI v4 declares BOTH naming conventions in resources/accent.baml — the legacy
         // SystemAccentColor* family AND the Fluent-v2 AccentFillColor* family. Different

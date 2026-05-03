@@ -27,6 +27,18 @@
                  is the font's INTERNAL Family Name (verified via PrivateFontCollection), not
                  the filename. Used by category icons and the icon-picker dialog. -->
             <FontFamily x:Key="IconFont">/Assets/Fonts/#Font Awesome 7 Free Solid</FontFamily>
+
+            <!-- Implicit TextBlock style: routes every plain TextBlock that doesn't set
+                 Foreground locally onto AccentForegroundBrush via DynamicResource. WPF-UI v4's
+                 FluentWindow template sets TextElement.Foreground with a StaticResource — the
+                 reference is snapshotted at template instantiation, so swapping
+                 TextFillColorPrimaryBrush at runtime never reaches the inherited tone. By
+                 putting a DynamicResource on the implicit Style we get live retheming for the
+                 thousands of "labelled hex" / header / inline-info TextBlocks across the app
+                 without touching them one by one. Local Foreground setters still win. -->
+            <Style TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

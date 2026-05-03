@@ -31,16 +31,18 @@
              pressed dims it; cursor flips to Hand to advertise the click target. -->
         <Style x:Key="HotkeyChipButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="{DynamicResource Surface3Brush}" />
-            <Setter Property="BorderBrush" Value="#444" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentForegroundDarkBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="10,4" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="VerticalAlignment" Value="Center" />
-            <!-- Default Foreground = the bright "active hotkey" colour. The DataTrigger below
-                 dims it to AccentForegroundDarkBrush when IsAssigned=false, so unbound rows
-                 read as a faded "Click to set hotkey…" placeholder instead of competing with
-                 real shortcuts. Both states still flip to white on hover for affordance. -->
-            <Setter Property="Foreground" Value="#DDD" />
+            <!-- Default Foreground = AccentForegroundBrush ("Foreground Light" in the theme
+                 tab) so the bound shortcut text reads as the user's brand foreground colour.
+                 The DataTrigger below dims it to AccentForegroundDarkBrush when IsAssigned=false
+                 so unbound rows read as a faded "Click to set hotkey…" placeholder instead of
+                 competing with real shortcuts. Both states still flip to white on hover for
+                 affordance. -->
+            <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -92,7 +94,7 @@
                                 <Border x:Name="Indicator"
                                         Height="2"
                                         VerticalAlignment="Bottom"
-                                        Background="{DynamicResource AccentBackgroundBrush}"
+                                        Background="{DynamicResource AccentBackgroundDarkBrush}"
                                         Visibility="Collapsed" />
                             </Grid>
                         </Border>
@@ -116,7 +118,7 @@
          inside the frame — same role as the explicit borders on Launcher / Clipboard / Toast /
          HotkeyCapture windows, so all surfaces share the same "accent telaio" treatment. -->
     <Border Background="{DynamicResource Surface2Brush}"
-            BorderBrush="{DynamicResource AccentForegroundDarkBrush}" BorderThickness="1">
+            BorderBrush="{DynamicResource AccentForegroundDarkBrush}" BorderThickness="2" CornerRadius="8">
     <!-- Outer wrapper Grid so the Border can hold both the main layout AND the resize thumb
          (Border accepts only one child, Grid happily stacks via z-order). -->
     <Grid>
@@ -154,8 +156,13 @@
         </ui:TitleBar>
 
         <!-- Sidebar -->
+        <!-- CornerRadius on the bottom-left matches the outer Border's CornerRadius (8) minus
+             its BorderThickness (2) so the Surface1 fill curves with the window corner instead
+             of bleeding past it. WPF Border doesn't auto-clip child Backgrounds to the parent's
+             rounded shape — this is the standard workaround. -->
         <Border Grid.Row="1" Grid.Column="0" Padding="8,12"
                 Background="{DynamicResource Surface1Brush}"
+                CornerRadius="0,0,0,6"
                 BorderBrush="{DynamicResource AccentForegroundDarkBrush}" BorderThickness="0,0,1,0">
             <Border.Resources>
                 <!-- Override the AccentButton* brush family inside this Border's resource scope
@@ -244,6 +251,19 @@
                          only the ItemsSource changes. -->
                     <DataTemplate x:Key="UploaderRowTemplate" DataType="{x:Type vm:UploaderSelectionItemViewModel}">
                         <Grid Margin="0,2">
+                            <!-- Local override of WPF-UI v4's checkbox brush keys (verified by
+                                 string-extracting Wpf.Ui.dll): scoped to this DataTemplate so the
+                                 uploader checkboxes pick up the ambient "Accent Background Dark"
+                                 tone for the fill and "Foreground Light" for the border + glyph
+                                 instead of the bright primary accent. Lookup walks up the visual
+                                 tree, so the keys defined here win inside this row only — Settings
+                                 / About checkboxes elsewhere keep the standard accent. -->
+                            <Grid.Resources>
+                                <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="{DynamicResource AccentBackgroundDarkColor}" />
+                                <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" Color="{DynamicResource AccentBackgroundDarkColor}" />
+                                <SolidColorBrush x:Key="CheckBoxCheckBorderBrush" Color="{DynamicResource AccentForegroundColor}" />
+                                <SolidColorBrush x:Key="CheckBoxCheckGlyphForeground" Color="{DynamicResource AccentForegroundColor}" />
+                            </Grid.Resources>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -432,7 +452,7 @@
                              pre-tabs flat-list row so muscle memory carries over. -->
                         <DataTemplate x:Key="HotkeyRowTemplate" DataType="{x:Type vm:HotkeyItemViewModel}">
                             <Border Margin="0,0,0,8" Padding="14,10" Background="{DynamicResource Surface1Brush}"
-                                    BorderBrush="#333" BorderThickness="1" CornerRadius="6">
+                                    BorderBrush="{DynamicResource AccentForegroundDarkBrush}" BorderThickness="1" CornerRadius="6">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -805,7 +825,33 @@
                 <ComboBox ItemsSource="{Binding Theme.Presets}"
                           SelectedItem="{Binding Theme.SelectedPreset, Mode=TwoWay}"
                           DisplayMemberPath="Name"
-                          Margin="0,0,0,20" />
+                          Margin="0,0,0,20"
+                          Foreground="{DynamicResource AccentForegroundBrush}">
+                    <!-- Local popup-chrome override: route every "popup body" key for this
+                         specific picker onto Surface3 so the dropdown reads as one elevated
+                         card instead of the standard Surface2 floating panel. Scoped to this
+                         ComboBox only — other dropdowns across the app keep the global
+                         Surface2-popup convention. Item text re-pinned to AccentForegroundBrush
+                         so the row labels stay readable on the lighter Surface3 surface. -->
+                    <ComboBox.Resources>
+                        <!-- ComboBoxDropDownBackground is the actual key WPF-UI v4 binds the
+                             popup chrome to (verified by string-extracting Wpf.Ui.dll); the
+                             earlier "ComboBoxPopupBackground" guess never resolved, which is
+                             why the dropdown stayed on the dark theme default. Surface3 here
+                             so this specific picker reads as one shade above the standard
+                             Surface2 popup convention used elsewhere — a cue that the picker
+                             is itself a "settings surface" rather than a generic chooser. -->
+                        <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="{DynamicResource Surface3Color}" />
+                        <SolidColorBrush x:Key="ComboBoxItemBackground" Color="{DynamicResource Surface3Color}" />
+                        <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="{DynamicResource AccentBackgroundDarkColor}" />
+                        <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="{DynamicResource AccentBackgroundDarkColor}" />
+                        <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="{DynamicResource AccentBackgroundDarkColor}" />
+                        <SolidColorBrush x:Key="ComboBoxItemForeground" Color="{DynamicResource AccentForegroundColor}" />
+                        <SolidColorBrush x:Key="ComboBoxItemForegroundPointerOver" Color="{DynamicResource AccentForegroundColor}" />
+                        <SolidColorBrush x:Key="ComboBoxItemForegroundSelected" Color="{DynamicResource AccentForegroundColor}" />
+                        <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedPointerOver" Color="{DynamicResource AccentForegroundColor}" />
+                    </ComboBox.Resources>
+                </ComboBox>
 
                 <!-- Foreground rows come first — these drive both the on-accent text colour and
                      the dim subtext used across captions / metadata; visually the most "global"
@@ -1062,7 +1108,7 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:CategoryRowViewModel}">
                                 <Border Background="{DynamicResource Surface1Brush}"
-                                        BorderBrush="#333" BorderThickness="1" CornerRadius="6"
+                                        BorderBrush="{DynamicResource AccentForegroundDarkBrush}" BorderThickness="1" CornerRadius="6"
                                         Padding="14,10" Margin="0,0,0,8">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -1384,7 +1430,7 @@
                      so changing the accent in Settings → Theme also retints the links). -->
                 <TextBlock HorizontalAlignment="Center" Margin="0,16,0,0" FontSize="12">
                     <Hyperlink NavigateUri="https://github.com/Ares9323/ShareQ" RequestNavigate="OnHyperlinkClicked"
-                               Foreground="{DynamicResource AccentBackgroundLightBrush}">
+                               Foreground="{DynamicResource AccentForegroundBrush}">
                         github.com/Ares9323/ShareQ
                     </Hyperlink>
                 </TextBlock>
@@ -1397,13 +1443,13 @@
                            Text="Inspired by" />
                 <TextBlock HorizontalAlignment="Center" FontSize="12">
                     <Hyperlink NavigateUri="https://github.com/ShareX/ShareX" RequestNavigate="OnHyperlinkClicked"
-                               Foreground="{DynamicResource AccentBackgroundLightBrush}">ShareX</Hyperlink>
+                               Foreground="{DynamicResource AccentForegroundBrush}">ShareX</Hyperlink>
                     <Run Text=" · " Foreground="#666" />
                     <Hyperlink NavigateUri="https://github.com/hluk/CopyQ" RequestNavigate="OnHyperlinkClicked"
-                               Foreground="{DynamicResource AccentBackgroundLightBrush}">CopyQ</Hyperlink>
+                               Foreground="{DynamicResource AccentForegroundBrush}">CopyQ</Hyperlink>
                     <Run Text=" · " Foreground="#666" />
                     <Hyperlink NavigateUri="https://maxlauncher.sourceforge.io/" RequestNavigate="OnHyperlinkClicked"
-                               Foreground="{DynamicResource AccentBackgroundLightBrush}">MaxLauncher</Hyperlink>
+                               Foreground="{DynamicResource AccentForegroundBrush}">MaxLauncher</Hyperlink>
                 </TextBlock>
 
                 <!-- Manual update check. Disabled when running outside a Velopack-managed install

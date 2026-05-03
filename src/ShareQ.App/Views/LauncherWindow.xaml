@@ -77,11 +77,11 @@
                     </Canvas>
                 </Viewbox>
                 <TextBlock Grid.Column="1" Text="ShareQ Launcher"
-                           Foreground="#FFF" FontWeight="SemiBold" FontSize="13"
+                           Foreground="{DynamicResource AccentForegroundBrush}" FontWeight="SemiBold" FontSize="13"
                            VerticalAlignment="Center" Margin="0,0,16,0" />
                 <TextBlock x:Name="DragModeBanner" Grid.Column="2"
                            Text="🎯 Drag-and-drop mode — drop files / folders / shortcuts onto cells to map them. Esc or click toggle to exit."
-                           Foreground="#F4B400" FontSize="11" VerticalAlignment="Center"
+                           Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" VerticalAlignment="Center"
                            Visibility="Collapsed" />
                 <!-- Drag toggle sits left of the search box now: search lives at the extreme
                      right (consistent placement with the popup's search) and the toggle
@@ -126,14 +126,14 @@
                                      badge + centred icon (same 40px size) + label underneath.
                                      Function-key glyphs (F1, F2…) get Bold to read more like
                                      keycap labels and stand out from the QWERTY corner badges. -->
-                                <TextBlock Text="{Binding DisplayKeyChar}" Foreground="#DDD"
+                                <TextBlock Text="{Binding DisplayKeyChar}" Foreground="{DynamicResource AccentForegroundBrush}"
                                            FontSize="12" FontWeight="Bold"
                                            HorizontalAlignment="Left" VerticalAlignment="Top"
                                            Panel.ZIndex="1" />
                                 <StackPanel VerticalAlignment="Center">
                                     <Image Source="{Binding Icon}" Width="40" Height="40"
                                            HorizontalAlignment="Center" />
-                                    <TextBlock Text="{Binding Label}" Foreground="#DDD"
+                                    <TextBlock Text="{Binding Label}" Foreground="{DynamicResource AccentForegroundBrush}"
                                                FontSize="11" TextAlignment="Center"
                                                TextWrapping="Wrap"
                                                Margin="0,4,0,0" />
@@ -165,10 +165,10 @@
                                 Visibility="{Binding HeaderVisibility}"
                                 ToolTip="Right-click to rename this tab — drop a file to switch tab without firing.">
                             <Grid Margin="6,4">
-                                <TextBlock Text="{Binding TabKey}" Foreground="#DDD"
+                                <TextBlock Text="{Binding TabKey}" Foreground="{DynamicResource AccentForegroundBrush}"
                                            FontSize="12" FontWeight="SemiBold"
                                            HorizontalAlignment="Left" VerticalAlignment="Top" />
-                                <TextBlock Text="{Binding Title}" Foreground="#FFF"
+                                <TextBlock Text="{Binding Title}" Foreground="{DynamicResource AccentForegroundBrush}"
                                            FontSize="13" FontWeight="Bold"
                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Grid>
@@ -219,14 +219,14 @@
                                      overflows on one line wraps onto a second/third without the
                                      icon shifting. Cells stay a fixed Height (set on the Border
                                      above), so longer labels just push the icon up slightly. -->
-                                <TextBlock Text="{Binding DisplayKeyChar}" Foreground="#DDD"
+                                <TextBlock Text="{Binding DisplayKeyChar}" Foreground="{DynamicResource AccentForegroundBrush}"
                                            FontSize="12" FontWeight="SemiBold"
                                            HorizontalAlignment="Left" VerticalAlignment="Top"
                                            Panel.ZIndex="1" />
                                 <StackPanel VerticalAlignment="Center">
                                     <Image Source="{Binding Icon}" Width="40" Height="40"
                                            HorizontalAlignment="Center" />
-                                    <TextBlock Text="{Binding Label}" Foreground="#DDD"
+                                    <TextBlock Text="{Binding Label}" Foreground="{DynamicResource AccentForegroundBrush}"
                                                FontSize="11" TextAlignment="Center"
                                                TextWrapping="Wrap"
                                                Margin="0,4,0,0" />
@@ -268,14 +268,14 @@
                                      overflows on one line wraps onto a second/third without the
                                      icon shifting. Cells stay a fixed Height (set on the Border
                                      above), so longer labels just push the icon up slightly. -->
-                                <TextBlock Text="{Binding DisplayKeyChar}" Foreground="#DDD"
+                                <TextBlock Text="{Binding DisplayKeyChar}" Foreground="{DynamicResource AccentForegroundBrush}"
                                            FontSize="12" FontWeight="SemiBold"
                                            HorizontalAlignment="Left" VerticalAlignment="Top"
                                            Panel.ZIndex="1" />
                                 <StackPanel VerticalAlignment="Center">
                                     <Image Source="{Binding Icon}" Width="40" Height="40"
                                            HorizontalAlignment="Center" />
-                                    <TextBlock Text="{Binding Label}" Foreground="#DDD"
+                                    <TextBlock Text="{Binding Label}" Foreground="{DynamicResource AccentForegroundBrush}"
                                                FontSize="11" TextAlignment="Center"
                                                TextWrapping="Wrap"
                                                Margin="0,4,0,0" />
@@ -317,14 +317,14 @@
                                      overflows on one line wraps onto a second/third without the
                                      icon shifting. Cells stay a fixed Height (set on the Border
                                      above), so longer labels just push the icon up slightly. -->
-                                <TextBlock Text="{Binding DisplayKeyChar}" Foreground="#DDD"
+                                <TextBlock Text="{Binding DisplayKeyChar}" Foreground="{DynamicResource AccentForegroundBrush}"
                                            FontSize="12" FontWeight="SemiBold"
                                            HorizontalAlignment="Left" VerticalAlignment="Top"
                                            Panel.ZIndex="1" />
                                 <StackPanel VerticalAlignment="Center">
                                     <Image Source="{Binding Icon}" Width="40" Height="40"
                                            HorizontalAlignment="Center" />
-                                    <TextBlock Text="{Binding Label}" Foreground="#DDD"
+                                    <TextBlock Text="{Binding Label}" Foreground="{DynamicResource AccentForegroundBrush}"
                                                FontSize="11" TextAlignment="Center"
                                                TextWrapping="Wrap"
                                                Margin="0,4,0,0" />
@@ -336,7 +336,7 @@
             </ItemsControl>
 
             <TextBlock Grid.Row="7" Margin="0,10,0,0" HorizontalAlignment="Center"
-                       Foreground="#666" FontSize="10"
+                       Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="10"
                        Text="F1-F10 fire global · 1-9,0 / arrows switch tab · QWERTY fires tab cell · Esc closes · right-click to edit" />
 
         </Grid>
