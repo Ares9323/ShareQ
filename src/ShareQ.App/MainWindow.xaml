@@ -157,12 +157,16 @@
 
         <!-- Sidebar -->
         <!-- CornerRadius on the bottom-left matches the outer Border's CornerRadius (8) minus
-             its BorderThickness (2) so the Surface1 fill curves with the window corner instead
-             of bleeding past it. WPF Border doesn't auto-clip child Backgrounds to the parent's
-             rounded shape — this is the standard workaround. -->
+             its BorderThickness (2) so the fill curves with the window corner instead of
+             bleeding past it. WPF Border doesn't auto-clip child Backgrounds to the parent's
+             rounded shape — this is the standard workaround.
+             Vertical gradient Surface1 (bottom) → Surface2 (top): the sidebar reads as a faint
+             column gradient that fades into the main content surface at the top, instead of a
+             flat panel. Colors are bound dynamically to the theme so the gradient retunes
+             whenever the user changes Surface1 / Surface2 in the Theme tab. -->
         <Border Grid.Row="1" Grid.Column="0" Padding="8,12"
-                Background="{DynamicResource Surface1Brush}"
                 CornerRadius="0,0,0,6"
+                Background="{DynamicResource SidebarGradientBrush}"
                 BorderBrush="{DynamicResource AccentForegroundDarkBrush}" BorderThickness="0,0,1,0">
             <Border.Resources>
                 <!-- Override the AccentButton* brush family inside this Border's resource scope
@@ -212,11 +216,6 @@
                            Appearance="{Binding IsCaptureSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Margin="0,0,0,4"
-                           Content="Theme"
-                           Command="{Binding ShowThemeCommand}"
-                           Appearance="{Binding IsThemeSelected, Converter={StaticResource BoolToAppearance}}" />
-                <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                           Margin="0,0,0,4"
                            Content="Categories"
                            Command="{Binding ShowCategoriesCommand}"
                            Appearance="{Binding IsCategoriesSelected, Converter={StaticResource BoolToAppearance}}" />
@@ -225,6 +224,11 @@
                            Content="Settings"
                            Command="{Binding ShowSettingsCommand}"
                            Appearance="{Binding IsSettingsSelected, Converter={StaticResource BoolToAppearance}}" />
+                <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                           Margin="0,0,0,4"
+                           Content="Theme"
+                           Command="{Binding ShowThemeCommand}"
+                           Appearance="{Binding IsThemeSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Margin="0,0,0,4"
                            Content="Debug"
@@ -1380,7 +1384,13 @@
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{Binding TimestampDisplay}" Foreground="{DynamicResource AccentForegroundDarkBrush}" Margin="0,0,8,0" />
+                                    <!-- Timestamp text uses a fixed gray so the debug log panel
+                                         keeps its "terminal" inverted look regardless of the
+                                         active theme. AccentForegroundDarkBrush is theme-bound
+                                         and on a light theme (e.g. BurnMyEyes) drops to near-
+                                         black, which is unreadable on the panel's hardcoded
+                                         #0F0F0F surface. -->
+                                    <TextBlock Grid.Column="0" Text="{Binding TimestampDisplay}" Foreground="#888" Margin="0,0,8,0" />
                                     <TextBlock Grid.Column="1" Text="{Binding LevelDisplay}" Margin="0,0,8,0"
                                                FontWeight="SemiBold"
                                                Foreground="{Binding LevelBrush}" />

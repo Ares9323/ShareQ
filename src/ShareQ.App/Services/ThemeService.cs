@@ -222,6 +222,25 @@ public sealed class ThemeService
         app.Resources["Surface2Brush"] = surface2Brush;
         app.Resources["Surface3Brush"] = surface3Brush;
 
+        // Vertical gradient Surface1 (bottom) → Surface2 (top) — built imperatively because
+        // DynamicResource on GradientStop.Color is broken in WPF: the parent LinearGradientBrush
+        // gets frozen as part of resource caching, snapping the dynamic refs to whatever they
+        // resolved to first (often only the first stop renders, the rest stay Transparent).
+        // Re-allocating the whole brush on every theme change avoids the problem entirely and
+        // costs nothing — Apply() runs only on Load / SetAsync / ResetAsync, not per-frame.
+        var sidebarGradient = new LinearGradientBrush
+        {
+            StartPoint = new System.Windows.Point(0, 1),
+            EndPoint = new System.Windows.Point(0, 0),
+            GradientStops =
+            {
+                new GradientStop(_surface1, 0.0),
+                new GradientStop(_surface2, 1.0),
+            },
+        };
+        sidebarGradient.Freeze();
+        app.Resources["SidebarGradientBrush"] = sidebarGradient;
+
         // Override WPF-UI v4's chrome brushes so the dark.baml defaults (#202020 window body,
         // #2D2D2D control fills) track our surface palette. WPF-UI's FluentWindow template
         // resolves Background via {DynamicResource WindowBackground}, NOT the FluentWindow's
