@@ -14,7 +14,7 @@
          visually melting into anything behind it that shares the dark background. The Border
          here paints our own 1px outline so the popup reads as a distinct window even when it
          lands over Settings (which uses the same Surface2 tone). -->
-    <Border BorderBrush="{DynamicResource AccentBackgroundLightBrush}" BorderThickness="1">
+    <Border BorderBrush="{DynamicResource AccentBackgroundDarkBrush}" BorderThickness="1">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />

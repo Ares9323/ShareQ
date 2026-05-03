@@ -29,6 +29,16 @@ public partial class MainWindow : FluentWindow
     // the persisted value with the default-selected item.
     private bool _suppressContextMenuWorkflowChange;
 
+    // Persistence keys for window placement. Loaded once in the Loaded handler, written on
+    // every move / resize via SizeChanged + LocationChanged. Stored as plain string columns in
+    // settings (not sensitive — the popup already does the same dance).
+    private const string MainWindowXKey = "mainwindow.x";
+    private const string MainWindowYKey = "mainwindow.y";
+    private const string MainWindowWidthKey = "mainwindow.width";
+    private const string MainWindowHeightKey = "mainwindow.height";
+    private const string MainWindowMaximizedKey = "mainwindow.maximized";
+    private bool _placementLoaded;
+
     public MainWindow(SettingsViewModel viewModel,
         ShareQ.App.Services.ScreenColorPickerService screenSampler,
         ShareQ.Editor.Persistence.ColorRecentsStore colorRecents,
@@ -77,6 +87,84 @@ public partial class MainWindow : FluentWindow
             try { DebugLogList.ScrollIntoView(last); }
             catch { /* virtualization race during heavy log bursts — drop a single tick */ }
         };
+
+        // Window placement persistence. Load saved size/position on first show; save on every
+        // resize / move. Same pattern the clipboard popup uses for its own bounds.
+        Loaded += async (_, _) => await LoadWindowPlacementAsync();
+        SizeChanged += (_, _) => _ = SaveWindowPlacementAsync();
+        LocationChanged += (_, _) => _ = SaveWindowPlacementAsync();
+        StateChanged += (_, _) => _ = SaveWindowPlacementAsync();
+    }
+
+    private async Task LoadWindowPlacementAsync()
+    {
+        try
+        {
+            var x = await _settingsStore.GetAsync(MainWindowXKey, System.Threading.CancellationToken.None);
+            var y = await _settingsStore.GetAsync(MainWindowYKey, System.Threading.CancellationToken.None);
+            var w = await _settingsStore.GetAsync(MainWindowWidthKey, System.Threading.CancellationToken.None);
+            var h = await _settingsStore.GetAsync(MainWindowHeightKey, System.Threading.CancellationToken.None);
+            var max = await _settingsStore.GetAsync(MainWindowMaximizedKey, System.Threading.CancellationToken.None);
+
+            // Order matters: apply size + position BEFORE flipping to maximised — otherwise
+            // restoring from maximised gives the user a 900×600 default snap instead of their
+            // pre-maximise dimensions.
+            if (double.TryParse(w, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var width)
+                && double.TryParse(h, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var height)
+                && width >= MinWidth && height >= MinHeight)
+            {
+                Width = width;
+                Height = height;
+            }
+            if (double.TryParse(x, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var left)
+                && double.TryParse(y, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var top))
+            {
+                // Sanity check: reject coordinates that would land us off any monitor (e.g. user
+                // unplugged a second screen between sessions). A future startup with the screen
+                // back will pick up the stored values fine.
+                var virtualLeft = SystemParameters.VirtualScreenLeft;
+                var virtualTop = SystemParameters.VirtualScreenTop;
+                var virtualRight = virtualLeft + SystemParameters.VirtualScreenWidth;
+                var virtualBottom = virtualTop + SystemParameters.VirtualScreenHeight;
+                if (left + 50 < virtualRight && top + 50 < virtualBottom
+                    && left + Width - 50 > virtualLeft && top + Height - 50 > virtualTop)
+                {
+                    WindowStartupLocation = WindowStartupLocation.Manual;
+                    Left = left;
+                    Top = top;
+                }
+            }
+            if (string.Equals(max, "1", StringComparison.Ordinal))
+                WindowState = WindowState.Maximized;
+        }
+        catch { /* placement persistence is cosmetic — never fail startup over a missing row */ }
+        finally
+        {
+            _placementLoaded = true;
+        }
+    }
+
+    private async Task SaveWindowPlacementAsync()
+    {
+        // Skip writes during the initial load — Width/Height/Left/Top all fire SizeChanged /
+        // LocationChanged as we apply the persisted values, which would echo them back to the
+        // store as the freshly-applied values (harmless but noisy).
+        if (!_placementLoaded) return;
+        // Don't capture the maximised geometry as the "preferred" size — RestoreBounds holds
+        // what the user actually set before maximising, which is what we want to restore on
+        // next launch.
+        var bounds = WindowState == WindowState.Maximized ? RestoreBounds : new Rect(Left, Top, Width, Height);
+        if (bounds.Width < MinWidth || bounds.Height < MinHeight) return;
+        try
+        {
+            var ct = System.Threading.CancellationToken.None;
+            await _settingsStore.SetAsync(MainWindowXKey, bounds.X.ToString(System.Globalization.CultureInfo.InvariantCulture), false, ct);
+            await _settingsStore.SetAsync(MainWindowYKey, bounds.Y.ToString(System.Globalization.CultureInfo.InvariantCulture), false, ct);
+            await _settingsStore.SetAsync(MainWindowWidthKey, bounds.Width.ToString(System.Globalization.CultureInfo.InvariantCulture), false, ct);
+            await _settingsStore.SetAsync(MainWindowHeightKey, bounds.Height.ToString(System.Globalization.CultureInfo.InvariantCulture), false, ct);
+            await _settingsStore.SetAsync(MainWindowMaximizedKey, WindowState == WindowState.Maximized ? "1" : "0", false, ct);
+        }
+        catch { /* same — failure is not user-visible */ }
     }
 
     /// <summary>Builds the "+ Add step" categorized context menu on demand. Doing this in
@@ -313,7 +401,7 @@ public partial class MainWindow : FluentWindow
     /// code-behind (rather than the VM) so we don't drag <see cref="ColorPickerWindow"/> — a UI
     /// type — into the view-model layer. The hex assignment fires the existing TryApply path
     /// which propagates colors live across the app.</summary>
-    private enum AccentChannel { Background, Foreground, Dark, ForegroundDark, Surface1, Surface2, Surface3 }
+    private enum AccentChannel { Background, Foreground, Dark, ForegroundDark, Delete, Surface1, Surface2, Surface3 }
 
     private void OnAccentBgSwatchClick(object sender, MouseButtonEventArgs e)
         => PickAccentColor(AccentChannel.Background);
@@ -326,6 +414,9 @@ public partial class MainWindow : FluentWindow
 
     private void OnAccentForegroundDarkSwatchClick(object sender, MouseButtonEventArgs e)
         => PickAccentColor(AccentChannel.ForegroundDark);
+
+    private void OnAccentDeleteSwatchClick(object sender, MouseButtonEventArgs e)
+        => PickAccentColor(AccentChannel.Delete);
 
     private void OnSurface1SwatchClick(object sender, MouseButtonEventArgs e)
         => PickAccentColor(AccentChannel.Surface1);
@@ -345,6 +436,7 @@ public partial class MainWindow : FluentWindow
             AccentChannel.Foreground     => vm.Theme.AccentForegroundHex,
             AccentChannel.Dark           => vm.Theme.AccentBackgroundDarkHex,
             AccentChannel.ForegroundDark => vm.Theme.AccentForegroundDarkHex,
+            AccentChannel.Delete         => vm.Theme.AccentDangerHex,
             AccentChannel.Surface1       => vm.Theme.Surface1Hex,
             AccentChannel.Surface2       => vm.Theme.Surface2Hex,
             AccentChannel.Surface3       => vm.Theme.Surface3Hex,
@@ -393,6 +485,7 @@ public partial class MainWindow : FluentWindow
             case AccentChannel.Foreground:     vm.Theme.AccentForegroundHex = hex2; break;
             case AccentChannel.Dark:           vm.Theme.AccentBackgroundDarkHex = hex2; break;
             case AccentChannel.ForegroundDark: vm.Theme.AccentForegroundDarkHex = hex2; break;
+            case AccentChannel.Delete:         vm.Theme.AccentDangerHex = hex2; break;
             case AccentChannel.Surface1:       vm.Theme.Surface1Hex = hex2; break;
             case AccentChannel.Surface2:       vm.Theme.Surface2Hex = hex2; break;
             case AccentChannel.Surface3:       vm.Theme.Surface3Hex = hex2; break;
@@ -408,6 +501,84 @@ public partial class MainWindow : FluentWindow
         // looked. Suppress the Click handler during this initial sync via the IsLoaded check.
         if (sender is System.Windows.Controls.CheckBox cb)
             cb.IsChecked = ShareQ.App.Services.SxcuFileAssociation.IsRegistered();
+    }
+
+    /// <summary>"Pick…" button on the Add-category row → open the IconPickerDialog and write
+    /// back into <see cref="CategoriesViewModel.NewCategoryIcon"/>. Clear is treated as "remove
+    /// icon" (empty string).</summary>
+    private void OnPickCategoryIconClicked(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsViewModel vm) return;
+        var dialog = new ShareQ.App.Views.IconPickerDialog(vm.Categories.NewCategoryIcon) { Owner = this };
+        if (dialog.ShowDialog() == true)
+            vm.Categories.NewCategoryIcon = dialog.PickedGlyph;
+    }
+
+    /// <summary>"Pick…" button on a category row → open the dialog and write back into the row
+    /// VM's Icon. The row VM is passed via Button.Tag (set in the DataTemplate). The Icon setter
+    /// itself triggers SaveAsync via the VM's OnIconChanged partial, so no extra plumbing here.</summary>
+    private void OnPickRowIconClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button btn) return;
+        if (btn.Tag is not ShareQ.App.ViewModels.CategoryRowViewModel row) return;
+        var dialog = new ShareQ.App.Views.IconPickerDialog(row.Icon) { Owner = this };
+        if (dialog.ShowDialog() == true)
+            row.Icon = dialog.PickedGlyph;
+    }
+
+    /// <summary>Autosave hook for category-row text / number fields. Fires on focus loss (after
+    /// the binding has already pushed the new value to the VM via UpdateSourceTrigger=LostFocus)
+    /// and runs the row's Save command. Default-row fields are disabled so this only ever fires
+    /// for user-modifiable rows.</summary>
+    private void OnCategoryFieldCommitted(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement el) return;
+        if (el.DataContext is not ShareQ.App.ViewModels.CategoryRowViewModel row) return;
+        if (!row.CanModify) return;
+        _ = row.SaveAsync();
+    }
+
+    /// <summary>Enter inside the Name TextBox: push the binding + run Save without waiting for
+    /// LostFocus. UX expectation is "I typed the new name, hit Enter, it's saved" — without
+    /// this the user has to tab out for the LostFocus path to fire.</summary>
+    private void OnCategoryFieldKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.Enter) return;
+        if (sender is not Wpf.Ui.Controls.TextBox tb) return;
+        var binding = tb.GetBindingExpression(Wpf.Ui.Controls.TextBox.TextProperty);
+        binding?.UpdateSource();
+        OnCategoryFieldCommitted(sender, e);
+        e.Handled = true;
+    }
+
+    /// <summary>Handle clicks on the +/- stepper buttons in the category rows. The Tag carries
+    /// the field name + sign (e.g. "MaxItems+", "AutoCleanupAfter-") so a single handler routes
+    /// for both columns. After mutating the VM property the row autosaves through the standard
+    /// Save command — same path field-commit takes, so behaviour stays identical.</summary>
+    private void OnCategoryStepperClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button btn) return;
+        if (btn.DataContext is not ShareQ.App.ViewModels.CategoryRowViewModel row) return;
+        if (!row.CanConfigure) return;
+        if (btn.Tag is not string tag) return;
+
+        // Tag format: "<PropertyName><+|->". Split on the trailing sign character.
+        var sign = tag[^1];
+        var prop = tag[..^1];
+        var step = sign == '+' ? +1 : -1;
+
+        switch (prop)
+        {
+            case "MaxItems":
+                row.MaxItems = Math.Clamp(row.MaxItems + step, 0, 100000);
+                break;
+            case "AutoCleanupAfter":
+                row.AutoCleanupAfter = Math.Clamp(row.AutoCleanupAfter + step, 0, 525600); // 525600 min = 365 days
+                break;
+            default:
+                return;
+        }
+        _ = row.SaveAsync();
     }
 
     private void OnSxcuAssociationToggled(object sender, RoutedEventArgs e)

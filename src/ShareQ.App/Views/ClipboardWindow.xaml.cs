@@ -38,12 +38,15 @@ public partial class ClipboardWindow : Window
 
     public PopupWindowViewModel ViewModel { get; }
 
-    public ClipboardWindow(PopupWindowViewModel viewModel, ISettingsStore settings)
+    private readonly ShareQ.Storage.Rotation.CategoryRotationService? _categoryRotation;
+
+    public ClipboardWindow(PopupWindowViewModel viewModel, ISettingsStore settings, ShareQ.Storage.Rotation.CategoryRotationService? categoryRotation = null)
     {
         InitializeComponent();
         ViewModel = viewModel;
         DataContext = viewModel;
         _settings = settings;
+        _categoryRotation = categoryRotation;
         _current = this;
 
         // Tunneling so Ctrl+digits / arrows / Enter reach this handler before SearchBox
@@ -68,6 +71,15 @@ public partial class ClipboardWindow : Window
         {
             if (e.NewValue is not true) return;
             _isClosing = false;
+            // On-open immediate sweep: enforce per-category MaxItems + AutoCleanupAfter before
+            // we paint the list, so a "1-minute cleanup" item that's already expired doesn't
+            // flash onscreen for the gap between Now and the next 30s scheduler tick. Best-
+            // effort — failures fall through to whatever the scheduler's next tick produces.
+            if (_categoryRotation is not null)
+            {
+                try { await _categoryRotation.RunAsync(CancellationToken.None).ConfigureAwait(true); }
+                catch { /* sweep is fire-and-forget — Refresh below shows whatever survived */ }
+            }
             await ViewModel.RefreshAsync(CancellationToken.None);
             Focus();
         };

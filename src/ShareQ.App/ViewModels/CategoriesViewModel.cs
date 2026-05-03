@@ -29,8 +29,14 @@ public sealed partial class CategoriesViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _newCategoryName = string.Empty;
 
+    /// <summary>FontAwesome 'star' (). Used as the default icon when the user adds a
+    /// category without explicitly opening the picker — guarantees every row in the list has a
+    /// glyph instead of a blank cell, so the popup tab strip never shows a nameless box. The
+    /// user can still change it via the Pick button before clicking Add.</summary>
+    public const string DefaultIconGlyph = "";
+
     [ObservableProperty]
-    private string _newCategoryIcon = string.Empty;
+    private string _newCategoryIcon = DefaultIconGlyph;
 
     private void OnStoreChanged(object? sender, EventArgs e)
         => Application.Current?.Dispatcher.InvokeAsync(() => _ = ReloadAsync());
@@ -59,7 +65,7 @@ public sealed partial class CategoriesViewModel : ObservableObject, IDisposable
         var icon = string.IsNullOrWhiteSpace(NewCategoryIcon) ? null : NewCategoryIcon.Trim();
         await _store.AddAsync(new Category(name, icon, sortOrder), CancellationToken.None).ConfigureAwait(true);
         NewCategoryName = string.Empty;
-        NewCategoryIcon = string.Empty;
+        NewCategoryIcon = DefaultIconGlyph;
     }
 
     public Task RenameAsync(string oldName, string newName)
@@ -85,11 +91,17 @@ public sealed partial class CategoryRowViewModel : ObservableObject
         _name = category.Name;
         _icon = category.Icon ?? string.Empty;
         _maxItems = category.MaxItems;
-        _autoCleanupDays = category.AutoCleanupDays;
+        _autoCleanupAfter = category.AutoCleanupAfter;
     }
 
     public bool IsDefault { get; }
+    /// <summary>Default ('Clipboard') can't be renamed or deleted — would orphan existing items
+    /// and leave the system without a fallback bucket. Used by Name TextBox + Delete button.</summary>
     public bool CanModify => !IsDefault;
+    /// <summary>Retention caps (MaxItems / AutoCleanupAfter) and the icon are valid even on the
+    /// default row — there's no reason the user shouldn't tune how aggressively their main
+    /// bucket trims itself. Used by the icon picker, NumberBoxes and the autosave hooks.</summary>
+    public bool CanConfigure => true;
 
     [ObservableProperty]
     private string _name;
@@ -101,19 +113,35 @@ public sealed partial class CategoryRowViewModel : ObservableObject
     private int _maxItems;
 
     [ObservableProperty]
-    private int _autoCleanupDays;
+    private int _autoCleanupAfter;
 
-    [RelayCommand(CanExecute = nameof(CanModify))]
-    private async Task SaveAsync()
+    /// <summary>Auto-save trigger for icon changes — the picker dialog returns synchronously, so
+    /// the user's expectation is "I picked it, it's saved". Re-uses the existing SaveAsync
+    /// pipeline (with rename support) so behaviour stays identical to the manual Save button.
+    /// Skipped on the default Clipboard row since it can't be modified.</summary>
+    partial void OnIconChanged(string value)
     {
-        // Two-step when renaming: rename first (re-routes items at the same time), then
-        // update icon/caps separately since RenameAsync only touches the name.
-        if (!string.Equals(Name, _original.Name, StringComparison.Ordinal))
+        if (!CanConfigure) return;
+        _ = SaveAsync();
+    }
+
+    /// <summary>Commit the row to storage. Public so the XAML LostFocus / Enter handlers can
+    /// trigger a save without waiting for the explicit Save button — the bound TextBox uses
+    /// UpdateSourceTrigger=LostFocus so by the time we get called the property has already
+    /// been pushed back from the editor. Two-step when renaming: rename first (re-routes
+    /// items at the same time), then update icon/caps separately since RenameAsync only
+    /// touches the name.</summary>
+    [RelayCommand(CanExecute = nameof(CanConfigure))]
+    public async Task SaveAsync()
+    {
+        // Rename only when allowed (custom rows). Default rows skip this branch entirely so
+        // the row keeps its 'Clipboard' identity even if the user somehow tampered with Name.
+        if (CanModify && !string.Equals(Name, _original.Name, StringComparison.Ordinal))
         {
             await _owner.RenameAsync(_original.Name, Name).ConfigureAwait(true);
         }
         var updated = new Category(Name, string.IsNullOrWhiteSpace(Icon) ? null : Icon.Trim(),
-            _original.SortOrder, MaxItems, AutoCleanupDays);
+            _original.SortOrder, MaxItems, AutoCleanupAfter);
         await _owner.UpdateAsync(updated).ConfigureAwait(true);
     }
 

@@ -13,8 +13,26 @@
         Topmost="True"
         ShowInTaskbar="False"
         ResizeMode="CanResize">
+    <Window.Resources>
+        <!-- Same Primary-button override as the Settings sidebar: rest = AccentBackgroundDark
+             (deeper green/blue), hover/pressed flip to the brighter AccentBackground for
+             visible feedback. Border colour matches the fill so no light halo around the
+             primary buttons. Scoped to this Window so other Primary buttons elsewhere stay
+             on the global accent. Covers the selected category tab, the toolbar copy/edit/pin
+             buttons, the Clear all button, and any future Primary button added to the popup. -->
+        <SolidColorBrush x:Key="AccentButtonBackground"
+                         Color="{DynamicResource AccentBackgroundDarkColor}" />
+        <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver"
+                         Color="{DynamicResource AccentBackgroundColor}" />
+        <SolidColorBrush x:Key="AccentButtonBackgroundPressed"
+                         Color="{DynamicResource AccentBackgroundColor}" />
+        <SolidColorBrush x:Key="AccentControlElevationBorderBrush"
+                         Color="{DynamicResource AccentBackgroundDarkColor}" />
+        <SolidColorBrush x:Key="AccentButtonBorderBrushPressed"
+                         Color="{DynamicResource AccentBackgroundColor}" />
+    </Window.Resources>
     <Border Background="{DynamicResource Surface2Brush}" CornerRadius="8"
-            BorderBrush="{DynamicResource AccentBackgroundLightBrush}" BorderThickness="1">
+            BorderBrush="{DynamicResource AccentBackgroundDarkBrush}" BorderThickness="1">
         <Grid>
             <Grid Margin="14">
                 <Grid.RowDefinitions>
@@ -54,6 +72,7 @@
                                VerticalAlignment="Center" />
                     <ui:Button Grid.Column="3"
                                Content="Clear all"
+                               Appearance="Danger"
                                Margin="0,0,8,0"
                                Cursor="Arrow"
                                Command="{Binding ClearAllCommand}"
@@ -79,11 +98,23 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:CategoryTab}">
-                                <ui:Button Content="{Binding DisplayName}"
-                                           Command="{Binding DataContext.SelectCategoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                <!-- Icon + name on the same row. Icon is empty for the
+                                     synthetic "All" tab and for categories the user hasn't
+                                     given an emoji to; the StackPanel collapses spacing in
+                                     that case (no margin around an empty TextBlock). -->
+                                <ui:Button Command="{Binding DataContext.SelectCategoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                            CommandParameter="{Binding Name}"
                                            Appearance="{Binding IsActive, Converter={StaticResource BoolToAppearance}}"
-                                           Margin="0,0,4,0" />
+                                           Margin="0,0,4,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Icon}"
+                                                   FontFamily="{DynamicResource IconFont}"
+                                                   Margin="0,0,6,0"
+                                                   VerticalAlignment="Center"
+                                                   Visibility="{Binding Icon, Converter={StaticResource NonEmptyToVisibility}}" />
+                                        <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </ui:Button>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

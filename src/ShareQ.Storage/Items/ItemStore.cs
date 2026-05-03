@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using ShareQ.Core.Domain;
 using ShareQ.Storage.Database;
+using ShareQ.Storage.Rotation;
 
 namespace ShareQ.Storage.Items;
 
@@ -8,11 +9,13 @@ public sealed class ItemStore : IItemStore
 {
     private readonly IShareQDatabase _database;
     private readonly ItemSerializer _serializer;
+    private readonly CategoryRotationService? _categoryRotation;
 
-    public ItemStore(IShareQDatabase database, ItemSerializer serializer)
+    public ItemStore(IShareQDatabase database, ItemSerializer serializer, CategoryRotationService? categoryRotation = null)
     {
         _database = database;
         _serializer = serializer;
+        _categoryRotation = categoryRotation;
     }
 
     public async Task<long> AddAsync(NewItem item, CancellationToken cancellationToken)
@@ -65,11 +68,48 @@ public sealed class ItemStore : IItemStore
         cmd.Parameters.AddWithValue("$category", string.IsNullOrEmpty(item.Category) ? "Clipboard" : item.Category);
 
         var newId = (long)(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false))!;
+
+        // Per-category MaxItems enforcement happens HERE (synchronously after the insert) so
+        // a "MaxItems = 1" category really only ever shows the single newest item — waiting
+        // for the periodic timer would let an item sit visible for up to 30s before being
+        // trimmed, which feels like a bug to the user. The cap is read from the categories
+        // table inside the rotation service; we just kick it. No-op when the category has no
+        // cap or when the rotation service isn't wired (legacy / test cases).
+        if (_categoryRotation is not null)
+        {
+            try
+            {
+                var category = string.IsNullOrEmpty(item.Category) ? "Clipboard" : item.Category;
+                var maxItems = await ReadMaxItemsAsync(conn, category, cancellationToken).ConfigureAwait(false);
+                if (maxItems > 0)
+                    await _categoryRotation.EnforceMaxItemsForAsync(category, maxItems, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Rotation is best-effort — a transient SQLite hiccup mustn't fail the add.
+                // The next periodic sweep will catch up.
+            }
+        }
+
         ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.Added, newId));
         return newId;
     }
 
+    private static async Task<int> ReadMaxItemsAsync(SqliteConnection conn, string category, CancellationToken ct)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT max_items FROM categories WHERE name = $name LIMIT 1;";
+        cmd.Parameters.AddWithValue("$name", category);
+        var v = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        return v is null or DBNull ? 0 : Convert.ToInt32(v, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
     public event EventHandler<ItemsChangedEventArgs>? ItemsChanged;
+
+    /// <summary>External hook to broadcast a refresh — used by the periodic
+    /// CategoryRotationScheduler when its sweep soft-deletes rows so any open popup re-queries
+    /// without having to subscribe to a separate event source.</summary>
+    public void RaiseItemsChanged(ItemsChangedEventArgs args) => ItemsChanged?.Invoke(this, args);
 
     public async Task<ItemRecord?> GetByIdAsync(long id, CancellationToken cancellationToken)
     {

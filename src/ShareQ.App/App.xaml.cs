@@ -227,6 +227,11 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, CopyColorAsDecimalTask>();
                 services.AddSingleton<IPipelineTask, CopyColorAsLinearTask>();
                 services.AddSingleton<IPipelineTask, CopyColorAsBgraTask>();
+                // Periodic per-category retention sweep (30s tick) — see CategoryRotationScheduler.
+                // The MaxItems cap is enforced inline on add inside ItemStore; this scheduler is
+                // the time-based safety net for AutoCleanupAfter (minutes).
+                services.AddHostedService<CategoryRotationScheduler>();
+
                 services.AddSingleton<IPipelineTask, CaptureRegionTask>();
                 services.AddSingleton<IPipelineTask, CaptureActiveWindowTask>();
                 services.AddSingleton<IPipelineTask, CaptureActiveMonitorTask>();

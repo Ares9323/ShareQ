@@ -40,6 +40,16 @@ public sealed class NonEmptyToVisibilityConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => Binding.DoNothing;
 }
 
+/// <summary>String null OR empty → Visible, anything with content → Collapsed. Used for the
+/// "empty state" placeholder shown inside an input when the bound text is missing — paired
+/// with NonEmptyToVisibility on the live content TextBlock so exactly one of the two is shown.</summary>
+public sealed class NullOrEmptyToVisibilityConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => value is null || (value is string s && s.Length == 0) ? Visibility.Visible : Visibility.Collapsed;
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => Binding.DoNothing;
+}
+
 /// <summary>True → 0.4 (dimmed), false → 1.0 (full). Used to fade the source row while it's being
 /// dragged so the user sees what they picked up.</summary>
 public sealed class BoolToOpacityConverter : IValueConverter

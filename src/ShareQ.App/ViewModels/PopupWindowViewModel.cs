@@ -51,7 +51,7 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
             MovableCategories.Add(tab);
         }
         // No synthetic "All" any more — default to the first real category (always
-        // "Clipboard" on a fresh DB thanks to Migration003Categories) when the user
+        // "Clipboard" on a fresh DB thanks to Migration001InitialSchema) when the user
         // hasn't picked one yet, or when the previously-active category was deleted.
         if (Categories.Count > 0 && (ActiveCategory is null || !Categories.Any(t => t.Name == ActiveCategory)))
         {

@@ -15,7 +15,7 @@ public sealed class SqliteCategoryStore : ICategoryStore
     {
         var conn = _database.GetOpenConnection();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT name, icon, sort_order, max_items, auto_cleanup_days FROM categories ORDER BY sort_order, name;";
+        cmd.CommandText = "SELECT name, icon, sort_order, max_items, auto_cleanup_after FROM categories ORDER BY sort_order, name;";
         var results = new List<Category>();
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -30,7 +30,7 @@ public sealed class SqliteCategoryStore : ICategoryStore
         ArgumentException.ThrowIfNullOrEmpty(name);
         var conn = _database.GetOpenConnection();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT name, icon, sort_order, max_items, auto_cleanup_days FROM categories WHERE name = $name;";
+        cmd.CommandText = "SELECT name, icon, sort_order, max_items, auto_cleanup_after FROM categories WHERE name = $name;";
         cmd.Parameters.AddWithValue("$name", name);
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) return null;
@@ -43,12 +43,12 @@ public sealed class SqliteCategoryStore : ICategoryStore
         ArgumentException.ThrowIfNullOrWhiteSpace(category.Name);
         var conn = _database.GetOpenConnection();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "INSERT INTO categories (name, icon, sort_order, max_items, auto_cleanup_days) VALUES ($name, $icon, $order, $max, $cleanup);";
+        cmd.CommandText = "INSERT INTO categories (name, icon, sort_order, max_items, auto_cleanup_after) VALUES ($name, $icon, $order, $max, $cleanup);";
         cmd.Parameters.AddWithValue("$name", category.Name.Trim());
         cmd.Parameters.AddWithValue("$icon", (object?)category.Icon ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$order", category.SortOrder);
         cmd.Parameters.AddWithValue("$max", category.MaxItems);
-        cmd.Parameters.AddWithValue("$cleanup", category.AutoCleanupDays);
+        cmd.Parameters.AddWithValue("$cleanup", category.AutoCleanupAfter);
         await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -58,12 +58,12 @@ public sealed class SqliteCategoryStore : ICategoryStore
         ArgumentNullException.ThrowIfNull(category);
         var conn = _database.GetOpenConnection();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "UPDATE categories SET icon = $icon, sort_order = $order, max_items = $max, auto_cleanup_days = $cleanup WHERE name = $name;";
+        cmd.CommandText = "UPDATE categories SET icon = $icon, sort_order = $order, max_items = $max, auto_cleanup_after = $cleanup WHERE name = $name;";
         cmd.Parameters.AddWithValue("$name", category.Name);
         cmd.Parameters.AddWithValue("$icon", (object?)category.Icon ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$order", category.SortOrder);
         cmd.Parameters.AddWithValue("$max", category.MaxItems);
-        cmd.Parameters.AddWithValue("$cleanup", category.AutoCleanupDays);
+        cmd.Parameters.AddWithValue("$cleanup", category.AutoCleanupAfter);
         await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -153,5 +153,5 @@ public sealed class SqliteCategoryStore : ICategoryStore
         Icon: reader.IsDBNull(1) ? null : reader.GetString(1),
         SortOrder: reader.GetInt32(2),
         MaxItems: reader.GetInt32(3),
-        AutoCleanupDays: reader.GetInt32(4));
+        AutoCleanupAfter: reader.GetInt32(4));
 }

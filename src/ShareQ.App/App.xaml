@@ -15,11 +15,18 @@
             <cv:NotNullToVisibilityConverter x:Key="NotNullToVisibility" />
             <cv:NullToVisibilityConverter x:Key="NullToVisibility" />
             <cv:NonEmptyToVisibilityConverter x:Key="NonEmptyToVisibility" />
+            <cv:NullOrEmptyToVisibilityConverter x:Key="NullOrEmptyToVisibility" />
             <cv:BoolToOpacityConverter x:Key="BoolToOpacity" />
             <cv:InverseBoolConverter x:Key="InverseBool" />
             <cv:ZeroToVisibilityConverter x:Key="ZeroToVisibility" />
             <cv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
             <cv:BytesToImageConverter x:Key="BytesToImage" />
+
+            <!-- FontAwesome Free Solid embedded via the standard WPF font-resource syntax.
+                 Path before "#" is the folder relative to the assembly root; string after "#"
+                 is the font's INTERNAL Family Name (verified via PrivateFontCollection), not
+                 the filename. Used by category icons and the icon-picker dialog. -->
+            <FontFamily x:Key="IconFont">/Assets/Fonts/#Font Awesome 7 Free Solid</FontFamily>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

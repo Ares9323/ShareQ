@@ -308,8 +308,9 @@ public static class DefaultPipelineProfiles
                 new PipelineStep(ColorPickerTaskId, Id: "color-picker"),
                 new PipelineStep(CopyColorAsHexTaskId, Id: "copy-as-hex")
             ],
-            // No default hotkey — picker is mostly invoked via tray / workflow UI; the user can
-            // bind one in Settings if they want a one-shot dialog launch.
+            // Ctrl+Shift+\ — pairs with the existing Ctrl+\ Color sampler so the dialog launcher
+            // and the screen sampler share the same root key. VK_OEM_5 (0xDC) = the \ / | key.
+            Hotkey: new HotkeyBinding(Ctrl | Shift, 0xDC),
             IsBuiltIn: true),
 
         new PipelineProfile(

@@ -26,6 +26,7 @@ public sealed class ThemeService
     private const string FgKey = "theme.accent_fg";
     private const string DarkKey = "theme.accent_dark";
     private const string FgDarkKey = "theme.accent_fg_dark";
+    private const string DeleteKey = "theme.accent_delete";
     private const string Surface1Key = "theme.surface_1";
     private const string Surface2Key = "theme.surface_2";
     private const string Surface3Key = "theme.surface_3";
@@ -41,6 +42,11 @@ public sealed class ThemeService
     /// default green accent (matches the SVG logo's brand colour) so the launcher's
     /// "active vs ambient" tabs read as the same hue family out of the box.</summary>
     public static readonly Color DefaultAccentDark = (Color)ColorConverter.ConvertFromString("#314D3B")!;
+    /// <summary>Default accent for destructive actions — Delete buttons, the trash icon in the
+    /// clipboard toolbar, and any other "this is irreversible" affordance. Picked to clash
+    /// readably with both the green and the blue presets without being a screaming pure red.
+    /// User-tunable from Settings → Theme so they can dial it up/down for their preset.</summary>
+    public static readonly Color DefaultAccentDelete = (Color)ColorConverter.ConvertFromString("#8F2720")!;
     /// <summary>Three neutral surface colours, ordered darkest → lightest. Surface1 is for the
     /// deepest backgrounds (input backgrounds, list rows), Surface2 for the standard window
     /// chrome (popup body, launcher card), Surface3 for elevated panels (drag handles, group
@@ -56,6 +62,7 @@ public sealed class ThemeService
     private Color _fg = DefaultForeground;
     private Color _dark = DefaultAccentDark;
     private Color _fgDark = DefaultAccentForegroundDark;
+    private Color _delete = DefaultAccentDelete;
     private Color _surface1 = DefaultSurface1;
     private Color _surface2 = DefaultSurface2;
     private Color _surface3 = DefaultSurface3;
@@ -66,6 +73,7 @@ public sealed class ThemeService
     public Color AccentForeground => _fg;
     public Color AccentBackgroundDark => _dark;
     public Color AccentForegroundDark => _fgDark;
+    public Color AccentDelete => _delete;
     public Color Surface1 => _surface1;
     public Color Surface2 => _surface2;
     public Color Surface3 => _surface3;
@@ -82,6 +90,7 @@ public sealed class ThemeService
         var fgRaw     = await _settings.GetAsync(FgKey, ct).ConfigureAwait(false);
         var darkRaw   = await _settings.GetAsync(DarkKey, ct).ConfigureAwait(false);
         var fgDarkRaw = await _settings.GetAsync(FgDarkKey, ct).ConfigureAwait(false);
+        var deleteRaw = await _settings.GetAsync(DeleteKey, ct).ConfigureAwait(false);
         var s1Raw     = await _settings.GetAsync(Surface1Key, ct).ConfigureAwait(false);
         var s2Raw     = await _settings.GetAsync(Surface2Key, ct).ConfigureAwait(false);
         var s3Raw     = await _settings.GetAsync(Surface3Key, ct).ConfigureAwait(false);
@@ -89,6 +98,7 @@ public sealed class ThemeService
         _fg       = TryParseHex(fgRaw)     ?? DefaultForeground;
         _dark     = TryParseHex(darkRaw)   ?? DefaultAccentDark;
         _fgDark   = TryParseHex(fgDarkRaw) ?? DefaultAccentForegroundDark;
+        _delete   = TryParseHex(deleteRaw) ?? DefaultAccentDelete;
         _surface1 = TryParseHex(s1Raw)     ?? DefaultSurface1;
         _surface2 = TryParseHex(s2Raw)     ?? DefaultSurface2;
         _surface3 = TryParseHex(s3Raw)     ?? DefaultSurface3;
@@ -97,12 +107,13 @@ public sealed class ThemeService
     }
 
     public async Task SetAsync(Color background, Color foreground, Color dark, Color foregroundDark,
-        Color surface1, Color surface2, Color surface3, CancellationToken ct = default)
+        Color delete, Color surface1, Color surface2, Color surface3, CancellationToken ct = default)
     {
         _bg = background;
         _fg = foreground;
         _dark = dark;
         _fgDark = foregroundDark;
+        _delete = delete;
         _surface1 = surface1;
         _surface2 = surface2;
         _surface3 = surface3;
@@ -111,6 +122,7 @@ public sealed class ThemeService
         await _settings.SetAsync(FgKey,       ToHex(foreground),     sensitive: false, ct).ConfigureAwait(false);
         await _settings.SetAsync(DarkKey,     ToHex(dark),           sensitive: false, ct).ConfigureAwait(false);
         await _settings.SetAsync(FgDarkKey,   ToHex(foregroundDark), sensitive: false, ct).ConfigureAwait(false);
+        await _settings.SetAsync(DeleteKey,   ToHex(delete),         sensitive: false, ct).ConfigureAwait(false);
         await _settings.SetAsync(Surface1Key, ToHex(surface1),       sensitive: false, ct).ConfigureAwait(false);
         await _settings.SetAsync(Surface2Key, ToHex(surface2),       sensitive: false, ct).ConfigureAwait(false);
         await _settings.SetAsync(Surface3Key, ToHex(surface3),       sensitive: false, ct).ConfigureAwait(false);
@@ -119,7 +131,7 @@ public sealed class ThemeService
 
     public Task ResetAsync(CancellationToken ct = default) =>
         SetAsync(DefaultBackground, DefaultForeground, DefaultAccentDark, DefaultAccentForegroundDark,
-            DefaultSurface1, DefaultSurface2, DefaultSurface3, ct);
+            DefaultAccentDelete, DefaultSurface1, DefaultSurface2, DefaultSurface3, ct);
 
     /// <summary>Pushes the current colors into Application.Resources and the WPF-UI accent
     /// manager. Called on Load and on every Set; safe to call from any thread (marshals to the UI
@@ -165,6 +177,22 @@ public sealed class ThemeService
         // family no matter which accent the user picks.
         var accentLighterBrush = new SolidColorBrush(Lighten(_bg, 0.30)); accentLighterBrush.Freeze();
         app.Resources["AccentBackgroundLightBrush"] = accentLighterBrush;
+
+        // Destructive-action accent — Delete buttons, trash icons, "this is irreversible" cues.
+        // Exposed as both Color (for SolidColorBrush x:Key overrides in scoped XAML) and Brush
+        // (for direct DynamicResource consumers). User-tunable so a high-contrast theme doesn't
+        // get stuck with a rust-red that fights its accent palette.
+        var deleteBrush = new SolidColorBrush(_delete); deleteBrush.Freeze();
+        var deleteHoverBrush = new SolidColorBrush(Lighten(_delete, 0.15)); deleteHoverBrush.Freeze();
+        var deletePressedBrush = new SolidColorBrush(Lighten(_delete, -0.15)); deletePressedBrush.Freeze();
+        app.Resources["AccentDeleteColor"] = _delete;
+        app.Resources["AccentDeleteBrush"] = deleteBrush;
+        app.Resources["AccentDeleteHoverBrush"] = deleteHoverBrush;
+        app.Resources["AccentDeletePressedBrush"] = deletePressedBrush;
+
+        // PaletteRed* override moved to AFTER ApplicationAccentColorManager.Apply below — that
+        // call re-rebuilds parts of the WPF-UI palette (including PaletteRedBrush back to the
+        // system red) so any override placed before it gets clobbered.
 
         // Accent dark — separate user-tunable colour used by surfaces that aren't the primary
         // accent but still want to follow the theme: launcher cells, inactive tab headers,
@@ -291,6 +319,15 @@ public sealed class ThemeService
         // reads those directly. Pure write, no template re-creation, so it doesn't undo our
         // overrides above.
         ApplicationAccentColorManager.Apply(_bg, ApplicationTheme.Dark, false);
+
+        // Danger / red palette override — MUST sit after ApplicationAccentColorManager.Apply,
+        // which otherwise resets PaletteRedBrush back to the WPF-UI default system red. v4's
+        // Button.xaml template wires Appearance="Danger" to PaletteRedBrush via DynamicResource,
+        // so re-keying it here retints every Danger button across the app to the user's
+        // accent-delete colour. PaletteRedColor kept in sync for any consumer that pulls the raw
+        // colour rather than the brush.
+        app.Resources["PaletteRedBrush"] = deleteBrush;
+        app.Resources["PaletteRedColor"] = _delete;
     }
 
     /// <summary>Mix toward white (positive amount) or black (negative amount). Used for the

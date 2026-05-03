@@ -40,6 +40,10 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\icon.ico" />
+    <!-- FontAwesome Free Solid (~400KB, OFL/CC-BY-4.0). Used by category icons + the icon
+         picker grid. Monochrome, scales crisply at any DPI, plays nicely with the dark theme
+         (Foreground bound to AccentForeground / Surface text). -->
+    <Resource Include="Assets\Fonts\FontAwesome-Solid.otf" />
     <!-- Default .sxcu files seeded into %LOCALAPPDATA%\ShareQ\custom-uploaders\ on first run.
          CopyToOutputDirectory because we read them from disk at runtime — embedding as
          AssemblyResource would force NavigationToString plumbing in the seed step. -->

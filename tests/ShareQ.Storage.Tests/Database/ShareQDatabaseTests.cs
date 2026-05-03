@@ -16,8 +16,8 @@ public class ShareQDatabaseTests
         cmd.CommandText = "SELECT MAX(version) FROM schema_version;";
         var version = (long)(await cmd.ExecuteScalarAsync())!;
 
-        // Migration003Categories is currently the latest applied migration → schema v3.
-        Assert.Equal(3, version);
+        // Single consolidated Migration001InitialSchema seeds schema v1.
+        Assert.Equal(1, version);
     }
 
     [Fact]
@@ -36,8 +36,9 @@ public class ShareQDatabaseTests
         Assert.Contains("blob_ref", columns);
         Assert.Contains("uploaded_url", columns);
         Assert.Contains("search_text", columns);
-        // Added by Migration003Categories — regression coverage so a future migration list
-        // shuffle can't silently drop the column the popup's right-click "Move to" depends on.
+        // Categories table is part of the consolidated v1 schema — regression coverage so a
+        // future migration list shuffle can't silently drop the column the popup's right-click
+        // "Move to" depends on.
         Assert.Contains("category", columns);
     }
 
@@ -70,8 +71,8 @@ public class ShareQDatabaseTests
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM schema_version;";
         var rowCount = (long)(await cmd.ExecuteScalarAsync())!;
-        // One row per applied migration (v1 + v2 + v3).
-        Assert.Equal(3, rowCount);
+        // One row per applied migration (only v1 after the consolidation).
+        Assert.Equal(1, rowCount);
     }
 
     [Fact]

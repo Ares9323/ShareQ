@@ -116,7 +116,7 @@
          inside the frame — same role as the explicit borders on Launcher / Clipboard / Toast /
          HotkeyCapture windows, so all surfaces share the same "accent telaio" treatment. -->
     <Border Background="{DynamicResource Surface2Brush}"
-            BorderBrush="{DynamicResource AccentBackgroundLightBrush}" BorderThickness="1">
+            BorderBrush="{DynamicResource AccentBackgroundDarkBrush}" BorderThickness="1">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -153,7 +153,33 @@
         <!-- Sidebar -->
         <Border Grid.Row="1" Grid.Column="0" Padding="8,12"
                 Background="{DynamicResource Surface1Brush}"
-                BorderBrush="{DynamicResource AccentBackgroundLightBrush}" BorderThickness="0,0,1,0">
+                BorderBrush="{DynamicResource AccentBackgroundDarkBrush}" BorderThickness="0,0,1,0">
+            <Border.Resources>
+                <!-- Override the AccentButton* brush family inside this Border's resource scope
+                     only — WPF-UI's Button Primary template resolves them via DynamicResource,
+                     so re-keying here flips the SELECTED sidebar button background from the
+                     light accent to the dark accent. Non-selected buttons use ButtonBackground
+                     (defined globally in ThemeService) and stay untouched. Primary buttons
+                     anywhere else in the app keep the light accent because this scope is
+                     limited to the sidebar Border. -->
+                <SolidColorBrush x:Key="AccentButtonBackground"
+                                 Color="{DynamicResource AccentBackgroundDarkColor}" />
+                <!-- Hover / pressed flip back to the LIGHT accent so the user gets a visible
+                     "this is interactive" cue against the resting dark accent. Same idea as
+                     a button getting brighter when hovered. -->
+                <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver"
+                                 Color="{DynamicResource AccentBackgroundColor}" />
+                <SolidColorBrush x:Key="AccentButtonBackgroundPressed"
+                                 Color="{DynamicResource AccentBackgroundColor}" />
+                <!-- WPF-UI's Primary button paints a 1px border via AccentControlElevationBorderBrush
+                     that's set globally to the LIGHT accent. Without overriding it the dark fill
+                     keeps a light-accent halo around it. Match the resting dark + lighten on
+                     hover so the border tracks the background instead of fighting it. -->
+                <SolidColorBrush x:Key="AccentControlElevationBorderBrush"
+                                 Color="{DynamicResource AccentBackgroundDarkColor}" />
+                <SolidColorBrush x:Key="AccentButtonBorderBrushPressed"
+                                 Color="{DynamicResource AccentBackgroundColor}" />
+            </Border.Resources>
             <StackPanel>
                 <!-- Hotkeys is the most-edited section (every workflow lives here, every hotkey
                      is bound from here), so it sits first and is the default landing page. The
@@ -439,6 +465,7 @@
                             <TextBlock Grid.Column="0" Text="Hotkeys" FontSize="20" FontWeight="SemiBold"
                                        VerticalAlignment="Center" />
                             <ui:Button Grid.Column="1" Content="Reset all"
+                                       Appearance="Danger"
                                        Command="{Binding Hotkeys.Workflows.ResetAllToDefaultsCommand}"
                                        ToolTip="Reset every built-in workflow to its default steps and hotkey. Asks for confirmation; custom workflows are not touched." />
                         </Grid>
@@ -519,10 +546,12 @@
                                 <ui:Button Content="Duplicate" Margin="0,0,4,0"
                                            Command="{Binding Hotkeys.Workflows.DuplicateWorkflowCommand}"
                                            ToolTip="Clone this workflow into a new editable copy" />
-                                <ui:Button Content="Remove"    Margin="0,0,4,0"
+                                <ui:Button Content="Remove" Margin="0,0,4,0"
+                                           Appearance="Danger"
                                            Command="{Binding Hotkeys.Workflows.RemoveWorkflowCommand}"
                                            ToolTip="Delete this workflow (built-ins can't be deleted)" />
                                 <ui:Button Content="Reset to defaults"
+                                           Appearance="Danger"
                                            Command="{Binding Hotkeys.Workflows.Editor.ResetToDefaultsCommand}"
                                            Visibility="{Binding Hotkeys.Workflows.Editor.CanResetToDefaults, Converter={StaticResource BoolToVisibility}}"
                                            ToolTip="Restore this built-in workflow's original steps and hotkey." />
@@ -690,10 +719,18 @@
                                                 </StackPanel>
                                                 <ui:ToggleSwitch Grid.Column="2" IsChecked="{Binding IsEnabled, Mode=TwoWay}"
                                                                  VerticalAlignment="Center" Margin="12,0,0,0" />
-                                                <ui:Button Grid.Column="3" Content="×" Width="30" Height="22" Padding="0"
+                                                <ui:Button Grid.Column="3" Width="30" Height="22" Padding="0"
+                                                           Appearance="Danger"
                                                            Command="{Binding RemoveCommand}"
                                                            ToolTip="Remove this step from the workflow"
-                                                           VerticalAlignment="Center" Margin="8,0,0,0" />
+                                                           VerticalAlignment="Center" Margin="8,0,0,0">
+                                                    <!-- Trash glyph (FontAwesome ) — XAML
+                                                         entity reference because raw PUA chars
+                                                         get stripped by editor save round-trips. -->
+                                                    <TextBlock Text="&#xF1F8;"
+                                                               FontFamily="{DynamicResource IconFont}"
+                                                               FontSize="11" />
+                                                </ui:Button>
                                             </Grid>
                                         </Border>
                                     </Grid>
@@ -770,7 +807,7 @@
                 <!-- Foreground rows come first — these drive both the on-accent text colour and
                      the dim subtext used across captions / metadata; visually the most "global"
                      of the seven controls so reading top-to-bottom matches their reach. -->
-                <TextBlock Text="Foreground light" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <TextBlock Text="Foreground Light" FontWeight="SemiBold" Margin="0,4,0,4" />
                 <Grid Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -791,7 +828,7 @@
                 <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
                            Text="Text / icon colour drawn on top of the accent background — pick one with enough contrast (e.g. white on a dark accent, near-black on a light one)." />
 
-                <TextBlock Text="Foreground dark" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <TextBlock Text="Foreground Dark" FontWeight="SemiBold" Margin="0,4,0,4" />
                 <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -815,7 +852,7 @@
                 <!-- Background row — renamed "light" so it pairs visually with "Accent background
                      dark" below. Both tint surfaces inside the app: light is the bright primary
                      accent, dark is the ambient surface tone. -->
-                <TextBlock Text="Accent background light" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <TextBlock Text="Accent Background Light" FontWeight="SemiBold" Margin="0,4,0,4" />
                 <Grid Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -836,7 +873,7 @@
                 <!-- Accent dark — used by ambient surfaces that follow the theme but aren't the
                      primary accent: launcher cells, inactive tab headers. Sits darker than the
                      main accent so the bright accent reads cleanly on top of it. -->
-                <TextBlock Text="Accent background dark" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <TextBlock Text="Accent Background Dark" FontWeight="SemiBold" Margin="0,4,0,4" />
                 <Grid Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -856,6 +893,30 @@
 
                 <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
                            Text="Used by the launcher overlay (cell backgrounds, inactive tab headers). Pick a low-luminance shade so the main accent reads on top of it." />
+
+                <!-- Destructive-action accent: Delete buttons, trash icons, "this is irreversible"
+                     cues. Separate from the main accent so a green/blue theme doesn't get stuck
+                     with a default red that fights its palette. -->
+                <TextBlock Text="Accent Danger" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
+                            Background="{Binding Theme.AccentDeletePreview}"
+                            BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
+                            Cursor="Hand"
+                            ToolTip="Click to open the color picker"
+                            MouseLeftButtonDown="OnAccentDeleteSwatchClick" />
+                    <ui:TextBox Grid.Column="1"
+                                Text="{Binding Theme.AccentDangerHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                PlaceholderText="#8F2720"
+                                FontFamily="Consolas" />
+                </Grid>
+
+                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
+                           Text="Tints the trash / delete buttons across the app (clipboard toolbar, category remove, ‘Clear all’). Tweak it to a shade that contrasts cleanly with your accent colour." />
 
                 <!-- Three neutral surface tones — darkest → lightest. The XAML across the app
                      consumes these via DynamicResource so changes propagate everywhere live. -->
@@ -922,8 +983,9 @@
                      whole UI behind the dialog. Reset stays as the one button that DOES apply
                      immediately because there's no separate preview surface for it. -->
                 <ui:Button Content="Reset to defaults" HorizontalAlignment="Left"
+                           Appearance="Danger"
                            Command="{Binding Theme.ResetCommand}"
-                           ToolTip="Restore the original ShareQ accent (#751C8B background, white foreground, #371242 launcher dark)." />
+                           ToolTip="Restore the original ShareQ accent and surface palette." />
             </StackPanel>
             </ScrollViewer>
 
@@ -944,20 +1006,47 @@
                         <StackPanel>
                             <TextBlock Text="Add a new category" FontWeight="SemiBold" Margin="0,0,0,8" />
                             <Grid>
+                                <!-- Same accent-dark resting / accent-light hover treatment as
+                                     the sidebar's selected button — scoped to this Grid so it
+                                     only affects the Add button without re-keying app-wide. -->
+                                <Grid.Resources>
+                                    <SolidColorBrush x:Key="AccentButtonBackground"
+                                                     Color="{DynamicResource AccentBackgroundDarkColor}" />
+                                    <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver"
+                                                     Color="{DynamicResource AccentBackgroundColor}" />
+                                    <SolidColorBrush x:Key="AccentButtonBackgroundPressed"
+                                                     Color="{DynamicResource AccentBackgroundColor}" />
+                                    <SolidColorBrush x:Key="AccentControlElevationBorderBrush"
+                                                     Color="{DynamicResource AccentBackgroundDarkColor}" />
+                                    <SolidColorBrush x:Key="AccentButtonBorderBrushPressed"
+                                                     Color="{DynamicResource AccentBackgroundColor}" />
+                                </Grid.Resources>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="80" />
+                                    <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <ui:TextBox Grid.Column="0"
                                             Text="{Binding Categories.NewCategoryName, UpdateSourceTrigger=PropertyChanged}"
                                             PlaceholderText="Name (e.g. Code)"
                                             Margin="0,0,8,0" />
-                                <ui:TextBox Grid.Column="1"
-                                            Text="{Binding Categories.NewCategoryIcon, UpdateSourceTrigger=PropertyChanged}"
-                                            PlaceholderText="🏷️"
-                                            Margin="0,0,8,0"
-                                            ToolTip="Optional emoji or character to display next to the name." />
+                                <!-- Pick-icon button: square (matches the Name TextBox height
+                                     for visual alignment). NewCategoryIcon is seeded with the
+                                     star glyph by the VM so this always renders something — no
+                                     empty-state fallback needed. Click opens the picker. -->
+                                <Button Grid.Column="1" Tag="NewCategoryIcon"
+                                        Click="OnPickCategoryIconClicked"
+                                        Width="32" Height="32"
+                                        Background="{DynamicResource Surface3Brush}"
+                                        BorderBrush="#444" BorderThickness="1"
+                                        Cursor="Hand" Padding="0"
+                                        Margin="0,0,8,0"
+                                        ToolTip="Click to pick an icon from the library.">
+                                    <TextBlock Text="{Binding Categories.NewCategoryIcon}"
+                                               FontFamily="{DynamicResource IconFont}"
+                                               FontSize="16" Foreground="#DDD"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Button>
                                 <ui:Button Grid.Column="2" Content="Add"
                                            Command="{Binding Categories.AddCategoryCommand}"
                                            Appearance="Primary"
@@ -974,45 +1063,125 @@
                                         Padding="14,10" Margin="0,0,0,8">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="60" />
+                                            <ColumnDefinition Width="40" />
                                             <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="100" />
-                                            <ColumnDefinition Width="100" />
+                                            <!-- Stepper columns auto-fit so a 4-digit cap doesn't
+                                                 get visually clipped. The inner TextBox has
+                                                 MinWidth so a single digit doesn't collapse the
+                                                 control to almost-nothing. -->
                                             <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <!-- Save column removed: autosave on field commit
+                                                 (LostFocus / Enter) replaces the manual button. -->
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <ui:TextBox Grid.Column="0"
-                                                    Text="{Binding Icon, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                    IsEnabled="{Binding CanModify}"
-                                                    PlaceholderText="🏷️"
-                                                    Margin="0,0,8,0"
-                                                    ToolTip="Emoji or icon char." />
+                                        <!-- Per-row pick button — square 32×32, mirrors the Add
+                                             row's button. Empty state shows the same dim star
+                                             so users see "this opens a picker" without text. -->
+                                        <Button Grid.Column="0" Tag="{Binding}"
+                                                Click="OnPickRowIconClicked"
+                                                Width="32" Height="32"
+                                                Background="{DynamicResource Surface3Brush}"
+                                                BorderBrush="#444" BorderThickness="1"
+                                                Cursor="Hand" Padding="0"
+                                                IsEnabled="{Binding CanConfigure}"
+                                                Margin="0,0,8,0"
+                                                ToolTip="Click to pick an icon from the library.">
+                                            <Grid>
+                                                <TextBlock Text="{Binding Icon}"
+                                                           FontFamily="{DynamicResource IconFont}"
+                                                           FontSize="16" Foreground="#DDD"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           Visibility="{Binding Icon, Converter={StaticResource NonEmptyToVisibility}}" />
+                                                <!-- Star fallback (FontAwesome ) for the
+                                                     "no icon picked yet" empty state. -->
+                                                <TextBlock Text="&#xF005;"
+                                                           FontFamily="{DynamicResource IconFont}"
+                                                           FontSize="16" Foreground="#777"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           Visibility="{Binding Icon, Converter={StaticResource NullOrEmptyToVisibility}}" />
+                                            </Grid>
+                                        </Button>
                                         <ui:TextBox Grid.Column="1"
-                                                    Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                    Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
                                                     IsEnabled="{Binding CanModify}"
+                                                    LostFocus="OnCategoryFieldCommitted"
+                                                    KeyDown="OnCategoryFieldKeyDown"
                                                     Margin="0,0,8,0"
                                                     ToolTip="Category name. Renaming re-routes every existing item to the new name." />
-                                        <ui:NumberBox Grid.Column="2"
-                                                      Value="{Binding MaxItems, Mode=TwoWay}"
-                                                      IsEnabled="{Binding CanModify}"
-                                                      Minimum="0" Maximum="100000"
-                                                      ClearButtonEnabled="False"
-                                                      Margin="0,0,8,0"
-                                                      ToolTip="Max items kept (0 = no cap)." />
-                                        <ui:NumberBox Grid.Column="3"
-                                                      Value="{Binding AutoCleanupDays, Mode=TwoWay}"
-                                                      IsEnabled="{Binding CanModify}"
-                                                      Minimum="0" Maximum="3650"
-                                                      ClearButtonEnabled="False"
-                                                      Margin="0,0,8,0"
-                                                      ToolTip="Auto-delete items older than N days (0 = never)." />
-                                        <ui:Button Grid.Column="4" Content="Save"
-                                                   Command="{Binding SaveCommand}"
-                                                   Margin="0,0,4,0" />
-                                        <ui:Button Grid.Column="5" Content="✕"
+                                        <!-- Stepper: [-] [N] [+]. Replaces the WPF-UI NumberBox
+                                             chevrons with a more obvious tap-target on each side.
+                                             Binding goes through a TextBox in the middle so
+                                             keyboard typing still works; the Tag carries the row
+                                             VM so the +/- handlers can mutate the right field. -->
+                                        <!-- MaxItems stepper. StackPanel auto-fits to content
+                                             via MinWidth on the TextBox, so 1 digit shows ~36px
+                                             of input and 5 digits expand naturally. The +/-
+                                             buttons sit 2px clear of the TextBox so the chrome
+                                             doesn't visually merge into a single block. -->
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                                    Margin="0,0,8,0">
+                                            <Button Content="−" Tag="MaxItems-"
+                                                    Click="OnCategoryStepperClicked"
+                                                    Width="28" Height="32"
+                                                    Background="{DynamicResource Surface3Brush}"
+                                                    BorderBrush="#444" BorderThickness="1"
+                                                    Cursor="Hand" Padding="0"
+                                                    IsEnabled="{Binding CanConfigure}"
+                                                    ToolTip="Decrease by 1." />
+                                            <ui:TextBox Text="{Binding MaxItems, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                        IsEnabled="{Binding CanConfigure}"
+                                                        TextAlignment="Center"
+                                                        MinWidth="36"
+                                                        Margin="2,0,2,0"
+                                                        LostFocus="OnCategoryFieldCommitted"
+                                                        ToolTip="Max items kept (0 = no cap)." />
+                                            <Button Content="+" Tag="MaxItems+"
+                                                    Click="OnCategoryStepperClicked"
+                                                    Width="28" Height="32"
+                                                    Background="{DynamicResource Surface3Brush}"
+                                                    BorderBrush="#444" BorderThickness="1"
+                                                    Cursor="Hand" Padding="0"
+                                                    IsEnabled="{Binding CanConfigure}"
+                                                    ToolTip="Increase by 1." />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="3" Orientation="Horizontal"
+                                                    Margin="0,0,8,0">
+                                            <Button Content="−" Tag="AutoCleanupAfter-"
+                                                    Click="OnCategoryStepperClicked"
+                                                    Width="28" Height="32"
+                                                    Background="{DynamicResource Surface3Brush}"
+                                                    BorderBrush="#444" BorderThickness="1"
+                                                    Cursor="Hand" Padding="0"
+                                                    IsEnabled="{Binding CanConfigure}"
+                                                    ToolTip="Decrease by 1 minute." />
+                                            <ui:TextBox Text="{Binding AutoCleanupAfter, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                        IsEnabled="{Binding CanConfigure}"
+                                                        TextAlignment="Center"
+                                                        MinWidth="36"
+                                                        Margin="2,0,2,0"
+                                                        LostFocus="OnCategoryFieldCommitted"
+                                                        ToolTip="Auto-delete items older than N minutes (0 = never)." />
+                                            <Button Content="+" Tag="AutoCleanupAfter+"
+                                                    Click="OnCategoryStepperClicked"
+                                                    Width="28" Height="32"
+                                                    Background="{DynamicResource Surface3Brush}"
+                                                    BorderBrush="#444" BorderThickness="1"
+                                                    Cursor="Hand" Padding="0"
+                                                    IsEnabled="{Binding CanConfigure}"
+                                                    ToolTip="Increase by 1 minute." />
+                                        </StackPanel>
+                                        <!-- Trash glyph (FontAwesome ) instead of the bare
+                                             ✕ — visually consistent with the clipboard popup's
+                                             trash icon, and the IconFont stays themed by accent. -->
+                                        <ui:Button Grid.Column="4"
                                                    Command="{Binding DeleteCommand}"
                                                    Appearance="Danger"
-                                                   ToolTip="Delete category (items will move to 'Clipboard')." />
+                                                   ToolTip="Delete category (items will move to 'Clipboard').">
+                                            <TextBlock Text="&#xF1F8;"
+                                                       FontFamily="{DynamicResource IconFont}"
+                                                       FontSize="13" />
+                                        </ui:Button>
                                     </Grid>
                                 </Border>
                             </DataTemplate>

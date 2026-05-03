@@ -10,6 +10,7 @@ public sealed record ThemePreset(
     string AccentForegroundHex,
     string AccentBackgroundDarkHex,
     string AccentForegroundDarkHex,
+    string AccentDangerHex,
     string Surface1Hex,
     string Surface2Hex,
     string Surface3Hex);
@@ -22,6 +23,7 @@ public static class ThemePresets
         Name: "Custom (current values)",
         AccentBackgroundHex: string.Empty, AccentForegroundHex: string.Empty,
         AccentBackgroundDarkHex: string.Empty, AccentForegroundDarkHex: string.Empty,
+        AccentDangerHex: string.Empty,
         Surface1Hex: string.Empty, Surface2Hex: string.Empty, Surface3Hex: string.Empty);
 
     public static readonly ThemePreset Default = new(
@@ -30,6 +32,7 @@ public static class ThemePresets
         AccentForegroundHex: "#E5E6E6",
         AccentBackgroundDarkHex: "#314D3B",
         AccentForegroundDarkHex: "#878787",
+        AccentDangerHex: "#8F2720",
         Surface1Hex: "#1A1A1A",
         Surface2Hex: "#1F1F1F",
         Surface3Hex: "#2D2D2D");
@@ -39,20 +42,22 @@ public static class ThemePresets
         AccentBackgroundHex: "#2B5278",
         AccentForegroundHex: "#FFFFFF",
         AccentBackgroundDarkHex: "#0E1621",
-        AccentForegroundDarkHex: "#768B9D",
+        AccentForegroundDarkHex: "#7592AE",
+        AccentDangerHex: "#A04040",
         Surface1Hex: "#111820",
         Surface2Hex: "#17212B",
-        Surface3Hex: "#243443");
+        Surface3Hex: "#1E2C39");
 
     public static readonly ThemePreset DarkPurple = new(
         Name: "Dark purple",
         AccentBackgroundHex: "#782B78",
         AccentForegroundHex: "#FFFFFF",
         AccentBackgroundDarkHex: "#210E1F",
-        AccentForegroundDarkHex: "#9C769D",
+        AccentForegroundDarkHex: "#AD75AE",
+        AccentDangerHex: "#993355",
         Surface1Hex: "#20111F",
         Surface2Hex: "#2B172B",
-        Surface3Hex: "#422443");
+        Surface3Hex: "#391E39");
 
     public static readonly IReadOnlyList<ThemePreset> All = [Custom, Default, TelegramBlue, DarkPurple];
 }

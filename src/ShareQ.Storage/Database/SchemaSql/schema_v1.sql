@@ -1,4 +1,7 @@
--- ShareQ schema v1
+-- ShareQ schema v1 — single consolidated definition. Pre-release the project has no live
+-- installs to migrate, so we collapse what would have been migrations 1-5 into one create.
+-- The migration runner machinery is kept (schema_version + IMigration) so future changes
+-- after the first public release ship as additive Migration002+ instead.
 
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
@@ -8,6 +11,7 @@ CREATE TABLE schema_version (
 );
 INSERT INTO schema_version (version) VALUES (1);
 
+-- ── Items ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE items (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     kind            TEXT    NOT NULL,
@@ -22,7 +26,13 @@ CREATE TABLE items (
     blob_ref        TEXT,
     uploaded_url    TEXT,
     uploader_id     TEXT,
-    search_text     TEXT
+    search_text     TEXT,
+    -- Inline thumbnail BLOB so the popup/timeline can render previews without decrypting
+    -- the full DPAPI-encrypted payload for every row.
+    thumbnail       BLOB,
+    -- Category bucket (CopyQ-style "tab"). Defaults to the seeded 'Clipboard' bucket so
+    -- existing rows always have a home; users re-route via right-click → Move to → ….
+    category        TEXT    NOT NULL DEFAULT 'Clipboard'
 );
 
 CREATE INDEX idx_items_created
@@ -37,6 +47,11 @@ CREATE INDEX idx_items_pinned
     ON items(pinned, created_at DESC)
     WHERE deleted_at IS NULL AND pinned = 1;
 
+CREATE INDEX idx_items_category
+    ON items(category, created_at DESC)
+    WHERE deleted_at IS NULL;
+
+-- ── Full-text search over search_text ────────────────────────────────────────────────
 CREATE VIRTUAL TABLE items_fts USING fts5(
     search_text,
     content='items',
@@ -57,6 +72,22 @@ CREATE TRIGGER items_au AFTER UPDATE ON items BEGIN
     INSERT INTO items_fts(rowid, search_text) VALUES (new.id, new.search_text);
 END;
 
+-- ── Categories ───────────────────────────────────────────────────────────────────────
+-- The default 'Clipboard' bucket is seeded with the FontAwesome 'list' glyph (U+F03A)
+-- so the popup tab strip never shows a nameless box. auto_cleanup_after is in MINUTES
+-- today; the column name is generic so changing the unit semantics later doesn't need
+-- a column rename.
+CREATE TABLE categories (
+    name               TEXT PRIMARY KEY,
+    icon               TEXT,
+    sort_order         INTEGER NOT NULL DEFAULT 0,
+    max_items          INTEGER NOT NULL DEFAULT 0,
+    auto_cleanup_after INTEGER NOT NULL DEFAULT 0
+);
+
+INSERT INTO categories (name, icon, sort_order) VALUES ('Clipboard', char(0xF03A), 0);
+
+-- ── Pipeline profiles + settings (key/value, DPAPI-encrypted when sensitive) ─────────
 CREATE TABLE pipeline_profiles (
     id              TEXT PRIMARY KEY,
     display_name    TEXT NOT NULL,

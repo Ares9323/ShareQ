@@ -26,8 +26,6 @@ public static class StorageServiceCollectionExtensions
         services.AddSingleton<IStoragePathResolver, StoragePathResolver>();
 
         services.AddSingleton<IMigration, Migration001InitialSchema>();
-        services.AddSingleton<IMigration, Migration002Thumbnail>();
-        services.AddSingleton<IMigration, Migration003Categories>();
         services.AddSingleton<MigrationRunner>(sp =>
             new MigrationRunner(sp.GetServices<IMigration>()));
         services.AddSingleton<IShareQDatabase, ShareQDatabase>();
@@ -41,6 +39,7 @@ public static class StorageServiceCollectionExtensions
         services.AddSingleton<ISettingsStore, SqliteSettingsStore>();
 
         services.AddSingleton<IRotationService, RotationService>();
+        services.AddSingleton<CategoryRotationService>();
 
         return services;
     }
