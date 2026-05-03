@@ -9,6 +9,14 @@ using ShareQ.Core.Pipeline;
 using ShareQ.Pipeline;
 using ShareQ.Pipeline.Profiles;
 using ShareQ.Storage.Settings;
+// Alias so we can keep `MenuItem` short while using WPF-UI's Fluent-styled subclass instead
+// of System.Windows.Controls.MenuItem. The default WPF MenuItem template is rendered by the
+// Aero/Aero2 theme dictionaries, which use internal brush keys we can't override from
+// outside — even after setting ContextMenuBackground / SystemColors.MenuBrushKey at App
+// level the submenu popup chrome stays on the system dark default. WPF-UI's MenuItem uses
+// its own Fluent template that resolves through ContextMenuBackground / Surface* keys we
+// already pin in ThemeService, so the menu themes correctly without any per-control work.
+using MenuItem = Wpf.Ui.Controls.MenuItem;
 
 namespace ShareQ.App.Services;
 

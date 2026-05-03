@@ -290,10 +290,20 @@ public sealed class ThemeService
         app.Resources["ComboBoxItemBackgroundDisabled"] = surface2Brush;
         // ContextMenu chrome (right-click + tray menus). Same dll-string source as the ComboBox
         // family above. Routing to Surface2 keeps tray + right-click popups consistent with the
-        // window body; the per-item style in TrayIconService still maps submenu chrome to
-        // Surface3 via SystemColors.MenuBrushKey.
+        // window body.
         app.Resources["ContextMenuBackground"] = surface2Brush;
         app.Resources["ContextMenuBorderBrush"] = darkBorderBrush;
+
+        // WPF-UI MenuItem's submenu popup uses a SEPARATE brush key family — Flyout* — not
+        // ContextMenu*. Verified by string-extracting Wpf.Ui.dll: the MenuItem template
+        // resolves the popup chrome through FlyoutBackground / FlyoutBorderBrush /
+        // SurfaceStrokeColorFlyoutBrush. Without these overrides the submenu kept the WPF-UI
+        // dark.baml default while the parent menu (which DOES use ContextMenuBackground)
+        // themed correctly. Routing to Surface3 so the submenu floats one shade above the
+        // top-level menu's Surface2 surface.
+        app.Resources["FlyoutBackground"] = surface3Brush;
+        app.Resources["FlyoutBorderBrush"] = darkBorderBrush;
+        app.Resources["SurfaceStrokeColorFlyoutBrush"] = darkBorderBrush;
 
         // SystemColors.* overrides at the App level — needed so submenu Popups (hosted in a
         // separate HwndSource) resolve them. The TrayIconService also adds them inside the
