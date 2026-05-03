@@ -22,7 +22,7 @@ public sealed class TempPipelineDatabaseFixture : IAsyncDisposable
         Options = new StorageOptions { RootDirectoryOverride = RootDirectory };
         Paths = new StoragePathResolver(Microsoft.Extensions.Options.Options.Create(Options));
 
-        var migrations = new IMigration[] { new Migration001InitialSchema(), new Migration002Thumbnail(), new Migration003Categories() };
+        var migrations = new IMigration[] { new Migration001InitialSchema() };
         Database = new ShareQDatabase(Paths, new MigrationRunner(migrations), NullLogger<ShareQDatabase>.Instance);
     }
 
