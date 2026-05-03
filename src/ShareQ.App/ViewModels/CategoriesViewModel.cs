@@ -145,6 +145,19 @@ public sealed partial class CategoryRowViewModel : ObservableObject
         await _owner.UpdateAsync(updated).ConfigureAwait(true);
     }
 
+    /// <summary>Reset the row's user-tunable fields (icon + retention caps) to their seed
+    /// defaults. Available on the default 'Clipboard' row in place of Delete (which would
+    /// leave no fallback bucket). Default icon is the FontAwesome 'list' glyph () —
+    /// the same value the migration seeds on a fresh install.</summary>
+    [RelayCommand]
+    private async Task ResetToDefaultsAsync()
+    {
+        Icon = "";
+        MaxItems = 0;
+        AutoCleanupAfter = 0;
+        await SaveAsync().ConfigureAwait(true);
+    }
+
     [RelayCommand(CanExecute = nameof(CanModify))]
     private async Task DeleteAsync()
     {

@@ -330,6 +330,12 @@
                 </ItemsControl>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom">
+                <!-- IsDefault re-enabled: Enter commits + closes the dialog by default. The
+                     code-behind handlers on every value TextBox swallow the first Enter (after
+                     a ClearFocus that commits the typed value) so the dialog DOESN'T close
+                     mid-edit. A second Enter, with focus no longer on a TextBox, falls through
+                     to this default button — so the user's mental model "Enter to confirm"
+                     keeps working when they're done editing. -->
                 <Button x:Name="OkButton" x:FieldModifier="public"
                         Content="OK" Width="80" Height="32" Margin="0,0,4,0"
                         IsDefault="True" Click="OnOkClicked"

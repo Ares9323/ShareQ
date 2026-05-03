@@ -116,7 +116,10 @@
          inside the frame — same role as the explicit borders on Launcher / Clipboard / Toast /
          HotkeyCapture windows, so all surfaces share the same "accent telaio" treatment. -->
     <Border Background="{DynamicResource Surface2Brush}"
-            BorderBrush="{DynamicResource AccentBackgroundDarkBrush}" BorderThickness="1">
+            BorderBrush="{DynamicResource AccentForegroundDarkBrush}" BorderThickness="1">
+    <!-- Outer wrapper Grid so the Border can hold both the main layout AND the resize thumb
+         (Border accepts only one child, Grid happily stacks via z-order). -->
+    <Grid>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -153,7 +156,7 @@
         <!-- Sidebar -->
         <Border Grid.Row="1" Grid.Column="0" Padding="8,12"
                 Background="{DynamicResource Surface1Brush}"
-                BorderBrush="{DynamicResource AccentBackgroundDarkBrush}" BorderThickness="0,0,1,0">
+                BorderBrush="{DynamicResource AccentForegroundDarkBrush}" BorderThickness="0,0,1,0">
             <Border.Resources>
                 <!-- Override the AccentButton* brush family inside this Border's resource scope
                      only — WPF-UI's Button Primary template resolves them via DynamicResource,
@@ -820,7 +823,7 @@
                             ToolTip="Click to open the color picker"
                             MouseLeftButtonDown="OnAccentFgSwatchClick" />
                     <ui:TextBox Grid.Column="1"
-                                Text="{Binding Theme.AccentForegroundHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                Text="{Binding Theme.AccentForegroundLightHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                 PlaceholderText="#FFFFFF"
                                 FontFamily="Consolas" />
                 </Grid>
@@ -865,7 +868,7 @@
                             ToolTip="Click to open the color picker"
                             MouseLeftButtonDown="OnAccentBgSwatchClick" />
                     <ui:TextBox Grid.Column="1"
-                                Text="{Binding Theme.AccentBackgroundHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                Text="{Binding Theme.AccentBackgroundLightHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                 PlaceholderText="#751C8B"
                                 FontFamily="Consolas" />
                 </Grid>
@@ -1171,14 +1174,27 @@
                                                     IsEnabled="{Binding CanConfigure}"
                                                     ToolTip="Increase by 1 minute." />
                                         </StackPanel>
-                                        <!-- Trash glyph (FontAwesome ) instead of the bare
-                                             ✕ — visually consistent with the clipboard popup's
-                                             trash icon, and the IconFont stays themed by accent. -->
+                                        <!-- Custom rows get a Trash button (delete category).
+                                             The default 'Clipboard' row swaps it for an Undo
+                                             glyph that resets icon + MaxItems + AutoCleanupAfter
+                                             back to defaults — the row can't be deleted (every
+                                             item needs a fallback bucket) so a reset is the
+                                             closest equivalent. -->
                                         <ui:Button Grid.Column="4"
                                                    Command="{Binding DeleteCommand}"
                                                    Appearance="Danger"
+                                                   Visibility="{Binding CanModify, Converter={StaticResource BoolToVisibility}}"
                                                    ToolTip="Delete category (items will move to 'Clipboard').">
                                             <TextBlock Text="&#xF1F8;"
+                                                       FontFamily="{DynamicResource IconFont}"
+                                                       FontSize="13" />
+                                        </ui:Button>
+                                        <ui:Button Grid.Column="4"
+                                                   Command="{Binding ResetToDefaultsCommand}"
+                                                   Appearance="Danger"
+                                                   Visibility="{Binding IsDefault, Converter={StaticResource BoolToVisibility}}"
+                                                   ToolTip="Reset icon, max items and auto-cleanup back to defaults.">
+                                            <TextBlock Text="&#xF0E2;"
                                                        FontFamily="{DynamicResource IconFont}"
                                                        FontSize="13" />
                                         </ui:Button>
@@ -1206,6 +1222,43 @@
                               Foreground="#DDD" FontSize="12"
                               HorizontalAlignment="Left" Margin="0,0,0,16"
                               ToolTip="Adds (or removes) ShareQ to the per-user Windows startup list. No admin rights needed." />
+
+                    <!-- Tray icon click routing. Each combo writes to a single settings key
+                         (tray.left_click / .double_click / .middle_click) read live by
+                         TrayIconService — no restart required. Defaults match the historical
+                         behaviour: left → Settings, double → Clipboard, middle → none. -->
+                    <Border Background="{DynamicResource Surface1Brush}" CornerRadius="4" Padding="14" Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock Text="Tray icon clicks" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
+                                       Text="Pick what each click on the tray icon should do. Right-click always opens the menu." />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="120" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Left click" VerticalAlignment="Center" Margin="0,0,8,8" />
+                                <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="TrayLeftClickCombo"
+                                           Loaded="OnTrayClickComboLoaded"
+                                           SelectionChanged="OnTrayLeftClickChanged"
+                                           Margin="0,0,0,8" />
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Double click" VerticalAlignment="Center" Margin="0,0,8,8" />
+                                <ComboBox  Grid.Row="1" Grid.Column="1" x:Name="TrayDoubleClickCombo"
+                                           Loaded="OnTrayClickComboLoaded"
+                                           SelectionChanged="OnTrayDoubleClickChanged"
+                                           Margin="0,0,0,8" />
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Middle click" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <ComboBox  Grid.Row="2" Grid.Column="1" x:Name="TrayMiddleClickCombo"
+                                           Loaded="OnTrayClickComboLoaded"
+                                           SelectionChanged="OnTrayMiddleClickChanged" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
 
                     <!-- Portable JSON dump of every non-sensitive setting. Skips OAuth tokens /
                          credentials / DPAPI-protected payloads — those are bound to the local
@@ -1364,6 +1417,26 @@
                            Visibility="Collapsed" />
             </StackPanel>
         </Grid>
+    </Grid>
+    <!-- Visual resize handle on the bottom-right corner. The window already supports system
+         resize on its borders (FluentWindow + ResizeMode=CanResize) but the explicit thumb
+         matches the affordance Clipboard / Launcher windows use, so the user has a clear
+         "grab here to resize" target. Z-ordered last so it paints on top of the inner border. -->
+    <Thumb x:Name="MainResizeThumb"
+           HorizontalAlignment="Right" VerticalAlignment="Bottom"
+           Width="14" Height="14"
+           Cursor="SizeNWSE"
+           DragDelta="OnMainResizeThumbDelta"
+           Margin="0,0,4,4">
+        <Thumb.Template>
+            <ControlTemplate TargetType="Thumb">
+                <Grid Background="Transparent">
+                    <Path Stroke="#888" StrokeThickness="1" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                          Data="M 4,13 L 13,4 M 7,13 L 13,7 M 10,13 L 13,10" />
+                </Grid>
+            </ControlTemplate>
+        </Thumb.Template>
+    </Thumb>
     </Grid>
     </Border>
 </ui:FluentWindow>

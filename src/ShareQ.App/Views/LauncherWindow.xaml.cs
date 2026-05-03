@@ -102,8 +102,12 @@ public partial class LauncherWindow : Window
                 // Hiding then re-showing resets _isClosing so the next deactivate can re-trigger.
                 _isClosing = false;
                 await ReloadAsync();
-                SetDragMode(StartInDragMode);
-                StartInDragMode = false;   // consume the flag so a normal re-open isn't sticky
+                // Drag-mode persistence: explicit open-in-drag from the host (StartInDragMode)
+                // wins; otherwise the persisted flag from the previous close is honoured. So
+                // closing while in drag mode reopens in drag mode automatically.
+                var startDrag = StartInDragMode || await _store.LoadDragModeAsync(CancellationToken.None);
+                SetDragMode(startDrag);
+                StartInDragMode = false;   // consume the explicit flag so a normal re-open isn't sticky
                 // Focus the launcher root, NOT the search box — auto-focusing the search swallows
                 // every shortcut key (Q, F1, …) the user wanted to press to fire a cell. Ctrl+F
                 // gives them an explicit way into the search box when they actually want to type.
@@ -432,6 +436,9 @@ public partial class LauncherWindow : Window
         DragModeBanner.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         DragToggle.Content = on ? "✓ Drag mode (on)" : "📥 Drag mode";
         ResizeThumb.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        // Persist so closing the launcher while in drag mode reopens it the same way next time.
+        // Fire-and-forget: persistence is sub-ms (single SQLite key write).
+        _ = _store.SaveDragModeAsync(on, CancellationToken.None);
     }
 
     private void OnCellDragEnter(object sender, DragEventArgs e)

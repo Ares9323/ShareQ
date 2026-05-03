@@ -256,6 +256,7 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, OpenLauncherMenuTask>();
                 services.AddSingleton<IPipelineTask, OpenLauncherDragModeTask>();
                 services.AddSingleton<IPipelineTask, OpenClipboardWindowTask>();
+                services.AddSingleton<IPipelineTask, OpenSettingsTask>();
                 // Singleton + Hide (not Close) for snappy reopen on the global shortcut —
                 // same lifetime pattern the launcher uses.
                 services.AddSingleton<ShareQ.App.Views.ClipboardWindow>();

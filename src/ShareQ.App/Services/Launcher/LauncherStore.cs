@@ -18,6 +18,9 @@ public sealed class LauncherStore
     /// <summary>Window geometry — size and on-screen position. JSON blob so the four numbers
     /// commit atomically (a partial save would put the launcher in a contradictory layout).</summary>
     private const string GeometryKey = "launcher.geometry";
+    /// <summary>Last drag-mode toggle state. Saved on every hide so closing the launcher while
+    /// in drag mode reopens it the same way (the user was clearly in the middle of editing).</summary>
+    private const string DragModeKey = "launcher.drag_mode";
 
     private readonly ISettingsStore _settings;
 
@@ -151,6 +154,17 @@ public sealed class LauncherStore
         var json = JsonSerializer.Serialize(new GeometryDto(g.Width, g.Height, g.Left, g.Top));
         return _settings.SetAsync(GeometryKey, json, sensitive: false, cancellationToken);
     }
+
+    /// <summary>Load the persisted drag-mode flag. False is the safe default: a brand-new
+    /// install opens the launcher in normal mode (drag mode is the editing mode).</summary>
+    public async Task<bool> LoadDragModeAsync(CancellationToken cancellationToken)
+    {
+        var raw = await _settings.GetAsync(DragModeKey, cancellationToken).ConfigureAwait(false);
+        return string.Equals(raw, "1", StringComparison.Ordinal);
+    }
+
+    public Task SaveDragModeAsync(bool dragMode, CancellationToken cancellationToken)
+        => _settings.SetAsync(DragModeKey, dragMode ? "1" : "0", sensitive: false, cancellationToken);
 
     private sealed record GeometryDto(double W, double H, double L, double T);
 

@@ -5,22 +5,45 @@ using System.Windows.Media.Imaging;
 using H.NotifyIcon;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
+using ShareQ.Core.Pipeline;
+using ShareQ.Pipeline;
+using ShareQ.Pipeline.Profiles;
+using ShareQ.Storage.Settings;
 
 namespace ShareQ.App.Services;
 
 public sealed class TrayIconService : IDisposable
 {
+    public const string LeftClickKey  = "tray.left_click";
+    public const string DoubleClickKey = "tray.double_click";
+    public const string MiddleClickKey = "tray.middle_click";
+
+    /// <summary>Sentinel value persisted when the user picks "(do nothing)" — empty string
+    /// would round-trip to "use default" so we use a fixed marker instead.</summary>
+    public const string NoneMarker = "__none__";
+
     private readonly ILogger<TrayIconService> _logger;
     private readonly IServiceProvider _services;
+    private readonly ISettingsStore _settings;
+    private readonly IPipelineProfileStore _profiles;
+    private readonly PipelineExecutor _executor;
     private readonly TaskbarIcon _icon;
     private MainWindow? _mainWindow;
     // Click handler bound to the most recently shown toast. Cleared after the toast closes
     // so a click on a stale balloon (which Windows still routes through after dismissal) is a no-op.
     private Action? _pendingToastClick;
 
-    public TrayIconService(IServiceProvider services, ILogger<TrayIconService> logger)
+    public TrayIconService(
+        IServiceProvider services,
+        ISettingsStore settings,
+        IPipelineProfileStore profiles,
+        PipelineExecutor executor,
+        ILogger<TrayIconService> logger)
     {
         _services = services;
+        _settings = settings;
+        _profiles = profiles;
+        _executor = executor;
         _logger = logger;
         _icon = new TaskbarIcon
         {
@@ -30,7 +53,11 @@ public sealed class TrayIconService : IDisposable
         };
 
         _icon.ContextMenu = BuildMenu();
-        _icon.LeftClickCommand = new RelayCommand(OnOpen);
+        // Click routing reads from settings on every event so changes apply without restart.
+        // Defaults map to the historical behaviour: left=open Settings, double=toggle popup, middle=nothing.
+        _icon.LeftClickCommand = new RelayCommand(() => DispatchClick(LeftClickKey, DefaultPipelineProfiles.OpenSettingsId));
+        _icon.DoubleClickCommand = new RelayCommand(() => DispatchClick(DoubleClickKey, DefaultPipelineProfiles.ShowPopupId));
+        _icon.MiddleClickCommand = new RelayCommand(() => DispatchClick(MiddleClickKey, NoneMarker));
 
         // ShowNotification() requires the underlying Win32 NOTIFYICONDATA to be created.
         // The TaskbarIcon WPF wrapper sometimes defers this until first message; force it now.
@@ -38,6 +65,43 @@ public sealed class TrayIconService : IDisposable
 
         _icon.TrayBalloonTipClicked += OnTrayBalloonTipClicked;
         _icon.TrayBalloonTipClosed += (_, _) => _pendingToastClick = null;
+    }
+
+    /// <summary>Resolve the persisted profile id from settings (fall back to <paramref name="defaultProfileId"/>
+    /// when unset). Empty / NoneMarker → no-op. Otherwise look up the profile + run it via the
+    /// shared PipelineExecutor — same path every workflow takes, so a tray click can fire any
+    /// of them. Synchronous read against the settings store is sub-ms (SQLite key-value).</summary>
+    private void DispatchClick(string key, string defaultProfileId)
+    {
+        try
+        {
+            var raw = _settings.GetAsync(key, CancellationToken.None).GetAwaiter().GetResult();
+            var profileId = string.IsNullOrEmpty(raw) ? defaultProfileId : raw;
+            if (string.Equals(profileId, NoneMarker, StringComparison.Ordinal)) return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var profile = await _profiles.GetAsync(profileId, CancellationToken.None).ConfigureAwait(false);
+                    if (profile is null)
+                    {
+                        _logger.LogWarning("Tray click: profile '{Id}' not found, ignoring", profileId);
+                        return;
+                    }
+                    var ctx = new PipelineContext(_services);
+                    await _executor.RunAsync(profile, ctx, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Tray click: workflow {Id} failed", profileId);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Tray click: dispatch failed for {Key}", key);
+        }
     }
 
     public void Attach(MainWindow window) => _mainWindow = window;
@@ -102,6 +166,18 @@ public sealed class TrayIconService : IDisposable
                 }
                 Run<TargetWindowTracker>(t => t.CaptureCurrentForeground());
                 Run<ShareQ.App.Views.ClipboardWindow>(w => { w.Show(); w.Activate(); });
+            }));
+        menu.Items.Add(BuildMenuItem("Open launcher\tWin+Z",
+            () =>
+            {
+                // Same toggle pattern as OpenLauncherMenuTask: closed → open + activate; open
+                // → close. Inline because the tray menu doesn't carry a PipelineContext.
+                if (ShareQ.App.Views.LauncherWindow.IsOpen)
+                {
+                    ShareQ.App.Views.LauncherWindow.RequestClose();
+                    return;
+                }
+                Run<ShareQ.App.Views.LauncherWindow>(w => { w.Show(); w.Activate(); });
             }));
         menu.Items.Add(BuildMenuItem("Toggle incognito\tCtrl+Alt+I",
             () => Run<IncognitoModeService>(s => _ = s.ToggleAsync(CancellationToken.None))));
@@ -191,9 +267,45 @@ public sealed class TrayIconService : IDisposable
         Application.Current.Shutdown();
     }
 
+    /// <summary>Build a tray menu entry. Headers can carry a "Label\tShortcut" form (legacy
+    /// from the days when WPF rendered \t as a tab spacer); here we split on the tab and
+    /// build a 2-column Grid header so the shortcut sits flush right and gets the accent
+    /// foreground. Plain headers (no \t) keep using the simple string form for cheaper
+    /// rendering.</summary>
     private static MenuItem BuildMenuItem(string header, Action onClick)
     {
-        var item = new MenuItem { Header = header };
+        var item = new MenuItem();
+        var tabIdx = header.IndexOf('\t');
+        if (tabIdx < 0)
+        {
+            item.Header = header;
+        }
+        else
+        {
+            var label = header[..tabIdx];
+            var shortcut = header[(tabIdx + 1)..];
+            // Stretch the header presenter so the inner Grid can right-align the shortcut
+            // against the menu's full width instead of just the label width.
+            item.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition());
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.Children.Add(new TextBlock { Text = label });
+            var shortcutTb = new TextBlock
+            {
+                Text = shortcut,
+                Margin = new Thickness(24, 0, 0, 0),
+                Opacity = 0.85,
+            };
+            // DynamicResource so the shortcut tracks the live accent (changes in Theme tab
+            // re-tint instantly without rebuilding the menu).
+            shortcutTb.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
+                "AccentBackgroundLightBrush");
+            Grid.SetColumn(shortcutTb, 1);
+            grid.Children.Add(shortcutTb);
+            item.Header = grid;
+        }
         item.Click += (_, _) => onClick();
         return item;
     }

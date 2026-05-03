@@ -96,6 +96,76 @@ public partial class MainWindow : FluentWindow
         StateChanged += (_, _) => _ = SaveWindowPlacementAsync();
     }
 
+    /// <summary>Manual drag-resize from the bottom-right thumb. Mirrors the Launcher window's
+    /// handler so the corner grab feels identical across the app. The system already permits
+    /// edge resize via FluentWindow chrome; this thumb is the affordance for users who hunt
+    /// for a corner handle.</summary>
+    private void OnMainResizeThumbDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+    {
+        var newW = Math.Max(MinWidth,  ActualWidth  + e.HorizontalChange);
+        var newH = Math.Max(MinHeight, ActualHeight + e.VerticalChange);
+        Width = newW;
+        Height = newH;
+    }
+
+    // ── Tray click action ComboBoxes ─────────────────────────────────────────────────
+    // Tray clicks now route through arbitrary pipeline profiles — same picker shape as the
+    // Explorer-context-menu workflow ComboBox above. The list comes from IPipelineProfileStore
+    // so any workflow (built-in or user-created) can be wired to a click. A sentinel
+    // "(do nothing)" option maps to NoneMarker so the user can disable a click entirely.
+    private sealed record TrayClickProfileOption(string Id, string DisplayName);
+    private bool _suppressTrayClickPersist;
+
+    private async void OnTrayClickComboLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.ComboBox combo) return;
+        var (key, def) = ResolveTrayClickKey(combo);
+        if (string.IsNullOrEmpty(key)) return;
+        try
+        {
+            var profiles = await _profileStore.ListAsync(System.Threading.CancellationToken.None);
+            var options = new List<TrayClickProfileOption>
+            {
+                new(Services.TrayIconService.NoneMarker, "(do nothing)"),
+            };
+            foreach (var p in profiles.OrderBy(p => p.DisplayName, StringComparer.OrdinalIgnoreCase))
+                options.Add(new TrayClickProfileOption(p.Id, p.DisplayName));
+
+            var raw = await _settingsStore.GetAsync(key, System.Threading.CancellationToken.None);
+            _suppressTrayClickPersist = true;
+            combo.DisplayMemberPath = nameof(TrayClickProfileOption.DisplayName);
+            combo.SelectedValuePath = nameof(TrayClickProfileOption.Id);
+            combo.ItemsSource = options;
+            combo.SelectedValue = string.IsNullOrEmpty(raw) ? def : raw;
+            if (combo.SelectedValue is null) combo.SelectedValue = def;
+        }
+        finally { _suppressTrayClickPersist = false; }
+    }
+
+    private (string Key, string Default) ResolveTrayClickKey(System.Windows.Controls.ComboBox combo) => combo.Name switch
+    {
+        nameof(TrayLeftClickCombo) =>   (Services.TrayIconService.LeftClickKey,   ShareQ.Pipeline.Profiles.DefaultPipelineProfiles.OpenSettingsId),
+        nameof(TrayDoubleClickCombo) => (Services.TrayIconService.DoubleClickKey, ShareQ.Pipeline.Profiles.DefaultPipelineProfiles.ShowPopupId),
+        nameof(TrayMiddleClickCombo) => (Services.TrayIconService.MiddleClickKey, Services.TrayIconService.NoneMarker),
+        _ => (string.Empty, Services.TrayIconService.NoneMarker),
+    };
+
+    private async void OnTrayLeftClickChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        => await PersistTrayClickAsync(sender, Services.TrayIconService.LeftClickKey);
+    private async void OnTrayDoubleClickChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        => await PersistTrayClickAsync(sender, Services.TrayIconService.DoubleClickKey);
+    private async void OnTrayMiddleClickChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        => await PersistTrayClickAsync(sender, Services.TrayIconService.MiddleClickKey);
+
+    private async Task PersistTrayClickAsync(object sender, string key)
+    {
+        if (_suppressTrayClickPersist) return;
+        if (sender is not System.Windows.Controls.ComboBox combo) return;
+        if (combo.SelectedValue is not string value || string.IsNullOrEmpty(value)) return;
+        try { await _settingsStore.SetAsync(key, value, sensitive: false, System.Threading.CancellationToken.None); }
+        catch { /* persistence is best-effort; the next run reads the previous value */ }
+    }
+
     private async Task LoadWindowPlacementAsync()
     {
         try
@@ -432,15 +502,15 @@ public partial class MainWindow : FluentWindow
         if (DataContext is not SettingsViewModel vm) return;
         var currentHex = channel switch
         {
-            AccentChannel.Background     => vm.Theme.AccentBackgroundHex,
-            AccentChannel.Foreground     => vm.Theme.AccentForegroundHex,
+            AccentChannel.Background     => vm.Theme.AccentBackgroundLightHex,
+            AccentChannel.Foreground     => vm.Theme.AccentForegroundLightHex,
             AccentChannel.Dark           => vm.Theme.AccentBackgroundDarkHex,
             AccentChannel.ForegroundDark => vm.Theme.AccentForegroundDarkHex,
             AccentChannel.Delete         => vm.Theme.AccentDangerHex,
             AccentChannel.Surface1       => vm.Theme.Surface1Hex,
             AccentChannel.Surface2       => vm.Theme.Surface2Hex,
             AccentChannel.Surface3       => vm.Theme.Surface3Hex,
-            _ => vm.Theme.AccentBackgroundHex,
+            _ => vm.Theme.AccentBackgroundLightHex,
         };
         var fallback = channel == AccentChannel.Foreground
             ? new ShapeColor(255, 255, 255, 255)
@@ -481,8 +551,8 @@ public partial class MainWindow : FluentWindow
         var hex2 = $"#{picked.R:X2}{picked.G:X2}{picked.B:X2}";
         switch (channel)
         {
-            case AccentChannel.Background:     vm.Theme.AccentBackgroundHex = hex2; break;
-            case AccentChannel.Foreground:     vm.Theme.AccentForegroundHex = hex2; break;
+            case AccentChannel.Background:     vm.Theme.AccentBackgroundLightHex = hex2; break;
+            case AccentChannel.Foreground:     vm.Theme.AccentForegroundLightHex = hex2; break;
             case AccentChannel.Dark:           vm.Theme.AccentBackgroundDarkHex = hex2; break;
             case AccentChannel.ForegroundDark: vm.Theme.AccentForegroundDarkHex = hex2; break;
             case AccentChannel.Delete:         vm.Theme.AccentDangerHex = hex2; break;

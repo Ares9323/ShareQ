@@ -153,9 +153,12 @@ public partial class ColorPickerWindow : Window
         // "set Hex doesn't update the preview" was the LostFocus-only handler not firing while
         // the user kept typing/clicking inside the box.
         HexBox.TextChanged += (_, _) => { if (!_suppress) OnHexCommitted(); };
-        HexBox.KeyDown     += (_, ev) => { if (ev.Key == Key.Enter) Keyboard.ClearFocus(); };
+        // Mark Enter handled INSIDE the TextBox: ClearFocus commits the value, e.Handled stops
+        // the event from bubbling to the IsDefault OK button (which would close the dialog
+        // mid-edit). A second Enter, with focus no longer on a TextBox, reaches OK normally.
+        HexBox.KeyDown     += (_, ev) => { if (ev.Key == Key.Enter) { Keyboard.ClearFocus(); ev.Handled = true; } };
         DecBox.TextChanged += (_, _) => { if (!_suppress) OnDecimalCommitted(); };
-        DecBox.KeyDown     += (_, ev) => { if (ev.Key == Key.Enter) Keyboard.ClearFocus(); };
+        DecBox.KeyDown     += (_, ev) => { if (ev.Key == Key.Enter) { Keyboard.ClearFocus(); ev.Handled = true; } };
         // sRGB toggle: re-runs UpdateAllUi (re-paints sliders, swatches, New preview), rebuilds
         // the palette swatches, and re-rasterises the colour wheel — every visible "colour
         // value" surface follows the toggle for consistency. The wheel re-render is ~3 ms for
@@ -171,7 +174,8 @@ public partial class ColorPickerWindow : Window
 
         foreach (var b in new[] { HBox, SBox, VBox, RBox, GBox, BBox, ABox, CBox, MBox, YBox, KBox })
         {
-            b.KeyDown += (s, ev) => { if (ev.Key == Key.Enter) Keyboard.ClearFocus(); };
+            // Same handling as Hex / Dec — Enter commits without closing.
+            b.KeyDown += (s, ev) => { if (ev.Key == Key.Enter) { Keyboard.ClearFocus(); ev.Handled = true; } };
         }
     }
 

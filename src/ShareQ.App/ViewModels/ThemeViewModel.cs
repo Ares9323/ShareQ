@@ -38,8 +38,8 @@ public sealed partial class ThemeViewModel : ObservableObject
         // suppressed, then a single TryApply at the end persists + paints in one go.
         if (value is null || ReferenceEquals(value, ThemePresets.Custom)) return;
         _suppressApply = true;
-        AccentBackgroundHex = value.AccentBackgroundHex;
-        AccentForegroundHex = value.AccentForegroundHex;
+        AccentBackgroundLightHex = value.AccentBackgroundLightHex;
+        AccentForegroundLightHex = value.AccentForegroundLightHex;
         AccentBackgroundDarkHex = value.AccentBackgroundDarkHex;
         AccentForegroundDarkHex = value.AccentForegroundDarkHex;
         AccentDangerHex = value.AccentDangerHex;
@@ -51,10 +51,10 @@ public sealed partial class ThemeViewModel : ObservableObject
     }
 
     [ObservableProperty]
-    private string _accentBackgroundHex = "#751C8B";
+    private string _AccentBackgroundLightHex = "#751C8B";
 
     [ObservableProperty]
-    private string _accentForegroundHex = "#FFFFFF";
+    private string _AccentForegroundLightHex = "#FFFFFF";
 
     [ObservableProperty]
     private string _accentBackgroundDarkHex = "#371242";
@@ -100,8 +100,8 @@ public sealed partial class ThemeViewModel : ObservableObject
     [ObservableProperty]
     private Brush _surface3Preview = new SolidColorBrush(ThemeService.DefaultSurface3);
 
-    partial void OnAccentBackgroundHexChanged(string value) => TryApply();
-    partial void OnAccentForegroundHexChanged(string value) => TryApply();
+    partial void OnAccentBackgroundLightHexChanged(string value) => TryApply();
+    partial void OnAccentForegroundLightHexChanged(string value) => TryApply();
     partial void OnAccentBackgroundDarkHexChanged(string value) => TryApply();
     partial void OnAccentForegroundDarkHexChanged(string value) => TryApply();
     partial void OnAccentDangerHexChanged(string value) => TryApply();
@@ -115,8 +115,8 @@ public sealed partial class ThemeViewModel : ObservableObject
     private void SyncFromService()
     {
         _suppressApply = true;
-        AccentBackgroundHex = ThemeService.ToHex(_theme.AccentBackground);
-        AccentForegroundHex = ThemeService.ToHex(_theme.AccentForeground);
+        AccentBackgroundLightHex = ThemeService.ToHex(_theme.AccentBackground);
+        AccentForegroundLightHex = ThemeService.ToHex(_theme.AccentForeground);
         AccentBackgroundDarkHex = ThemeService.ToHex(_theme.AccentBackgroundDark);
         AccentForegroundDarkHex = ThemeService.ToHex(_theme.AccentForegroundDark);
         AccentDangerHex = ThemeService.ToHex(_theme.AccentDelete);
@@ -137,8 +137,8 @@ public sealed partial class ThemeViewModel : ObservableObject
     private void TryApply()
     {
         if (_suppressApply) return;
-        var bg = ParseOrNull(AccentBackgroundHex);
-        var fg = ParseOrNull(AccentForegroundHex);
+        var bg = ParseOrNull(AccentBackgroundLightHex);
+        var fg = ParseOrNull(AccentForegroundLightHex);
         var dark = ParseOrNull(AccentBackgroundDarkHex);
         var fgDark = ParseOrNull(AccentForegroundDarkHex);
         var del = ParseOrNull(AccentDangerHex);

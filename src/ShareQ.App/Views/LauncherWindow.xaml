@@ -33,7 +33,7 @@
         </ContextMenu>
     </Window.Resources>
     <Border Background="{DynamicResource Surface2Brush}" CornerRadius="8"
-            BorderBrush="{DynamicResource AccentBackgroundDarkBrush}" BorderThickness="1">
+            BorderBrush="{DynamicResource AccentForegroundDarkBrush}" BorderThickness="1">
         <!-- Outer wrapper grid: holds the main content + the resize thumb. The thumb sits on the
              outer card's bottom-right corner (not buried inside the inner padding) and only
              appears in drag mode — the launcher is a one-shot ephemeral overlay outside drag

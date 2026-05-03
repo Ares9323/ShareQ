@@ -23,6 +23,7 @@ public static class DefaultPipelineProfiles
     public const string RecordScreenGifId   = "record-screen-gif";
     public const string OpenScreenshotFolderId = "open-screenshot-folder";
     public const string OpenLauncherId         = "open-launcher";
+    public const string OpenSettingsId         = "open-settings";
     public const string QrReadFromRegionId     = "qr-read-from-region";
 
     // Task IDs whose implementations live in ShareQ.App (resolved at runtime by the registry).
@@ -44,6 +45,7 @@ public static class DefaultPipelineProfiles
     public const string RecordScreenTaskId         = "shareq.record-screen";
     public const string OpenScreenshotFolderTaskId = "shareq.open-screenshot-folder";
     public const string OpenLauncherMenuTaskId     = "shareq.open-launcher-menu";
+    public const string OpenSettingsTaskId         = "shareq.open-settings";
     public const string UploadClipboardTextTaskId  = "shareq.upload-clipboard-text";
 
     // Task IDs from ShareQ.Plugins.
@@ -83,6 +85,7 @@ public static class DefaultPipelineProfiles
         [ColorPickerId]           = "Tools",
         [OpenScreenshotFolderId]  = "Tools",
         [OpenLauncherId]          = "Tools",
+        [OpenSettingsId]          = "Tools",
         [QrReadFromRegionId]      = "Tools",
     };
 
@@ -376,6 +379,18 @@ public static class DefaultPipelineProfiles
             // sits where the right-hand stays naturally in muscle-memory keyboard navigation.
             // The task itself toggles open/close so a second press dismisses the launcher.
             Hotkey: new HotkeyBinding(Win, 0x5A),
+            IsBuiltIn: true),
+
+        new PipelineProfile(
+            Id: OpenSettingsId,
+            DisplayName: "Open settings",
+            Trigger: "hotkey:settings",
+            Steps:
+            [
+                new PipelineStep(OpenSettingsTaskId, Id: "open-settings")
+            ],
+            // No default hotkey — Settings is mostly tray-driven. Exposed as a workflow so the
+            // tray click picker (Settings tab) can route to it like any other action.
             IsBuiltIn: true),
     ];
 }

@@ -95,6 +95,7 @@ public static class IconCatalog
         new("", "hourglass"), new("", "wrench"), new("", "screwdriver"),
         new("", "screwdriver-wrench"), new("", "toolbox"), new("", "hammer"),
         new("", "trash"), new("", "trash-can"), new("", "broom"),
+        new("", "rotate-left"), new("", "rotate-right"), new("", "arrows-rotate"), new("", "undo"),
 
         // Charts / data / money
         new("", "chart-area"), new("", "chart-pie"), new("", "chart-bar"),

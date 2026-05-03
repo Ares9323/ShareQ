@@ -4,36 +4,48 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:vm="clr-namespace:ShareQ.App.ViewModels"
         Title="Pick an icon"
-        Width="540" Height="460"
+        Width="540" Height="500"
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
-        AllowsTransparency="False"
-        Background="#1E1E1E"
-        Foreground="White"
+        AllowsTransparency="True"
+        Background="Transparent"
         ResizeMode="NoResize"
         ShowInTaskbar="False">
-    <!-- WindowStyle=None drops the system frame; the Border below paints the same accent edge
-         the rest of the dialogs use so this picker reads as part of the family. -->
-    <Border BorderBrush="{DynamicResource AccentBackgroundDarkBrush}" BorderThickness="1">
+    <!-- AllowsTransparency=True + Background=Transparent on the Window so the inner Border can
+         render rounded corners (CornerRadius is purely visual; without transparency the
+         opaque chrome behind clips the rounding back to a square). Same trick the Launcher /
+         Clipboard / HotkeyCapture windows use to share the same "soft card" look. -->
+    <Border Background="#1E1E1E"
+            BorderBrush="{DynamicResource AccentForegroundDarkBrush}" BorderThickness="1"
+            CornerRadius="8">
         <Grid Margin="20">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <StackPanel Grid.Row="0" Margin="0,0,0,12">
-                <TextBlock Text="Pick an icon" FontSize="14" FontWeight="SemiBold" />
-                <TextBlock Text="Hover an icon to see its FontAwesome name. Click to select."
+            <StackPanel Grid.Row="0" Margin="0,0,0,8">
+                <TextBlock Text="Pick an icon" Foreground="White" FontSize="14" FontWeight="SemiBold" />
+                <TextBlock Text="Type to filter; hover for the FontAwesome name; click to select."
                            Foreground="{DynamicResource AccentForegroundDarkBrush}"
                            FontSize="11" Margin="0,4,0,0" />
             </StackPanel>
 
+            <!-- Live filter — case-insensitive substring match against the icon name. The
+                 ItemsSource is rebuilt in code-behind on every keystroke so the grid shrinks
+                 immediately. Empty query → full catalog. -->
+            <ui:TextBox Grid.Row="1" x:Name="SearchBox"
+                        PlaceholderText="🔍 Search icons (e.g. folder, code, star)…"
+                        TextChanged="OnSearchChanged"
+                        Margin="0,0,0,12" />
+
             <!-- Auto-fitting grid: ItemsControl with a UniformGrid panel. 8 columns × however
                  many rows the catalog produces; each cell is a clickable Button that fires
                  OnIconClicked with the IconCatalogEntry.Glyph as Tag. -->
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <ItemsControl ItemsSource="{x:Static vm:IconCatalog.All}">
+            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="IconGrid">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <UniformGrid Columns="8" />
@@ -62,7 +74,7 @@
                 </ItemsControl>
             </ScrollViewer>
 
-            <Grid Grid.Row="2" Margin="0,12,0,0">
+            <Grid Grid.Row="3" Margin="0,12,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />

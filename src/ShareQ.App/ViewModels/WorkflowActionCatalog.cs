@@ -324,6 +324,11 @@ public static class WorkflowActionCatalog
             "Show the launcher overlay — a 3×10 keyboard grid where every printable key fires a path / shortcut / shell target. Press a key to launch, Esc to dismiss, right-click a cell to map it to something. Wire this behind a global shortcut and you have a MaxLaunchpad-style panel inside ShareQ.",
             "Launch"),
 
+        new("shareq.open-settings",
+            "Open settings window",
+            "Show + activate the main ShareQ Settings window. Useful as a tray-click action, or as the entry step of a workflow that opens settings then runs something else.",
+            "Tools"),
+
         new("shareq.open-launcher-drag-mode",
             "Open launcher (drag mode)",
             "Show the launcher overlay already in drag-and-drop mode: the panel stays open while you drag files / folders / shortcuts from Explorer onto cells to map them. Esc exits drag mode (the launcher stays open in normal mode); a second Esc closes it.",
