@@ -936,14 +936,15 @@ public partial class MainWindow : FluentWindow
         // Confirm before overwriting — import isn't destructive (it merges, doesn't wipe), but
         // it does silently rewrite existing keys, which the user should know.
         var ok = System.Windows.MessageBox.Show(this,
-            $"Import settings from:\n{dlg.FileName}\n\nExisting values will be overwritten where the file declares them. Settings not in the file stay untouched. Continue?",
+            $"Import settings from:\n{dlg.FileName}\n\nExisting settings and categories with the same name will be overwritten. Pinned items already present (matching content) are skipped. Settings not in the file stay untouched. Continue?",
             "ShareQ — Import settings", System.Windows.MessageBoxButton.OKCancel, System.Windows.MessageBoxImage.Question);
         if (ok != System.Windows.MessageBoxResult.OK) return;
         try
         {
-            var count = await _settingsBackup.ImportAsync(dlg.FileName).ConfigureAwait(true);
+            var result = await _settingsBackup.ImportAsync(dlg.FileName).ConfigureAwait(true);
+            var skippedNote = result.PinnedSkipped > 0 ? $" ({result.PinnedSkipped} duplicate pinned skipped)" : string.Empty;
             System.Windows.MessageBox.Show(this,
-                $"Imported {count} setting(s). Some changes (theme, hotkeys) apply immediately; others may require restarting ShareQ to take effect.",
+                $"Imported {result.Settings} setting(s), {result.Categories} categor{(result.Categories == 1 ? "y" : "ies")}, {result.PinnedItems} pinned item(s){skippedNote}.\n\nSome changes (theme, hotkeys) apply immediately; others may require restarting ShareQ to take effect.",
                 "ShareQ", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
         }
         catch (Exception ex)
