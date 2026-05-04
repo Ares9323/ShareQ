@@ -114,13 +114,17 @@ public sealed class DrawImageImageEffect : DrawingImageEffectBase
 
             if (Tile)
             {
-                // Tile fills the canvas from the anchor outward — matches ShareX's TextureBrush
-                // behaviour (Wrap.Tile with translation aligned on the placement origin).
+                // Tile fills only the placement rectangle (anchor + resized overlay size) with
+                // the bitmap repeating inside it — same shape as ShareX's TextureBrush+FillRectangle.
+                // Without the tight rect bound, the tile would smear across the whole canvas
+                // (e.g. MacOS9's 22-px-tall top strip would cover the entire image).
                 using var shader = SKShader.CreateBitmap(overlay,
                     SKShaderTileMode.Repeat, SKShaderTileMode.Repeat,
                     SKMatrix.CreateTranslation(anchor.X, anchor.Y));
                 paint.Shader = shader;
-                canvas.DrawRect(new SKRect(anchor.X, anchor.Y, source.Width, source.Height), paint);
+                canvas.DrawRect(new SKRect(anchor.X, anchor.Y,
+                                           anchor.X + overlay.Width,
+                                           anchor.Y + overlay.Height), paint);
             }
             else
             {
