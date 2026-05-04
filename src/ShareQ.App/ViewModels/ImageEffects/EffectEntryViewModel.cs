@@ -20,6 +20,10 @@ public sealed partial class EffectEntryViewModel : ObservableObject
     public string DisplayName { get; set; }
     public ObservableCollection<EffectParameterViewModel> Parameters { get; set; } = new();
 
+    /// <summary>Compass cluster (Top/Right/Bottom/Left + optional Curved) when the effect
+    /// exposes those bools. Null otherwise — the property panel hides the group section.</summary>
+    public SideToggleGroupViewModel? SideToggles { get; }
+
     public Action? Changed { get; set; }
 
     public EffectEntryViewModel(EffectPresetEntry entry)
@@ -45,6 +49,27 @@ public sealed partial class EffectEntryViewModel : ObservableObject
             };
             Parameters.Add(pvm);
         }
+
+        // Pair Color/UseGradient/Gradient triplets so the property grid can swap Color and
+        // Gradient in place based on the toggle. Effects use a naming convention: <prefix>Color
+        // pairs with <prefix>UseGradient + <prefix>Gradient (prefix is empty for the primary
+        // triplet, "Outline"/"Shadow" etc. for additional ones in DrawTextEx).
+        var byName = Parameters.ToDictionary(p => p.PropertyName);
+        foreach (var color in Parameters.Where(p => p.IsColor && p.PropertyName.EndsWith("Color", StringComparison.Ordinal)))
+        {
+            var prefix = color.PropertyName[..^"Color".Length];
+            if (!byName.TryGetValue(prefix + "UseGradient", out var toggle) || !toggle.IsBool) continue;
+            if (!byName.TryGetValue(prefix + "Gradient", out var gradient) || !gradient.IsGradient) continue;
+            color.PairedToggle = toggle;
+            color.PairedGradient = gradient;
+            gradient.PairedToggle = toggle;
+            toggle.IsPairedToggle = true;
+        }
+
+        // Compass-style group (Top/Right/Bottom/Left + optional Curved). When present, the
+        // property panel renders these bools as a 3×3 chip grid above the linear param list,
+        // and TryCreate flips IsInSideGroup on each member so the linear list skips them.
+        SideToggles = SideToggleGroupViewModel.TryCreate(byName);
     }
 
     public bool Enabled
@@ -62,5 +87,5 @@ public sealed partial class EffectEntryViewModel : ObservableObject
     private static bool IsSupportedParameterType(Type t) =>
         t == typeof(float) || t == typeof(double) || t == typeof(int)
         || t == typeof(bool) || t == typeof(SKColor) || t == typeof(Padding) || t.IsEnum
-        || t == typeof(string);
+        || t == typeof(string) || t == typeof(GradientInfo);
 }

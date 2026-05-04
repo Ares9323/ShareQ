@@ -9,8 +9,8 @@ namespace ShareQ.ImageEffects.Drawings;
 /// text with optional outline + drop-shadow, anchored at one of nine canvas positions. The
 /// <see cref="Font"/> property accepts the legacy ShareX format <c>"Family, Size[unit][, style]"</c>
 /// (e.g. <c>"Arial, 36pt"</c>, <c>"Calibri, 18pt, style=Bold"</c>) which we parse on apply.
-/// Gradients per text/outline/shadow exist in ShareX but aren't ported in this MVP — only
-/// solid colours render — gradient fields are kept on the model so .sxie round-trips.</summary>
+/// Independent gradients on text / outline / shadow each fall back to the solid colour when
+/// their respective <c>UseGradient</c> toggle is off.</summary>
 public sealed class DrawTextExImageEffect : DrawingImageEffectBase
 {
     public override string Id => "draw_text_ex";
@@ -78,10 +78,18 @@ public sealed class DrawTextExImageEffect : DrawingImageEffectBase
         canvas.Translate(anchor.X, anchor.Y);
         if (Angle != 0) canvas.RotateDegrees(Angle);
 
+        // Shader sized to the glyph bounds — used by all three passes (fill / outline / shadow)
+        // when their respective UseGradient toggle is on. Computed once because all three need
+        // the same dimensions; the shader itself is per-paint (Skia doesn't allow sharing).
+        var shaderWidth = (int)bounds.Width + 1;
+        var shaderHeight = (int)bounds.Height + 1;
+
         // Drop shadow first so it sits behind the fill + outline.
         if (Shadow)
         {
             using var shadowPaint = new SKPaint { IsAntialias = true, Color = ShadowColor };
+            if (ShadowUseGradient && ShadowGradient.IsValid)
+                shadowPaint.Shader = ShadowGradient.CreateShader(shaderWidth, shaderHeight);
             canvas.DrawText(Text, ShadowOffsetX, -bounds.Top + ShadowOffsetY, font, shadowPaint);
         }
 
@@ -95,12 +103,14 @@ public sealed class DrawTextExImageEffect : DrawingImageEffectBase
                 StrokeWidth = OutlineSize,
                 Color = OutlineColor,
             };
+            if (OutlineUseGradient && OutlineGradient.IsValid)
+                outlinePaint.Shader = OutlineGradient.CreateShader(shaderWidth, shaderHeight);
             canvas.DrawText(Text, 0, -bounds.Top, font, outlinePaint);
         }
 
         using var fillPaint = new SKPaint { IsAntialias = true, Color = Color };
         if (UseGradient && Gradient.IsValid)
-            fillPaint.Shader = Gradient.CreateShader((int)bounds.Width + 1, (int)bounds.Height + 1);
+            fillPaint.Shader = Gradient.CreateShader(shaderWidth, shaderHeight);
         canvas.DrawText(Text, 0, -bounds.Top, font, fillPaint);
 
         canvas.Restore();
@@ -109,20 +119,34 @@ public sealed class DrawTextExImageEffect : DrawingImageEffectBase
 
     private SKPoint ResolveAnchor(int canvasWidth, int canvasHeight, float textWidth, float textHeight)
     {
-        // Translate Placement → top-left position of the text rectangle, then add Offset.
-        var x = Placement switch
+        // Translate Placement → top-left position of the text rectangle, then apply Offset.
+        // Offset is always "distance from the anchor edge" — so for *Right placements OffsetX
+        // pushes LEFT (-X) and for Bottom* placements OffsetY pushes UP (-Y). Mirrors ShareX's
+        // Helpers.GetPosition exactly so .sxie presets land where their authors intended.
+        // Note: MiddleCenter follows ShareX's quirk of ignoring the offset entirely.
+        switch (Placement)
         {
-            TextPlacement.TopLeft or TextPlacement.MiddleLeft or TextPlacement.BottomLeft => 0f,
-            TextPlacement.TopCenter or TextPlacement.MiddleCenter or TextPlacement.BottomCenter => (canvasWidth - textWidth) / 2f,
-            _ => canvasWidth - textWidth,
-        };
-        var y = Placement switch
-        {
-            TextPlacement.TopLeft or TextPlacement.TopCenter or TextPlacement.TopRight => 0f,
-            TextPlacement.MiddleLeft or TextPlacement.MiddleCenter or TextPlacement.MiddleRight => (canvasHeight - textHeight) / 2f,
-            _ => canvasHeight - textHeight,
-        };
-        return new SKPoint(x + OffsetX, y + OffsetY);
+            case TextPlacement.TopLeft:
+                return new SKPoint(OffsetX, OffsetY);
+            case TextPlacement.TopCenter:
+                return new SKPoint((canvasWidth - textWidth) / 2f, OffsetY);
+            case TextPlacement.TopRight:
+                return new SKPoint(canvasWidth - textWidth - OffsetX, OffsetY);
+            case TextPlacement.MiddleLeft:
+                return new SKPoint(OffsetX, (canvasHeight - textHeight) / 2f);
+            case TextPlacement.MiddleCenter:
+                return new SKPoint((canvasWidth - textWidth) / 2f, (canvasHeight - textHeight) / 2f);
+            case TextPlacement.MiddleRight:
+                return new SKPoint(canvasWidth - textWidth - OffsetX, (canvasHeight - textHeight) / 2f);
+            case TextPlacement.BottomLeft:
+                return new SKPoint(OffsetX, canvasHeight - textHeight - OffsetY);
+            case TextPlacement.BottomCenter:
+                return new SKPoint((canvasWidth - textWidth) / 2f, canvasHeight - textHeight - OffsetY);
+            case TextPlacement.BottomRight:
+                return new SKPoint(canvasWidth - textWidth - OffsetX, canvasHeight - textHeight - OffsetY);
+            default:
+                return new SKPoint(OffsetX, OffsetY);
+        }
     }
 
     /// <summary>Parse a ShareX legacy font descriptor (<c>"Arial, 36pt"</c>). Returns family

@@ -72,18 +72,32 @@ public sealed class DrawImageImageEffect : DrawingImageEffectBase
 
     private SKPoint ResolveAnchor(int canvasW, int canvasH, int imageW, int imageH)
     {
-        var x = Placement switch
+        // Offset is "distance from the anchor edge" — for *Right OffsetX pushes LEFT, for
+        // Bottom* OffsetY pushes UP. Mirrors ShareX Helpers.GetPosition exactly so .sxie
+        // packages with non-zero offsets land where their authors intended. Same convention
+        // we already adopted in DrawTextExImageEffect.
+        switch (Placement)
         {
-            TextPlacement.TopLeft or TextPlacement.MiddleLeft or TextPlacement.BottomLeft => 0,
-            TextPlacement.TopCenter or TextPlacement.MiddleCenter or TextPlacement.BottomCenter => (canvasW - imageW) / 2,
-            _ => canvasW - imageW,
-        };
-        var y = Placement switch
-        {
-            TextPlacement.TopLeft or TextPlacement.TopCenter or TextPlacement.TopRight => 0,
-            TextPlacement.MiddleLeft or TextPlacement.MiddleCenter or TextPlacement.MiddleRight => (canvasH - imageH) / 2,
-            _ => canvasH - imageH,
-        };
-        return new SKPoint(x + OffsetX, y + OffsetY);
+            case TextPlacement.TopLeft:
+                return new SKPoint(OffsetX, OffsetY);
+            case TextPlacement.TopCenter:
+                return new SKPoint((canvasW - imageW) / 2, OffsetY);
+            case TextPlacement.TopRight:
+                return new SKPoint(canvasW - imageW - OffsetX, OffsetY);
+            case TextPlacement.MiddleLeft:
+                return new SKPoint(OffsetX, (canvasH - imageH) / 2);
+            case TextPlacement.MiddleCenter:
+                return new SKPoint((canvasW - imageW) / 2, (canvasH - imageH) / 2);
+            case TextPlacement.MiddleRight:
+                return new SKPoint(canvasW - imageW - OffsetX, (canvasH - imageH) / 2);
+            case TextPlacement.BottomLeft:
+                return new SKPoint(OffsetX, canvasH - imageH - OffsetY);
+            case TextPlacement.BottomCenter:
+                return new SKPoint((canvasW - imageW) / 2, canvasH - imageH - OffsetY);
+            case TextPlacement.BottomRight:
+                return new SKPoint(canvasW - imageW - OffsetX, canvasH - imageH - OffsetY);
+            default:
+                return new SKPoint(OffsetX, OffsetY);
+        }
     }
 }

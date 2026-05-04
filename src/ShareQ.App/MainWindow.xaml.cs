@@ -576,6 +576,31 @@ public partial class MainWindow : FluentWindow
             cb.IsChecked = ShareQ.App.Services.SxcuFileAssociation.IsRegistered();
     }
 
+    private void OnSxieAssociationCheckBoxLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.CheckBox cb)
+            cb.IsChecked = ShareQ.App.Services.SxieFileAssociation.IsRegistered();
+    }
+
+    private void OnSxieAssociationToggled(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.CheckBox cb) return;
+        try
+        {
+            if (cb.IsChecked == true)
+                ShareQ.App.Services.SxieFileAssociation.Register();
+            else
+                ShareQ.App.Services.SxieFileAssociation.Unregister();
+        }
+        catch (Exception ex)
+        {
+            cb.IsChecked = ShareQ.App.Services.SxieFileAssociation.IsRegistered();
+            System.Windows.MessageBox.Show(this,
+                $"Couldn't update the .sxie association:\n{ex.Message}",
+                "ShareQ", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+        }
+    }
+
     /// <summary>"Pick…" button on the Add-category row → open the IconPickerDialog and write
     /// back into <see cref="CategoriesViewModel.NewCategoryIcon"/>. Clear is treated as "remove
     /// icon" (empty string).</summary>

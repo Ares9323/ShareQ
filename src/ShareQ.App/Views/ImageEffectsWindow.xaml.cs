@@ -49,6 +49,11 @@ public partial class ImageEffectsWindow : Wpf.Ui.Controls.FluentWindow
         _viewModel.Dispose();
     }
 
+    /// <summary>Public entry point used by the file-association handler to load a .sxie into
+    /// an already-open editor instead of spinning up a fresh one. Returns the imported preset's
+    /// loading task so the caller can await it before bringing the window forward.</summary>
+    public Task ImportSxieAsync(string path) => _viewModel.ImportSxieFileAsync(path);
+
     private async Task LoadPlacementAsync()
     {
         if (_settings is null) return;
@@ -264,18 +269,73 @@ public partial class ImageEffectsWindow : Wpf.Ui.Controls.FluentWindow
         if (sender is TextBox tb && tb.DataContext is PresetItemViewModel vm) vm.CommitEdit();
     }
 
-    /// <summary>Open the editor's HSV ColorPickerWindow seeded with the parameter's current
-    /// SKColor; on OK push the picked colour back to the VM. Reuses the dialog already shipped
-    /// with the annotation editor — keeps the UX consistent across surfaces.</summary>
-    private void OnPickColorClicked(object sender, RoutedEventArgs e)
+    /// <summary>Click on a Color swatch — opens the editor's HSV ColorPickerWindow seeded
+    /// with the parameter's current SKColor; on OK pushes the picked colour back to the VM.
+    /// The swatch is the only affordance — the surrounding "Pick…" button was removed in
+    /// favour of clicking directly on the swatch itself.</summary>
+    private void OnColorSwatchMouseDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is not FrameworkElement fe || fe.Tag is not EffectParameterViewModel vm) return;
+        e.Handled = true;
         var c = vm.ColorValue;
         var initial = new ShareQ.Editor.Model.ShapeColor(c.Alpha, c.Red, c.Green, c.Blue);
         var dialog = new ShareQ.Editor.Views.ColorPickerWindow(initial) { Owner = this };
         if (dialog.ShowDialog() != true) return;
         var picked = dialog.PickedColor;
         vm.ColorValue = new SkiaSharp.SKColor(picked.R, picked.G, picked.B, picked.A);
+    }
+
+    /// <summary>Click on a Gradient swatch — opens GradientEditorWindow seeded with the
+    /// parameter's current GradientInfo. On OK we copy the dialog's stop list back into
+    /// the live GradientInfo (kept by reference) and notify the VM to refresh the swatch and
+    /// kick a preview re-render. The Tag is bound to the gradient VM directly so it works
+    /// both for standalone gradients and for the paired Color row's swap-in swatch.</summary>
+    private void OnGradientSwatchMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.Tag is not EffectParameterViewModel vm) return;
+        e.Handled = true;
+        if (vm.GradientValue is not { } current) return;
+        var dialog = new GradientEditorWindow(current, _settings) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is not { } edited) return;
+        current.Type = edited.Type;
+        current.Colors.Clear();
+        foreach (var s in edited.Colors) current.Colors.Add(new ShareQ.ImageEffects.Drawing.GradientStop(s.Color, s.Location));
+        vm.NotifyGradientChanged();
+    }
+
+    /// <summary>Browse for an image file and store the chosen path on the parameter VM.
+    /// Used by FilePath-kind rows (currently DrawImage's ImageLocation). The dialog filters
+    /// common raster formats but keeps an "All files" entry so users can still pick something
+    /// non-standard if they really need to.</summary>
+    private void OnBrowseImageFileClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.Tag is not EffectParameterViewModel vm) return;
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Pick an image",
+            Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.webp;*.gif|All files|*.*",
+            CheckFileExists = true,
+        };
+        if (!string.IsNullOrWhiteSpace(vm.StringValue) && System.IO.File.Exists(vm.StringValue))
+            dlg.FileName = vm.StringValue;
+        if (dlg.ShowDialog(this) != true) return;
+        vm.StringValue = dlg.FileName;
+    }
+
+    /// <summary>Open the ShareX image-effects gallery in the user's default browser.
+    /// Files downloaded from there are .sxie packages and can be loaded back through the
+    /// existing Import… button without further translation.</summary>
+    private void OnOpenEffectsGalleryClicked(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "https://getsharex.com/image-effects",
+                UseShellExecute = true,
+            });
+        }
+        catch { /* defensive — bad shell hook, missing browser, etc. */ }
     }
 
     private static string SafeFileName(string s)

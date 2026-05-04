@@ -40,11 +40,14 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        // Pull the .sxcu file path out of argv if present (Explorer file association invokes us
-        // with the path as argv[0] / argv[1] depending on how shell picked it). We only act on
-        // this once we know we're the primary; secondary instances forward it through the pipe.
+        // Pull the .sxcu / .sxie file path out of argv if present (Explorer file association
+        // invokes us with the path as argv[0] / argv[1] depending on how shell picked it). We
+        // only act on this once we know we're the primary; secondary instances forward it
+        // through the pipe.
         var sxcuPath = e.Args.FirstOrDefault(a =>
             !string.IsNullOrEmpty(a) && a.EndsWith(".sxcu", StringComparison.OrdinalIgnoreCase));
+        var sxiePath = e.Args.FirstOrDefault(a =>
+            !string.IsNullOrEmpty(a) && a.EndsWith(".sxie", StringComparison.OrdinalIgnoreCase));
 
         // --upload <path>: Explorer context-menu entry uses this. We don't validate the file
         // exists here (the upload pipeline will surface its own error); we just thread the path
@@ -62,13 +65,15 @@ public partial class App : Application
         var guard = new SingleInstanceGuard();
         if (!guard.IsPrimary)
         {
-            // Priority: upload (most specific) → sxcu → bare relaunch. Each prefix routes the
-            // payload to the matching handler in the primary's AnotherInstanceStarted listener.
+            // Priority: upload (most specific) → sxcu → sxie → bare relaunch. Each prefix routes
+            // the payload to the matching handler in the primary's AnotherInstanceStarted listener.
             string msg;
             if (uploadPath is not null)
                 msg = SingleInstanceGuard.UploadPrefix + Path.GetFullPath(uploadPath);
             else if (sxcuPath is not null)
                 msg = SingleInstanceGuard.SxcuPrefix + Path.GetFullPath(sxcuPath);
+            else if (sxiePath is not null)
+                msg = SingleInstanceGuard.SxiePrefix + Path.GetFullPath(sxiePath);
             else
                 msg = SingleInstanceGuard.ShowMessage;
             try { await guard.NotifyExistingInstanceAsync(msg, CancellationToken.None); }
@@ -395,6 +400,11 @@ public partial class App : Application
                     var path = message[SingleInstanceGuard.SxcuPrefix.Length..];
                     HandleSxcuOpen(path, window);
                 }
+                else if (message.StartsWith(SingleInstanceGuard.SxiePrefix, StringComparison.Ordinal))
+                {
+                    var path = message[SingleInstanceGuard.SxiePrefix.Length..];
+                    HandleSxieOpen(path, window);
+                }
                 else if (message.StartsWith(SingleInstanceGuard.UploadPrefix, StringComparison.Ordinal))
                 {
                     var path = message[SingleInstanceGuard.UploadPrefix.Length..];
@@ -413,6 +423,13 @@ public partial class App : Application
             _ = Dispatcher.BeginInvoke(new Action(() => HandleSxcuOpen(Path.GetFullPath(sxcuPath), window)),
                 System.Windows.Threading.DispatcherPriority.Loaded);
         }
+        // Same cold-start handling for .sxie — opens the image-effects window with the imported
+        // preset, mirroring how ShareX itself handles a double-click on a .sxie file.
+        if (sxiePath is not null)
+        {
+            _ = Dispatcher.BeginInvoke(new Action(() => HandleSxieOpen(Path.GetFullPath(sxiePath), window)),
+                System.Windows.Threading.DispatcherPriority.Loaded);
+        }
         // Same idea for --upload: cold-start from the Explorer context-menu — the user clicked
         // "Upload with ShareQ" and ShareQ wasn't running yet. Process the file then sit in the
         // tray; popping the Settings window unsolicited would feel wrong for a one-shot upload.
@@ -424,8 +441,8 @@ public partial class App : Application
         guard.StartListening();
 
         // Cold-start from the context menu (--upload) is silent: tray-only, no Settings popup.
-        // Sxcu still wants the main window because the import dialog needs an Owner.
-        var startSilent = uploadPath is not null && sxcuPath is null;
+        // Sxcu / sxie still want the main window because their import dialogs need an Owner.
+        var startSilent = uploadPath is not null && sxcuPath is null && sxiePath is null;
         if (!startSilent) window.Show();
         window.Closing += (sender, args) =>
         {
@@ -530,6 +547,52 @@ public partial class App : Application
         catch (Exception ex)
         {
             MessageBox.Show(owner, $"Couldn't open .sxcu file:\n{ex.Message}",
+                "ShareQ", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>Direct import of a .sxie image-effects preset (Explorer file association).
+    /// Mirrors ShareX's behaviour — no confirmation dialog, just open the image-effects window
+    /// with the imported preset selected. If an editor window is already open, we reuse it
+    /// (importing into its existing VM + bringing it forward) instead of stacking N windows.</summary>
+    private async void HandleSxieOpen(string path, Window owner)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                MessageBox.Show(owner, $"File not found:\n{path}", "ShareQ",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            // Reuse an open editor if there is one — Application.Windows includes any
+            // ImageEffectsWindow opened from Settings or from a previous .sxie association.
+            var existing = Application.Current.Windows
+                .OfType<ShareQ.App.Views.ImageEffectsWindow>()
+                .FirstOrDefault();
+            if (existing is not null)
+            {
+                if (existing.WindowState == WindowState.Minimized) existing.WindowState = WindowState.Normal;
+                existing.Activate();
+                await existing.ImportSxieAsync(path).ConfigureAwait(true);
+                return;
+            }
+
+            // No editor open yet — spin one up with the same DI wiring as the
+            // "Open image effects editor…" button in Settings (SQLite preset store + persisted
+            // window placement).
+            var presetStore = _host!.Services.GetRequiredService<ShareQ.Storage.ImageEffects.IImageEffectPresetStore>();
+            var settingsStore = _host.Services.GetRequiredService<ShareQ.Storage.Settings.ISettingsStore>();
+            var vm = new ShareQ.App.ViewModels.ImageEffects.ImageEffectsViewModel(
+                ShareQ.ImageEffects.ImageEffectRegistry.Default, presetStore);
+            var window = new ShareQ.App.Views.ImageEffectsWindow(vm, settingsStore) { Owner = owner };
+            window.Show();
+            await vm.ImportSxieFileAsync(path).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(owner, $"Couldn't open .sxie file:\n{ex.Message}",
                 "ShareQ", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

@@ -3,7 +3,7 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:vm="clr-namespace:ShareQ.App.ViewModels.ImageEffects"
-                 Title="ShareQ — Image effects"
+                 Title="ShareQ - Image effects"
                  Width="1200" Height="780"
                  MinWidth="900" MinHeight="600"
                  WindowStartupLocation="CenterOwner"
@@ -18,7 +18,17 @@
              handlers (PreviewMouseLeftButtonDown + GotKeyboardFocus) match what File
              Explorer / Visual Studio do for numeric fields: a single click selects the
              contents so you can type a replacement without manually clearing first. -->
-        <Style TargetType="TextBox">
+        <!-- BasedOn={x:Type ...} so the implicit theme style still applies — without it, the
+             plain <Style TargetType="..."> declaration replaces the WPF-UI default and you
+             end up with the unstyled WPF TextBox (white background, black text on dark theme). -->
+        <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <EventSetter Event="PreviewMouseLeftButtonDown" Handler="OnTextBoxPreviewMouseDown" />
+            <EventSetter Event="GotKeyboardFocus" Handler="OnTextBoxGotFocus" />
+        </Style>
+        <!-- Same select-all-on-focus behaviour for the WPF-UI variant. Implicit styles in WPF
+             only match the exact TargetType, so the events have to be re-attached for
+             ui:TextBox; the BasedOn keeps WPF-UI's themed appearance intact. -->
+        <Style TargetType="ui:TextBox" BasedOn="{StaticResource {x:Type ui:TextBox}}">
             <EventSetter Event="PreviewMouseLeftButtonDown" Handler="OnTextBoxPreviewMouseDown" />
             <EventSetter Event="GotKeyboardFocus" Handler="OnTextBoxGotFocus" />
         </Style>
@@ -46,6 +56,45 @@
              icon ended up clipped at the descender. No HorizontalAlignment override either —
              the WPF-UI Button centres its content already, and forcing it here was producing
              a vertically-stretched look on tall buttons. -->
+        <!-- Pill-style on/off chip for the side-toggle compass (Top/Right/Bottom/Left/Curved).
+             Background flips to AccentBackgroundDark when checked — same visual language as the
+             rest of the editor's primary buttons. -->
+        <Style x:Key="SideChip" TargetType="ToggleButton">
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Margin" Value="2" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd" CornerRadius="14"
+                                Background="{DynamicResource Surface3Brush}"
+                                BorderBrush="{DynamicResource AccentForegroundDarkBrush}"
+                                BorderThickness="1">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush"
+                                        Value="{DynamicResource AccentForegroundBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background"
+                                        Value="{DynamicResource AccentBackgroundDarkBrush}" />
+                                <Setter TargetName="Bd" Property="BorderBrush"
+                                        Value="{DynamicResource AccentBackgroundDarkBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="GlyphTextBlock" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{DynamicResource IconFont}" />
             <Setter Property="FontSize" Value="13" />
@@ -89,7 +138,11 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <ui:TitleBar Grid.Row="0" Title="ShareQ — Image effects" />
+            <ui:TitleBar Grid.Row="0" Title="ShareQ - Image effects">
+                <ui:TitleBar.Icon>
+                    <ui:ImageIcon Source="{StaticResource ShareQLogo}" />
+                </ui:TitleBar.Icon>
+            </ui:TitleBar>
 
             <Grid Grid.Row="1" Margin="12,8,12,12">
                 <Grid.ColumnDefinitions>
@@ -130,6 +183,13 @@
                             </ui:Button>
                             <ui:Button Margin="0,0,4,0" Command="{Binding BeginRenameSelectedCommand}" ToolTip="Rename (F2)">
                                 <TextBlock Text="&#xF044;" Style="{StaticResource GlyphTextBlock}" />
+                            </ui:Button>
+                            <!-- Globe — opens the public ShareX effects gallery in the user's browser.
+                                 Same .sxie format we already import, so anything they download lands via
+                                 the existing Import… button. -->
+                            <ui:Button Click="OnOpenEffectsGalleryClicked"
+                                       ToolTip="Get effects (opens browser)">
+                                <TextBlock Text="&#xF0AC;" Style="{StaticResource GlyphTextBlock}" />
                             </ui:Button>
                         </StackPanel>
                         <ui:Button Grid.Row="2" Content="Import…" HorizontalAlignment="Stretch"
@@ -224,28 +284,65 @@
                         <TextBlock Grid.Row="0" Style="{StaticResource PanelHeader}"
                                    Text="{Binding SelectedEntry.DisplayName, StringFormat='Properties — {0}', FallbackValue='Properties — (no selection)', Mode=OneWay}" />
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                            <!-- Compass cluster (Top/Right/Bottom/Left + optional Curved). Built once
+                                 per selected entry; null for effects without these toggles, so the
+                                 ContentControl's NotNullToVisibility hides the section entirely. -->
+                            <ContentControl Content="{Binding SelectedEntry.SideToggles}"
+                                            Visibility="{Binding SelectedEntry.SideToggles, Converter={StaticResource NotNullToVisibility}}"
+                                            Margin="0,0,0,12">
+                                <ContentControl.ContentTemplate>
+                                    <DataTemplate DataType="{x:Type vm:SideToggleGroupViewModel}">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.ColumnSpan="3" Text="Sides"
+                                                       Style="{StaticResource PanelHeader}" />
+                                            <ToggleButton Grid.Row="1" Grid.Column="1" Content="Top"
+                                                          IsChecked="{Binding Top.BoolValue, Mode=TwoWay}"
+                                                          Style="{StaticResource SideChip}" />
+                                            <ToggleButton Grid.Row="2" Grid.Column="0" Content="Left"
+                                                          IsChecked="{Binding Left.BoolValue, Mode=TwoWay}"
+                                                          Style="{StaticResource SideChip}" />
+                                            <ToggleButton Grid.Row="2" Grid.Column="1"
+                                                          Content="{Binding CenterLabel}"
+                                                          IsChecked="{Binding Center.BoolValue, Mode=TwoWay}"
+                                                          Visibility="{Binding HasCenter, Converter={StaticResource BoolToVisibility}}"
+                                                          Style="{StaticResource SideChip}" />
+                                            <ToggleButton Grid.Row="2" Grid.Column="2" Content="Right"
+                                                          IsChecked="{Binding Right.BoolValue, Mode=TwoWay}"
+                                                          Style="{StaticResource SideChip}" />
+                                            <ToggleButton Grid.Row="3" Grid.Column="1" Content="Bottom"
+                                                          IsChecked="{Binding Bottom.BoolValue, Mode=TwoWay}"
+                                                          Style="{StaticResource SideChip}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ContentControl.ContentTemplate>
+                            </ContentControl>
                             <ItemsControl ItemsSource="{Binding SelectedEntry.Parameters}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:EffectParameterViewModel}">
-                                        <Grid Margin="0,0,0,12">
+                                        <!-- Visibility=IsActive collapses paired Color when UseGradient is on (and the
+                                             Gradient when it's off), so the two rows swap in place rather than stacking. -->
+                                        <Grid Margin="0,0,0,12"
+                                              Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibility}}">
                                             <Grid.RowDefinitions>
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
 
-                                            <!-- Header line: label on the left, contextual value readout on the right
-                                                 (numeric for sliders, hex for colours, "L T R B" for paddings). -->
-                                            <Grid Grid.Row="0">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{Binding Label}" />
-                                                <TextBlock Grid.Column="1"
-                                                           Text="{Binding Value, StringFormat={}{0:F2}}"
-                                                           Visibility="{Binding IsNumber, Converter={StaticResource BoolToVisibility}}"
-                                                           Foreground="{DynamicResource AccentForegroundDarkBrush}" />
-                                            </Grid>
+                                            <!-- Header line: just the label. The numeric readout used to live here too,
+                                                 but it duplicated the value already shown in the editable TextBox below. -->
+                                            <TextBlock Grid.Row="0" Text="{Binding Label}" />
 
                                             <!-- Float / int — slider + numeric textbox. -->
                                             <Grid Grid.Row="1" Margin="0,4,0,0"
@@ -262,11 +359,12 @@
                                                         IsSnapToTickEnabled="False"
                                                         VerticalAlignment="Center"
                                                         Margin="0,0,8,0" />
-                                                <TextBox Grid.Column="1"
-                                                         Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus, StringFormat='{}{0:F2}'}"
-                                                         KeyDown="OnParameterTextBoxKeyDown"
-                                                         HorizontalContentAlignment="Right"
-                                                         VerticalContentAlignment="Center" />
+                                                <ui:TextBox Grid.Column="1"
+                                                            Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus, StringFormat='{}{0:F2}'}"
+                                                            KeyDown="OnParameterTextBoxKeyDown"
+                                                            HorizontalContentAlignment="Right"
+                                                            VerticalContentAlignment="Center"
+                                                            ClearButtonEnabled="False" />
                                             </Grid>
 
                                             <!-- Bool — single checkbox aligned with the label baseline. -->
@@ -274,29 +372,60 @@
                                                       IsChecked="{Binding BoolValue, Mode=TwoWay}"
                                                       Visibility="{Binding IsBool, Converter={StaticResource BoolToVisibility}}" />
 
-                                            <!-- Color — swatch + Pick… button. The swatch is a Border whose Background
-                                                 is bound to the hex form of ColorValue; clicking either opens the picker. -->
+                                            <!-- Color — small square swatch (32×32) with checker behind for partial alpha.
+                                                 Double-click opens the colour picker. Paired Color rows host the swatch + an
+                                                 inline "Use gradient" checkbox: when the toggle is on, the swatch swaps to
+                                                 show the paired Gradient (double-click then opens the gradient editor). -->
                                             <Grid Grid.Row="1" Margin="0,4,0,0"
                                                   Visibility="{Binding IsColor, Converter={StaticResource BoolToVisibility}}">
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
                                                 </Grid.ColumnDefinitions>
-                                                <Border Grid.Column="0" Height="22" CornerRadius="3"
+                                                <!-- Color swatch (default, or paired Color when toggle is off). -->
+                                                <Border Grid.Column="0" Width="32" Height="32" CornerRadius="3"
                                                         BorderBrush="{DynamicResource AccentForegroundDarkBrush}"
                                                         BorderThickness="1"
-                                                        Background="{Binding ColorBrush}"
-                                                        Margin="0,0,8,0" />
-                                                <ui:Button Grid.Column="1" Content="Pick…"
-                                                           Click="OnPickColorClicked"
-                                                           Tag="{Binding}" />
+                                                        Background="{StaticResource CheckerBrush}"
+                                                        Cursor="Hand"
+                                                        ToolTip="Click to change colour"
+                                                        Tag="{Binding}"
+                                                        MouseLeftButtonDown="OnColorSwatchMouseDown"
+                                                        Visibility="{Binding ShowsColor, Converter={StaticResource BoolToVisibility}}">
+                                                    <Rectangle Fill="{Binding ColorBrush}" RadiusX="2" RadiusY="2" />
+                                                </Border>
+                                                <!-- Paired Gradient swatch — same slot, only when the toggle is on. Reads from
+                                                     PairedGradient.GradientBrush so the direction is reflected in the preview. -->
+                                                <Border Grid.Column="0" Width="32" Height="32" CornerRadius="3"
+                                                        BorderBrush="{DynamicResource AccentForegroundDarkBrush}"
+                                                        BorderThickness="1"
+                                                        Background="{StaticResource CheckerBrush}"
+                                                        Cursor="Hand"
+                                                        ToolTip="Click to edit gradient"
+                                                        Tag="{Binding PairedGradient}"
+                                                        MouseLeftButtonDown="OnGradientSwatchMouseDown"
+                                                        Visibility="{Binding ShowsPairedGradient, Converter={StaticResource BoolToVisibility}}">
+                                                    <Rectangle Fill="{Binding PairedGradient.GradientBrush}" RadiusX="2" RadiusY="2" />
+                                                </Border>
+                                                <!-- Inline Use gradient toggle — only on paired Color rows (PairedToggle != null);
+                                                     hidden for unpaired Colors so the swatch sits alone. -->
+                                                <CheckBox Grid.Column="1"
+                                                          Content="Use gradient"
+                                                          Margin="12,0,0,0"
+                                                          VerticalAlignment="Center"
+                                                          IsChecked="{Binding PairedToggle.BoolValue, Mode=TwoWay}"
+                                                          Visibility="{Binding PairedToggle, Converter={StaticResource NotNullToVisibility}}" />
                                             </Grid>
 
-                                            <!-- Padding — 4 numeric inputs in a single row, labelled L/T/R/B above each. -->
+                                            <!-- Padding — compass-style 3×3 grid mirroring the side-toggle layout: each input
+                                                 sits where its side actually is on the canvas (Top above, Bottom below,
+                                                 Left/Right on the sides), so the L/T/R/B labels become unnecessary.
+                                                 Columns are *-sized so the cluster fills the property panel horizontally,
+                                                 and ClearButtonEnabled=False kills WPF-UI's "X" affordance which otherwise
+                                                 overlaps the digits when an input has focus. -->
                                             <Grid Grid.Row="1" Margin="0,4,0,0"
                                                   Visibility="{Binding IsPadding, Converter={StaticResource BoolToVisibility}}">
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="*" />
@@ -304,15 +433,37 @@
                                                 <Grid.RowDefinitions>
                                                     <RowDefinition Height="Auto" />
                                                     <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
                                                 </Grid.RowDefinitions>
-                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="L" FontSize="10" Foreground="{DynamicResource AccentForegroundDarkBrush}" />
-                                                <TextBlock Grid.Row="0" Grid.Column="1" Text="T" FontSize="10" Foreground="{DynamicResource AccentForegroundDarkBrush}" />
-                                                <TextBlock Grid.Row="0" Grid.Column="2" Text="R" FontSize="10" Foreground="{DynamicResource AccentForegroundDarkBrush}" />
-                                                <TextBlock Grid.Row="0" Grid.Column="3" Text="B" FontSize="10" Foreground="{DynamicResource AccentForegroundDarkBrush}" />
-                                                <TextBox Grid.Row="1" Grid.Column="0" Margin="0,0,4,0" Text="{Binding PaddingLeft, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" KeyDown="OnParameterTextBoxKeyDown" />
-                                                <TextBox Grid.Row="1" Grid.Column="1" Margin="0,0,4,0" Text="{Binding PaddingTop, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" KeyDown="OnParameterTextBoxKeyDown" />
-                                                <TextBox Grid.Row="1" Grid.Column="2" Margin="0,0,4,0" Text="{Binding PaddingRight, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" KeyDown="OnParameterTextBoxKeyDown" />
-                                                <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding PaddingBottom, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" KeyDown="OnParameterTextBoxKeyDown" />
+                                                <ui:TextBox Grid.Row="0" Grid.Column="1" Margin="2"
+                                                            Text="{Binding PaddingTop, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                            KeyDown="OnParameterTextBoxKeyDown"
+                                                            HorizontalContentAlignment="Center"
+                                                            ClearButtonEnabled="False" />
+                                                <ui:TextBox Grid.Row="1" Grid.Column="0" Margin="2"
+                                                            Text="{Binding PaddingLeft, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                            KeyDown="OnParameterTextBoxKeyDown"
+                                                            HorizontalContentAlignment="Center"
+                                                            ClearButtonEnabled="False" />
+                                                <!-- Uniform chip — when active, editing any of the four sides mirrors the value
+                                                     into the other three. Pure UX state, not persisted; pre-ticked when the four
+                                                     sides start out equal so the user gets the link-by-default for symmetric
+                                                     paddings. -->
+                                                <ToggleButton Grid.Row="1" Grid.Column="1"
+                                                              Content="Uniform"
+                                                              IsChecked="{Binding IsUniform, Mode=TwoWay}"
+                                                              ToolTip="When on, editing one side updates all four"
+                                                              Style="{StaticResource SideChip}" />
+                                                <ui:TextBox Grid.Row="1" Grid.Column="2" Margin="2"
+                                                            Text="{Binding PaddingRight, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                            KeyDown="OnParameterTextBoxKeyDown"
+                                                            HorizontalContentAlignment="Center"
+                                                            ClearButtonEnabled="False" />
+                                                <ui:TextBox Grid.Row="2" Grid.Column="1" Margin="2"
+                                                            Text="{Binding PaddingBottom, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                            KeyDown="OnParameterTextBoxKeyDown"
+                                                            HorizontalContentAlignment="Center"
+                                                            ClearButtonEnabled="False" />
                                             </Grid>
 
                                             <!-- Enum — combobox of available names. -->
@@ -321,16 +472,110 @@
                                                       SelectedItem="{Binding EnumValue, Mode=TwoWay}"
                                                       Visibility="{Binding IsEnum, Converter={StaticResource BoolToVisibility}}" />
 
-                                            <!-- String — single-line textbox for watermark text, font descriptors,
-                                                 image paths. LostFocus commit so re-render doesn't fire mid-typing. -->
-                                            <TextBox Grid.Row="1" Margin="0,4,0,0"
-                                                     Text="{Binding StringValue, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                                                     KeyDown="OnParameterTextBoxKeyDown"
-                                                     Visibility="{Binding IsString, Converter={StaticResource BoolToVisibility}}" />
+                                            <!-- String — single-line textbox for watermark text, etc.
+                                                 LostFocus commit so re-render doesn't fire mid-typing. -->
+                                            <ui:TextBox Grid.Row="1" Margin="0,4,0,0"
+                                                        Text="{Binding StringValue, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                        KeyDown="OnParameterTextBoxKeyDown"
+                                                        ClearButtonEnabled="False"
+                                                        Visibility="{Binding IsString, Converter={StaticResource BoolToVisibility}}" />
+
+                                            <!-- FilePath — string + browse button. Same 32×32 surface3 button as the
+                                                 workflow's file/folder picker; click opens an OpenFileDialog filtered to
+                                                 common image types. -->
+                                            <Grid Grid.Row="1" Margin="0,4,0,0"
+                                                  Visibility="{Binding IsFilePath, Converter={StaticResource BoolToVisibility}}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <ui:TextBox Grid.Column="0"
+                                                            Text="{Binding StringValue, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                            KeyDown="OnParameterTextBoxKeyDown"
+                                                            ClearButtonEnabled="False" />
+                                                <Button Grid.Column="1"
+                                                        Width="32" Height="32" Padding="0"
+                                                        Background="{DynamicResource Surface3Brush}"
+                                                        BorderBrush="#444" BorderThickness="1"
+                                                        Cursor="Hand" Margin="4,0,0,0"
+                                                        Click="OnBrowseImageFileClicked"
+                                                        Tag="{Binding}"
+                                                        ToolTip="Pick an image file…">
+                                                    <TextBlock Text="&#xF15B;"
+                                                               FontFamily="{DynamicResource IconFont}"
+                                                               FontSize="14" Foreground="#DDD"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Button>
+                                            </Grid>
+
+                                            <!-- Font — searchable family ComboBox (IsTextSearchEnabled gives incremental
+                                                 type-to-jump matching) + slider+textbox for size + Bold/Italic chips.
+                                                 ItemsSource is the static system-fonts cache so every Font row reuses the
+                                                 same enumeration. Round-trips via the VM's FormatFontDescriptor into the
+                                                 underlying ShareX-style descriptor string. -->
+                                            <Grid Grid.Row="1" Margin="0,4,0,0"
+                                                  Visibility="{Binding IsFont, Converter={StaticResource BoolToVisibility}}">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+                                                <ComboBox Grid.Row="0"
+                                                          IsEditable="True"
+                                                          IsTextSearchEnabled="True"
+                                                          IsTextSearchCaseSensitive="False"
+                                                          StaysOpenOnEdit="True"
+                                                          MaxDropDownHeight="280"
+                                                          ItemsSource="{x:Static vm:EffectParameterViewModel.SystemFontFamilies}"
+                                                          Text="{Binding FontFamily, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                <Grid Grid.Row="1" Margin="0,6,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="56" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Slider Grid.Column="0" Minimum="6" Maximum="200"
+                                                            Value="{Binding FontSizePoints, Mode=TwoWay}"
+                                                            VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <ui:TextBox Grid.Column="1"
+                                                                Text="{Binding FontSizePoints, Mode=TwoWay, UpdateSourceTrigger=LostFocus, StringFormat='{}{0:F0}'}"
+                                                                KeyDown="OnParameterTextBoxKeyDown"
+                                                                HorizontalContentAlignment="Right"
+                                                                ClearButtonEnabled="False" />
+                                                    <ToggleButton Grid.Column="2" Content="B" Width="36" Margin="6,0,0,0"
+                                                                  FontWeight="Bold"
+                                                                  IsChecked="{Binding FontBold, Mode=TwoWay}"
+                                                                  Style="{StaticResource SideChip}"
+                                                                  ToolTip="Bold" />
+                                                    <ToggleButton Grid.Column="3" Content="I" Width="36"
+                                                                  FontStyle="Italic"
+                                                                  IsChecked="{Binding FontItalic, Mode=TwoWay}"
+                                                                  Style="{StaticResource SideChip}"
+                                                                  ToolTip="Italic" />
+                                                </Grid>
+                                            </Grid>
+
+                                            <!-- Gradient (standalone, non-paired) — small square swatch with checker behind;
+                                                 double-click opens the gradient editor. Paired gradients hide their standalone
+                                                 row (rendered through the Color row instead) via IsActive. -->
+                                            <Border Grid.Row="1" Margin="0,4,0,0"
+                                                    Width="32" Height="32" CornerRadius="3"
+                                                    HorizontalAlignment="Left"
+                                                    BorderBrush="{DynamicResource AccentForegroundDarkBrush}"
+                                                    BorderThickness="1"
+                                                    Background="{StaticResource CheckerBrush}"
+                                                    Cursor="Hand"
+                                                    ToolTip="Click to edit gradient"
+                                                    Tag="{Binding}"
+                                                    MouseLeftButtonDown="OnGradientSwatchMouseDown"
+                                                    Visibility="{Binding IsGradient, Converter={StaticResource BoolToVisibility}}">
+                                                <Rectangle Fill="{Binding GradientBrush}" RadiusX="2" RadiusY="2" />
+                                            </Border>
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            </StackPanel>
                         </ScrollViewer>
                     </Grid>
                 </Border>
