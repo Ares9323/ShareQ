@@ -203,20 +203,46 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
     /// the SaveToFile pipeline step). Gates the "Show in explorer" affordance.</summary>
     public bool HasFileOnDisk => !string.IsNullOrEmpty(_selectedItemBlobRef);
 
-    /// <summary>True when the selected text item is a parseable http(s) URL — gates the
-    /// "Open in browser" affordance. We only treat short-ish text as URL candidates so a
-    /// pasted log file with a URL on line 1 doesn't accidentally launch a browser.</summary>
-    public bool IsUrlSelected
+    /// <summary>True when the selected item resolves to a parseable http(s) URL — gates the
+    /// "Open in browser" affordance. Covers two cases: a plain-text row whose entire payload
+    /// is the URL (manual paste / "copy as plain text"), and an HTML row whose first
+    /// <c>href</c> is an http(s) link (browser "Copy link" puts HTML on the clipboard, which
+    /// the reader prefers over plain text).</summary>
+    public bool IsUrlSelected => ResolveSelectedUrl() is not null;
+
+    private string? ResolveSelectedUrl()
     {
-        get
+        if (SelectedRow is null) return null;
+
+        if (SelectedRow.Kind == ItemKind.Text && !string.IsNullOrWhiteSpace(PreviewText))
         {
-            if (SelectedRow?.Kind != ItemKind.Text) return false;
-            if (string.IsNullOrWhiteSpace(PreviewText)) return false;
             var trimmed = PreviewText.Trim();
-            if (trimmed.Length is 0 or > 4096) return false;
-            return Uri.TryCreate(trimmed, UriKind.Absolute, out var parsed)
-                && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps);
+            if (trimmed.Length is > 0 and <= 4096
+                && Uri.TryCreate(trimmed, UriKind.Absolute, out var parsed)
+                && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps))
+            {
+                return parsed.AbsoluteUri;
+            }
         }
+
+        if (SelectedRow.Kind == ItemKind.Html && !string.IsNullOrWhiteSpace(PreviewHtml))
+        {
+            // Browsers wrap the copied selection in CF_HTML — between StartFragment /
+            // EndFragment is a tiny anchor element whose href is the URL we want. Match the
+            // first href and validate it as an absolute http(s) URI.
+            var match = System.Text.RegularExpressions.Regex.Match(
+                PreviewHtml,
+                @"href\s*=\s*[""']([^""']+)[""']",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success
+                && Uri.TryCreate(match.Groups[1].Value, UriKind.Absolute, out var parsed)
+                && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps))
+            {
+                return parsed.AbsoluteUri;
+            }
+        }
+
+        return null;
     }
 
     private void ApplyPreview(PreviewKind kind, string? text, byte[]? image, byte[]? rtf, string? html, string? meta)
@@ -319,15 +345,13 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(IsUrlSelected))]
     private void OpenInBrowser()
     {
-        if (string.IsNullOrWhiteSpace(PreviewText)) return;
-        var trimmed = PreviewText.Trim();
-        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var parsed)) return;
-        if (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps) return;
+        var url = ResolveSelectedUrl();
+        if (url is null) return;
         try
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = parsed.AbsoluteUri,
+                FileName = url,
                 UseShellExecute = true,
             });
         }
