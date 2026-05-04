@@ -72,8 +72,10 @@ public static class SxiePresetImporter
     /// Modern ShareX (and our codebase) use snake_case ids — <c>rounded_corners</c>,
     /// <c>auto_contrast</c>, <c>draw_background</c> — so we PascalCase → snake_case the class
     /// name (after stripping the common <c>"ImageEffect"</c>/<c>"Effect"</c> suffixes used by
-    /// both the legacy <c>ImageEffectsLib</c> and the new <c>ImageEditor</c> namespaces).</summary>
-    internal static string? ResolveId(string typeName)
+    /// both the legacy <c>ImageEffectsLib</c> and the new <c>ImageEditor</c> namespaces).
+    /// Public so the unit-test project can pin the snake-casing rules without taking a
+    /// dependency on InternalsVisibleTo plumbing.</summary>
+    public static string? ResolveId(string typeName)
     {
         var commaIdx = typeName.IndexOf(',');
         var fullName = commaIdx >= 0 ? typeName[..commaIdx].Trim() : typeName.Trim();
