@@ -310,8 +310,41 @@ public sealed partial class ImageEffectsViewModel : ObservableObject, IDisposabl
     {
         try
         {
-            var json = await File.ReadAllTextAsync(path).ConfigureAwait(true);
+            var (json, assetsDir) = await ReadSxiePackageAsync(path).ConfigureAwait(true);
             var preset = SxiePresetImporter.Import(json, _registry);
+
+            // Patch DrawImage.ImageLocation entries.
+            //  1. ShareX-specific token: "%ShareXImageEffects%" expands to the LocalAppData
+            //     folder where ShareX stores downloadable effect packs (e.g. macOSBigSur
+            //     border PNGs). If the user has ShareX installed the assets are there;
+            //     otherwise the file just doesn't exist and DrawImage no-ops.
+            //  2. Standard env vars (%LOCALAPPDATA%, %USERPROFILE%, ...) get expanded too
+            //     so a hand-authored preset can use those.
+            //  3. Relative paths (no env vars, not rooted) resolve against the assets folder
+            //     extracted from the .sxie package.
+            foreach (var entry in preset.Effects)
+            {
+                if (entry.Effect is not ShareQ.ImageEffects.Drawings.DrawImageImageEffect di) continue;
+                if (string.IsNullOrEmpty(di.ImageLocation)) continue;
+
+                var location = di.ImageLocation;
+                if (location.Contains("%ShareXImageEffects%", StringComparison.OrdinalIgnoreCase))
+                {
+                    var shareXBase = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "ShareX", "ImageEffects");
+                    location = location.Replace("%ShareXImageEffects%", shareXBase, StringComparison.OrdinalIgnoreCase);
+                }
+                location = Environment.ExpandEnvironmentVariables(location);
+
+                if (!Path.IsPathRooted(location) && assetsDir is not null)
+                {
+                    var candidate = Path.Combine(assetsDir, location);
+                    if (File.Exists(candidate)) location = candidate;
+                }
+
+                di.ImageLocation = location;
+            }
             if (string.IsNullOrEmpty(preset.Name)) preset.Name = Path.GetFileNameWithoutExtension(path);
             preset.Id = Guid.NewGuid().ToString("N");
             var item = WrapPreset(preset);
@@ -340,6 +373,67 @@ public sealed partial class ImageEffectsViewModel : ObservableObject, IDisposabl
         {
             StatusText = $"Export failed: {ex.Message}";
         }
+    }
+
+    /// <summary>Read the JSON payload out of a <c>.sxie</c> file. Modern ShareX wraps the
+    /// preset in a ZIP package (PK magic; root entry is <c>Config.json</c> + optional asset
+    /// files like watermark images); legacy <c>.sxie</c> and our own <c>.json</c> exports are
+    /// bare JSON. ZIP packages also extract their asset files into a stable per-preset
+    /// folder under %LOCALAPPDATA%/ShareQ/effect-assets/ so DrawImage steps can resolve
+    /// relative <c>ImageLocation</c> values to absolute paths after import.</summary>
+    private static async Task<(string Json, string? AssetsDir)> ReadSxiePackageAsync(string path)
+    {
+        await using (var stream = File.OpenRead(path))
+        {
+            var header = new byte[2];
+            var read = await stream.ReadAsync(header.AsMemory(0, 2)).ConfigureAwait(false);
+            // ZIP magic bytes "PK" — every modern .sxie pushed by ShareX's packager.
+            if (read == 2 && header[0] == 0x50 && header[1] == 0x4B)
+            {
+                stream.Position = 0;
+                using var archive = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Read);
+                // ExtractToFile is an extension method in System.IO.Compression.ZipFileExtensions;
+                // we'll use entry.Open() + manual copy below to avoid leaning on the using.
+
+                // Extract every entry into a stable per-package folder. The folder name is
+                // derived from the .sxie file name + a short hash of the path so reimporting
+                // the same file overwrites the previous extraction instead of leaking copies.
+                var packageName = SafeName(Path.GetFileNameWithoutExtension(path));
+                var hash = Math.Abs(StringComparer.Ordinal.GetHashCode(path));
+                var assetsDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "ShareQ", "effect-assets", $"{packageName}-{hash:x8}");
+                Directory.CreateDirectory(assetsDir);
+
+                string? json = null;
+                foreach (var entry in archive.Entries)
+                {
+                    if (string.IsNullOrEmpty(entry.Name)) continue; // skip directory entries
+                    var dest = Path.Combine(assetsDir, entry.FullName);
+                    Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                    using (var entryStream = entry.Open())
+                    using (var outStream = File.Create(dest))
+                    {
+                        await entryStream.CopyToAsync(outStream).ConfigureAwait(false);
+                    }
+                    if (json is null && entry.FullName.Equals("Config.json", StringComparison.OrdinalIgnoreCase))
+                        json = await File.ReadAllTextAsync(dest).ConfigureAwait(false);
+                }
+                json ??= archive.Entries
+                    .FirstOrDefault(e => e.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) is { } fallback
+                    ? await File.ReadAllTextAsync(Path.Combine(assetsDir, fallback.FullName)).ConfigureAwait(false)
+                    : throw new InvalidDataException("Sxie package contains no Config.json entry.");
+                return (json, assetsDir);
+            }
+        }
+        // Bare JSON — no zip, no assets to extract.
+        return (await File.ReadAllTextAsync(path).ConfigureAwait(false), null);
+    }
+
+    private static string SafeName(string raw)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        return new string(raw.Select(c => invalid.Contains(c) ? '_' : c).ToArray());
     }
 
     public void LoadPreviewImage(string path)

@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using ShareQ.ImageEffects;
+using ShareQ.ImageEffects.Drawing;
+using SkiaSharp;
 
 namespace ShareQ.App.ViewModels.ImageEffects;
 
@@ -28,12 +30,13 @@ public sealed partial class EffectEntryViewModel : ObservableObject
 
         // Reflect once at construction so the property grid stays in sync with the underlying
         // effect — Step/Min/Max are pulled from EffectParameterAttribute when present, defaults
-        // otherwise.
+        // otherwise. Supported CLR types: float / double / int (slider), bool (checkbox),
+        // SKColor (swatch + picker), Padding (4-up grid), enum (dropdown). Unrecognised types
+        // (e.g. GradientInfo) are skipped — they need a dedicated editor that doesn't fit a
+        // generic property row.
         var props = entry.Effect.GetType()
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanRead && p.CanWrite && (p.PropertyType == typeof(float)
-                                                    || p.PropertyType == typeof(double)
-                                                    || p.PropertyType == typeof(int)));
+            .Where(p => p.CanRead && p.CanWrite && IsSupportedParameterType(p.PropertyType));
         foreach (var prop in props)
         {
             var pvm = new EffectParameterViewModel(entry.Effect, prop)
@@ -55,4 +58,9 @@ public sealed partial class EffectEntryViewModel : ObservableObject
             Changed?.Invoke();
         }
     }
+
+    private static bool IsSupportedParameterType(Type t) =>
+        t == typeof(float) || t == typeof(double) || t == typeof(int)
+        || t == typeof(bool) || t == typeof(SKColor) || t == typeof(Padding) || t.IsEnum
+        || t == typeof(string);
 }

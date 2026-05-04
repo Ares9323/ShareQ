@@ -68,10 +68,13 @@ public static class SxiePresetImporter
         return preset;
     }
 
-    /// <summary>Map a ShareX <c>$type</c> string to our id, or null if we can't resolve it.</summary>
+    /// <summary>Map a ShareX <c>$type</c> string to our id, or null if we can't resolve it.
+    /// Modern ShareX (and our codebase) use snake_case ids — <c>rounded_corners</c>,
+    /// <c>auto_contrast</c>, <c>draw_background</c> — so we PascalCase → snake_case the class
+    /// name (after stripping the common <c>"ImageEffect"</c>/<c>"Effect"</c> suffixes used by
+    /// both the legacy <c>ImageEffectsLib</c> and the new <c>ImageEditor</c> namespaces).</summary>
     internal static string? ResolveId(string typeName)
     {
-        // "Namespace.ClassName, AssemblyName" → "Namespace.ClassName"
         var commaIdx = typeName.IndexOf(',');
         var fullName = commaIdx >= 0 ? typeName[..commaIdx].Trim() : typeName.Trim();
         var dotIdx = fullName.LastIndexOf('.');
@@ -79,12 +82,33 @@ public static class SxiePresetImporter
 
         if (_explicitMap.TryGetValue(shortName, out var explicitId)) return explicitId;
 
-        // Strip the conventional "ImageEffect" suffix used by the modern ShareX namespace.
+        // Strip "ImageEffect" first (longer suffix wins; ShareX moderno uses both forms).
         var stripped = shortName.EndsWith("ImageEffect", StringComparison.Ordinal)
             ? shortName[..^"ImageEffect".Length]
-            : shortName;
+            : shortName.EndsWith("Effect", StringComparison.Ordinal)
+                ? shortName[..^"Effect".Length]
+                : shortName;
         if (stripped.Length == 0) return null;
 
-        return char.ToLowerInvariant(stripped[0]) + stripped[1..];
+        return PascalToSnake(stripped);
+    }
+
+    private static string PascalToSnake(string s)
+    {
+        var sb = new System.Text.StringBuilder(s.Length + 4);
+        for (var i = 0; i < s.Length; i++)
+        {
+            var c = s[i];
+            // Insert an underscore before every uppercase letter that follows a lowercase
+            // letter or precedes a lowercase letter — handles RoundedCorners → rounded_corners
+            // and the acronym edge case ABCDef → abc_def.
+            if (i > 0 && char.IsUpper(c)
+                && (char.IsLower(s[i - 1]) || (i + 1 < s.Length && char.IsLower(s[i + 1]))))
+            {
+                sb.Append('_');
+            }
+            sb.Append(char.ToLowerInvariant(c));
+        }
+        return sb.ToString();
     }
 }

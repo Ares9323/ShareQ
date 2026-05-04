@@ -170,8 +170,8 @@ public static class WorkflowActionCatalog
             "Clipboard"),
 
         new("shareq.copy-image-to-clipboard",
-            "Copy image to clipboard",
-            "Place the bitmap on the clipboard (overwritten by later text-to-clipboard steps).",
+            "Copy image to Windows clipboard",
+            "Place the bitmap on the Windows clipboard (Ctrl+V in any other app pastes it). Overwritten by any later text-to-clipboard step in the same workflow. Distinct from 'Add to clipboard history', which saves the item to ShareQ's persistent popup list.",
             "Clipboard"),
 
         new("shareq.paste-history-item",
@@ -201,8 +201,8 @@ public static class WorkflowActionCatalog
             IntParameter: new IntParameter(Key: "ms", Label: "Milliseconds", DefaultValue: 250, Min: 0, Max: 60000)),
 
         new("shareq.copy-text-to-clipboard",
-            "Copy URL to clipboard",
-            "Replace the current clipboard content with the upload URL(s) returned by the upload step.",
+            "Copy URL to Windows clipboard",
+            "Replace the Windows clipboard content with the upload URL(s) returned by the upload step. Like 'Copy image to Windows clipboard', this writes to the OS clipboard (Ctrl+V target), not to ShareQ's history.",
             "Clipboard",
             DefaultConfigJson: "{\"template\":\"{bag.upload_urls}\"}"),
 

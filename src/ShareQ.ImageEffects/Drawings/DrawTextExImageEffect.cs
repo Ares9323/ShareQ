@@ -1,0 +1,158 @@
+using System.Globalization;
+using ShareQ.ImageEffects.Drawing;
+using ShareQ.ImageEffects.Parameters;
+using SkiaSharp;
+
+namespace ShareQ.ImageEffects.Drawings;
+
+/// <summary>Ported from ShareX (GPL v3) — ImageEffectsLib/Drawings/DrawTextEx.cs. Watermark
+/// text with optional outline + drop-shadow, anchored at one of nine canvas positions. The
+/// <see cref="Font"/> property accepts the legacy ShareX format <c>"Family, Size[unit][, style]"</c>
+/// (e.g. <c>"Arial, 36pt"</c>, <c>"Calibri, 18pt, style=Bold"</c>) which we parse on apply.
+/// Gradients per text/outline/shadow exist in ShareX but aren't ported in this MVP — only
+/// solid colours render — gradient fields are kept on the model so .sxie round-trips.</summary>
+public sealed class DrawTextExImageEffect : DrawingImageEffectBase
+{
+    public override string Id => "draw_text_ex";
+    public override string Name => "Text";
+
+    public string Text { get; set; } = "Text";
+    public TextPlacement Placement { get; set; } = TextPlacement.TopLeft;
+
+    [EffectParameter(-2000, 2000, DisplayName = "Offset X")]
+    public int OffsetX { get; set; }
+
+    [EffectParameter(-2000, 2000, DisplayName = "Offset Y")]
+    public int OffsetY { get; set; }
+
+    [EffectParameter(-360, 360, DisplayName = "Angle")]
+    public int Angle { get; set; }
+
+    public bool AutoHide { get; set; }
+
+    /// <summary>Font descriptor in ShareX legacy format (<c>"Arial, 36pt"</c>). Parsed on
+    /// apply rather than on set so the user can paste a new value via the textbox without
+    /// having to manage a typed parser through the binding.</summary>
+    public string Font { get; set; } = "Arial, 36pt";
+
+    public SKColor Color { get; set; } = new(235, 235, 235);
+    public bool UseGradient { get; set; }
+    public GradientInfo Gradient { get; set; } = new();
+
+    public bool Outline { get; set; }
+    [EffectParameter(0, 50, DisplayName = "Outline size")]
+    public int OutlineSize { get; set; } = 5;
+    public SKColor OutlineColor { get; set; } = new(235, 0, 0);
+    public bool OutlineUseGradient { get; set; }
+    public GradientInfo OutlineGradient { get; set; } = new();
+
+    public bool Shadow { get; set; }
+    [EffectParameter(-50, 50, DisplayName = "Shadow X")]
+    public int ShadowOffsetX { get; set; }
+    [EffectParameter(-50, 50, DisplayName = "Shadow Y")]
+    public int ShadowOffsetY { get; set; } = 5;
+    public SKColor ShadowColor { get; set; } = new(0, 0, 0, 125);
+    public bool ShadowUseGradient { get; set; }
+    public GradientInfo ShadowGradient { get; set; } = new();
+
+    public override SKBitmap Apply(SKBitmap source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (string.IsNullOrEmpty(Text)) return source.Copy();
+
+        var (family, size, style) = ParseFont(Font);
+        using var typeface = SKTypeface.FromFamilyName(family, style);
+        using var font = new SKFont(typeface, size);
+
+        // Measure the text bounds once — used both for AutoHide and to anchor the rotated
+        // string at its top-left, regardless of which Placement was picked.
+        font.MeasureText(Text, out var bounds);
+        if (AutoHide && (bounds.Width > source.Width || bounds.Height > source.Height))
+            return source.Copy();
+
+        var anchor = ResolveAnchor(source.Width, source.Height, bounds.Width, bounds.Height);
+
+        var result = source.Copy();
+        using var canvas = new SKCanvas(result);
+        canvas.Save();
+        canvas.Translate(anchor.X, anchor.Y);
+        if (Angle != 0) canvas.RotateDegrees(Angle);
+
+        // Drop shadow first so it sits behind the fill + outline.
+        if (Shadow)
+        {
+            using var shadowPaint = new SKPaint { IsAntialias = true, Color = ShadowColor };
+            canvas.DrawText(Text, ShadowOffsetX, -bounds.Top + ShadowOffsetY, font, shadowPaint);
+        }
+
+        // Outline pass under the fill so the stroke shows around the glyphs.
+        if (Outline && OutlineSize > 0)
+        {
+            using var outlinePaint = new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = OutlineSize,
+                Color = OutlineColor,
+            };
+            canvas.DrawText(Text, 0, -bounds.Top, font, outlinePaint);
+        }
+
+        using var fillPaint = new SKPaint { IsAntialias = true, Color = Color };
+        if (UseGradient && Gradient.IsValid)
+            fillPaint.Shader = Gradient.CreateShader((int)bounds.Width + 1, (int)bounds.Height + 1);
+        canvas.DrawText(Text, 0, -bounds.Top, font, fillPaint);
+
+        canvas.Restore();
+        return result;
+    }
+
+    private SKPoint ResolveAnchor(int canvasWidth, int canvasHeight, float textWidth, float textHeight)
+    {
+        // Translate Placement → top-left position of the text rectangle, then add Offset.
+        var x = Placement switch
+        {
+            TextPlacement.TopLeft or TextPlacement.MiddleLeft or TextPlacement.BottomLeft => 0f,
+            TextPlacement.TopCenter or TextPlacement.MiddleCenter or TextPlacement.BottomCenter => (canvasWidth - textWidth) / 2f,
+            _ => canvasWidth - textWidth,
+        };
+        var y = Placement switch
+        {
+            TextPlacement.TopLeft or TextPlacement.TopCenter or TextPlacement.TopRight => 0f,
+            TextPlacement.MiddleLeft or TextPlacement.MiddleCenter or TextPlacement.MiddleRight => (canvasHeight - textHeight) / 2f,
+            _ => canvasHeight - textHeight,
+        };
+        return new SKPoint(x + OffsetX, y + OffsetY);
+    }
+
+    /// <summary>Parse a ShareX legacy font descriptor (<c>"Arial, 36pt"</c>). Returns family
+    /// name, size in pixels, and a coarse SKFontStyle flag set. Unknown styles fall back to
+    /// regular weight at the requested size.</summary>
+    private static (string Family, float Size, SKFontStyle Style) ParseFont(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return ("Arial", 36f, SKFontStyle.Normal);
+        var parts = raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var family = parts.Length > 0 ? parts[0] : "Arial";
+        var size = 36f;
+        if (parts.Length > 1)
+        {
+            // Accept "36pt", "36", "36.5pt" — strip non-digits beyond the first decimal.
+            var sizeStr = new string(parts[1].TakeWhile(c => char.IsDigit(c) || c == '.').ToArray());
+            if (float.TryParse(sizeStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+            {
+                // ShareX writes "pt" (1 pt = 1.333 px at 96 DPI); SkiaSharp font sizes are in
+                // pixels, so convert. Bare numbers (no "pt") are assumed already-pixel.
+                size = parts[1].Contains("pt", StringComparison.OrdinalIgnoreCase) ? parsed * 96f / 72f : parsed;
+            }
+        }
+        var style = SKFontStyle.Normal;
+        for (var i = 2; i < parts.Length; i++)
+        {
+            var s = parts[i].ToLowerInvariant();
+            if (s.Contains("bold") && s.Contains("italic")) style = SKFontStyle.BoldItalic;
+            else if (s.Contains("bold")) style = SKFontStyle.Bold;
+            else if (s.Contains("italic")) style = SKFontStyle.Italic;
+        }
+        return (family, size, style);
+    }
+}

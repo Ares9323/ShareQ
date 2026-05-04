@@ -14,6 +14,14 @@
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
         </Style>
+        <!-- Auto-select-all on focus for every TextBox in this window. The combined
+             handlers (PreviewMouseLeftButtonDown + GotKeyboardFocus) match what File
+             Explorer / Visual Studio do for numeric fields: a single click selects the
+             contents so you can type a replacement without manually clearing first. -->
+        <Style TargetType="TextBox">
+            <EventSetter Event="PreviewMouseLeftButtonDown" Handler="OnTextBoxPreviewMouseDown" />
+            <EventSetter Event="GotKeyboardFocus" Handler="OnTextBoxGotFocus" />
+        </Style>
         <Style x:Key="PanelStyle" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource Surface2Brush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource AccentForegroundDarkBrush}" />
@@ -224,6 +232,9 @@
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
+
+                                            <!-- Header line: label on the left, contextual value readout on the right
+                                                 (numeric for sliders, hex for colours, "L T R B" for paddings). -->
                                             <Grid Grid.Row="0">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
@@ -232,9 +243,13 @@
                                                 <TextBlock Grid.Column="0" Text="{Binding Label}" />
                                                 <TextBlock Grid.Column="1"
                                                            Text="{Binding Value, StringFormat={}{0:F2}}"
+                                                           Visibility="{Binding IsNumber, Converter={StaticResource BoolToVisibility}}"
                                                            Foreground="{DynamicResource AccentForegroundDarkBrush}" />
                                             </Grid>
-                                            <Grid Grid.Row="1" Margin="0,4,0,0">
+
+                                            <!-- Float / int — slider + numeric textbox. -->
+                                            <Grid Grid.Row="1" Margin="0,4,0,0"
+                                                  Visibility="{Binding IsNumber, Converter={StaticResource BoolToVisibility}}">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="72" />
@@ -247,15 +262,71 @@
                                                         IsSnapToTickEnabled="False"
                                                         VerticalAlignment="Center"
                                                         Margin="0,0,8,0" />
-                                                <!-- Manual numeric entry. UpdateSourceTrigger=LostFocus so half-typed
-                                                     values (e.g. "1.") don't fail to parse and tank the binding. Enter
-                                                     also commits via OnParameterTextBoxKeyDown. -->
                                                 <TextBox Grid.Column="1"
                                                          Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus, StringFormat='{}{0:F2}'}"
                                                          KeyDown="OnParameterTextBoxKeyDown"
                                                          HorizontalContentAlignment="Right"
                                                          VerticalContentAlignment="Center" />
                                             </Grid>
+
+                                            <!-- Bool — single checkbox aligned with the label baseline. -->
+                                            <CheckBox Grid.Row="1" Margin="0,4,0,0"
+                                                      IsChecked="{Binding BoolValue, Mode=TwoWay}"
+                                                      Visibility="{Binding IsBool, Converter={StaticResource BoolToVisibility}}" />
+
+                                            <!-- Color — swatch + Pick… button. The swatch is a Border whose Background
+                                                 is bound to the hex form of ColorValue; clicking either opens the picker. -->
+                                            <Grid Grid.Row="1" Margin="0,4,0,0"
+                                                  Visibility="{Binding IsColor, Converter={StaticResource BoolToVisibility}}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="0" Height="22" CornerRadius="3"
+                                                        BorderBrush="{DynamicResource AccentForegroundDarkBrush}"
+                                                        BorderThickness="1"
+                                                        Background="{Binding ColorBrush}"
+                                                        Margin="0,0,8,0" />
+                                                <ui:Button Grid.Column="1" Content="Pick…"
+                                                           Click="OnPickColorClicked"
+                                                           Tag="{Binding}" />
+                                            </Grid>
+
+                                            <!-- Padding — 4 numeric inputs in a single row, labelled L/T/R/B above each. -->
+                                            <Grid Grid.Row="1" Margin="0,4,0,0"
+                                                  Visibility="{Binding IsPadding, Converter={StaticResource BoolToVisibility}}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="L" FontSize="10" Foreground="{DynamicResource AccentForegroundDarkBrush}" />
+                                                <TextBlock Grid.Row="0" Grid.Column="1" Text="T" FontSize="10" Foreground="{DynamicResource AccentForegroundDarkBrush}" />
+                                                <TextBlock Grid.Row="0" Grid.Column="2" Text="R" FontSize="10" Foreground="{DynamicResource AccentForegroundDarkBrush}" />
+                                                <TextBlock Grid.Row="0" Grid.Column="3" Text="B" FontSize="10" Foreground="{DynamicResource AccentForegroundDarkBrush}" />
+                                                <TextBox Grid.Row="1" Grid.Column="0" Margin="0,0,4,0" Text="{Binding PaddingLeft, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" KeyDown="OnParameterTextBoxKeyDown" />
+                                                <TextBox Grid.Row="1" Grid.Column="1" Margin="0,0,4,0" Text="{Binding PaddingTop, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" KeyDown="OnParameterTextBoxKeyDown" />
+                                                <TextBox Grid.Row="1" Grid.Column="2" Margin="0,0,4,0" Text="{Binding PaddingRight, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" KeyDown="OnParameterTextBoxKeyDown" />
+                                                <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding PaddingBottom, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" KeyDown="OnParameterTextBoxKeyDown" />
+                                            </Grid>
+
+                                            <!-- Enum — combobox of available names. -->
+                                            <ComboBox Grid.Row="1" Margin="0,4,0,0"
+                                                      ItemsSource="{Binding EnumOptions}"
+                                                      SelectedItem="{Binding EnumValue, Mode=TwoWay}"
+                                                      Visibility="{Binding IsEnum, Converter={StaticResource BoolToVisibility}}" />
+
+                                            <!-- String — single-line textbox for watermark text, font descriptors,
+                                                 image paths. LostFocus commit so re-render doesn't fire mid-typing. -->
+                                            <TextBox Grid.Row="1" Margin="0,4,0,0"
+                                                     Text="{Binding StringValue, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                     KeyDown="OnParameterTextBoxKeyDown"
+                                                     Visibility="{Binding IsString, Converter={StaticResource BoolToVisibility}}" />
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

@@ -191,6 +191,22 @@ public partial class ImageEffectsWindow : Wpf.Ui.Controls.FluentWindow
         _viewModel.RebuildSampleImage();
     }
 
+    /// <summary>Click in an unfocused TextBox: take focus immediately and swallow the click
+    /// so the default caret-placement logic doesn't run — paired with
+    /// <see cref="OnTextBoxGotFocus"/>, this gives "click → all contents selected" UX.</summary>
+    private void OnTextBoxPreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not TextBox tb) return;
+        if (tb.IsKeyboardFocusWithin) return;
+        e.Handled = true;
+        tb.Focus();
+    }
+
+    private void OnTextBoxGotFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox tb) tb.SelectAll();
+    }
+
     /// <summary>Commit the manual-entry TextBox to its bound source on Enter, instead of
     /// waiting for LostFocus. Without this an Enter press just rings the bell — the user
     /// types a value, hits Enter expecting "apply", and nothing happens.</summary>
@@ -246,6 +262,20 @@ public partial class ImageEffectsWindow : Wpf.Ui.Controls.FluentWindow
         // Click-away counts as "commit", same UX as File Explorer. The binding's
         // UpdateSourceTrigger=LostFocus already pushed the value, so we just close the editor.
         if (sender is TextBox tb && tb.DataContext is PresetItemViewModel vm) vm.CommitEdit();
+    }
+
+    /// <summary>Open the editor's HSV ColorPickerWindow seeded with the parameter's current
+    /// SKColor; on OK push the picked colour back to the VM. Reuses the dialog already shipped
+    /// with the annotation editor — keeps the UX consistent across surfaces.</summary>
+    private void OnPickColorClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.Tag is not EffectParameterViewModel vm) return;
+        var c = vm.ColorValue;
+        var initial = new ShareQ.Editor.Model.ShapeColor(c.Alpha, c.Red, c.Green, c.Blue);
+        var dialog = new ShareQ.Editor.Views.ColorPickerWindow(initial) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        var picked = dialog.PickedColor;
+        vm.ColorValue = new SkiaSharp.SKColor(picked.R, picked.G, picked.B, picked.A);
     }
 
     private static string SafeFileName(string s)

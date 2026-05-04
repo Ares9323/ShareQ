@@ -17,7 +17,8 @@ internal static class EffectPropertyBinder
         if (source.ValueKind != JsonValueKind.Object) return;
         options ??= _defaults;
 
-        foreach (var prop in EffectPresetSerializer.PropertyCache.For(effect.GetType()))
+        var props = EffectPresetSerializer.PropertyCache.For(effect.GetType());
+        foreach (var prop in props)
         {
             var attr = prop.GetCustomAttribute<JsonPropertyNameAttribute>();
             var camel = attr?.Name ?? options.PropertyNamingPolicy?.ConvertName(prop.Name) ?? prop.Name;
@@ -37,11 +38,51 @@ internal static class EffectPropertyBinder
                 // a removed parameter from an older ShareX build. Rest of the chain still loads.
             }
         }
+
+        // ShareX-legacy "Point" strings: a JSON entry like {"Offset": "0, 32"} corresponds to
+        // OffsetX/OffsetY ints on our side. We don't expose Point as a property type (too rare
+        // to justify a dedicated kind), so we recognise the pattern at bind-time: any pair of
+        // sibling <Foo>X / <Foo>Y int properties picks up "<Foo>" string when present.
+        foreach (var prop in props)
+        {
+            if (prop.PropertyType != typeof(int) || !prop.Name.EndsWith('X')) continue;
+            var baseName = prop.Name[..^1];
+            var matchY = Array.Find(props, p => p.Name == baseName + "Y" && p.PropertyType == typeof(int));
+            if (matchY is null) continue;
+
+            var camelBase = options.PropertyNamingPolicy?.ConvertName(baseName) ?? baseName;
+            if (!source.TryGetProperty(camelBase, out var pointVal)
+                && !source.TryGetProperty(baseName, out pointVal)) continue;
+            if (pointVal.ValueKind != JsonValueKind.String) continue;
+
+            var raw = pointVal.GetString();
+            if (string.IsNullOrWhiteSpace(raw)) continue;
+            var parts = raw.Split(',', StringSplitOptions.TrimEntries);
+            if (parts.Length == 2
+                && int.TryParse(parts[0], out var x)
+                && int.TryParse(parts[1], out var y))
+            {
+                prop.SetValue(effect, x);
+                matchY.SetValue(effect, y);
+            }
+        }
     }
 
-    private static readonly JsonSerializerOptions _defaults = new()
+    private static readonly JsonSerializerOptions _defaults = BuildDefaults();
+
+    /// <summary>Effect-property options. The custom converters cover the types that don't
+    /// round-trip through default STJ — colours, paddings — so an effect can declare a
+    /// <c>SKColor Background</c> or a <c>Padding Margin</c> and the binder Just Works.</summary>
+    private static JsonSerializerOptions BuildDefaults()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-    };
+        var opts = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true,
+        };
+        opts.Converters.Add(new SkColorJsonConverter());
+        opts.Converters.Add(new PaddingJsonConverter());
+        opts.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: true));
+        return opts;
+    }
 }

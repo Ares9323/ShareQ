@@ -37,7 +37,13 @@ public sealed class EffectPresetSerializer
             PropertyNameCaseInsensitive = true,
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            Converters = { new EffectPresetConverter(_registry) },
+            Converters =
+            {
+                new EffectPresetConverter(_registry),
+                new SkColorJsonConverter(),
+                new PaddingJsonConverter(),
+                new JsonStringEnumConverter(allowIntegerValues: true),
+            },
         };
     }
 
