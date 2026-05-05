@@ -1,3 +1,4 @@
+using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShareQ.App.Services;
@@ -42,7 +43,15 @@ public sealed partial class SettingsViewModel : ObservableObject
         Hotkeys = hotkeys;
         Capture = capture;
         Workflows = workflows;
-        AppVersion = typeof(SettingsViewModel).Assembly.GetName().Version?.ToString() ?? "dev";
+        // Reads the same string that MSBuild's -p:Version was given (suffix included). Falls
+        // back to the 4-part numeric version when the InformationalVersion attribute is
+        // missing — defensive only, the SDK always emits one.
+        var asm = typeof(SettingsViewModel).Assembly;
+        var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        // SourceLink appends "+<git-sha>" to InformationalVersion in modern .NET SDKs; keep
+        // just the leading semver part so About reads "0.1.0-dev" not "0.1.0-dev+abc1234".
+        var plus = info?.IndexOf('+') ?? -1;
+        AppVersion = plus >= 0 ? info![..plus] : (info ?? asm.GetName().Version?.ToString() ?? "dev");
         // Hold a reference so DI doesn't garbage-collect the registry singleton through this VM.
         _ = registry;
     }

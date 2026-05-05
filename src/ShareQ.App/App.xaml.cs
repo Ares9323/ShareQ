@@ -286,7 +286,7 @@ public partial class App : Application
                 services.AddSingleton<AutoPaster>();
                 services.AddSingleton<CaptureCoordinator>();
                 services.AddSingleton<ManualUploadService>();
-                services.AddSingleton<IToastNotifier, WpfToastNotifier>();
+                services.AddSingleton<IToastNotifier, WindowsToastNotifier>();
                 // Velopack-backed self-update. Disabled at runtime (IsAvailable=false) when the
                 // app isn't running from a Velopack-managed install — no harm, just shows the
                 // "Check for updates" button as disabled in Settings.

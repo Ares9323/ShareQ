@@ -1,7 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- Bumped from net10.0-windows to net10.0-windows10.0.19041.0 because
+         Microsoft.Toolkit.Uwp.Notifications needs a Windows-versioned TFM (≥17763 for
+         the unpackaged-toast API). 19041 = Windows 10 2004 = a low-friction floor; the
+         underlying ToastNotificationManagerCompat needs that build for its AUMID
+         registration helper to work cleanly on unpackaged installs. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <UseWPF>true</UseWPF>
     <RootNamespace>ShareQ.App</RootNamespace>
     <AssemblyName>ShareQ</AssemblyName>
@@ -15,8 +20,8 @@
     <StartupObject>ShareQ.App.Program</StartupObject>
     <!-- Dev/local builds get a clearly-not-a-release version so the Settings → About line
          doesn't say "1.0.0.0" and pretend to be a real shipped build. The release workflow
-         passes -p:Version=<x.y.z> which overrides this. -->
-    <Version>0.0.0-dev</Version>
+         (and tools/pack-local.ps1) passes -p:Version=<x.y.z> which overrides this. -->
+    <Version>0.1.0-dev</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" />
@@ -25,6 +30,7 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Console" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="H.NotifyIcon.Wpf" />
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" />
     <PackageReference Include="WPF-UI" />
     <PackageReference Include="QRCoder" />
     <PackageReference Include="ZXing.Net" />

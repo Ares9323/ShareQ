@@ -2,7 +2,7 @@
 
 > Modern clipboard + screenshot tool for Windows, unifying the strengths of CopyQ and ShareX into a single app.
 
-**Status:** Alpha. Builds and runs. No installer / packaged release yet — clone + `dotnet run`.
+**Status:** Alpha. Builds and runs. Velopack packaging is green (installer + portable + delta updates) — the public v0.1.0 release tag is the only thing still pending.
 
 ---
 
@@ -40,6 +40,23 @@ The app boots, hosts a tray icon, registers global hotkeys, and the following fl
 - Color picker with palette + recents + live preview + eyedropper
 - Clipboard round-trip (Ctrl+C/X/V) preserves shapes as editable objects in-process, falls back to raster for other apps
 
+**Image effects**
+- 60+ effects ported from ShareX across Adjustments (brightness / contrast / saturation / hue / levels / curves / temperature / split-toning / film emulation / …), Manipulations (canvas / crop / resize / rotate / shadow / rounded-corners / auto-crop / skew / flip / orthogonal-rotate), Filters (blur / motion-blur / sharpen / glow / pixelate / vignette / colour halftone / torn-edge / emboss / edge-detect / add-noise), Drawings (background / border / text / text-ex / image / particles / checkerboard / gradient overlay)
+- Editor with multi-preset list, drag-reorderable effect chain, live preview on a sample image (or a user-loaded one), property grid with sliders / colour swatches / paddings / gradients / fonts
+- Gradient picker (multi-stop with per-stop alpha + 9 ShareX presets) and a font picker (filterable family list + size slider + bold/italic chips)
+- ShareX-compatible `.sxie` import + export — preserves the exact PascalCase + `$type` schema so a preset round-trips between ShareX and ShareQ. Exports bundle asset files (DrawImage overlays) into the `.sxie` ZIP automatically
+- File-association toggle for `.sxie` (mirrors the `.sxcu` flow): double-click a downloaded preset in Explorer → opens the editor with the preset already imported
+- Pipeline task `Apply effects preset` lets the user attach any preset to capture / clipboard workflows so every screenshot can be auto-watermarked / coloured / cornered
+
+**QR codes**
+- Generator with live preview window (multiline editor → real-time QR), error-correction picker (L/M/Q/H), module-size slider, copy-to-clipboard, save as PNG, save as SVG, save into clipboard history (treated like a screenshot — file in the screenshot folder + history entry + optional upload)
+- Decoder via region select (Tools → "Read QR code" or as a pipeline task)
+- Right-click on a clipboard text item → "Generate QR code…" pre-fills the generator with that text
+- Pipeline tasks: Show QR code, Save QR as image, Save QR as SVG, Copy QR to clipboard — all chainable with the rest of the workflow system
+
+**Notifications**
+- Modern Windows toasts (`ToastNotificationManagerCompat`) — they persist in the Notification Center after the popup fades, with inline preview thumbnails for image-bearing toasts (screenshot saves, QR saves) and unique tag/group per toast so successive notifications don't replace or collapse each other
+
 **Uploaders** (10 bundled)
 | Uploader | Auth | Capability |
 |---|---|---|
@@ -72,8 +89,7 @@ Plus a declarative `.sxcu` engine that loads ShareX-compatible JSON uploader fil
 
 See [`docs/Improvements.md`](docs/Improvements.md) for the full feature-parity tracker against ShareX. Headline gaps:
 
-- **No installer / no auto-update yet.** Velopack packaging + GitHub Releases auto-update is the M7 milestone — not done.
-- **No image effects framework** (resize / blur / sepia / watermark / borders) — pencilled in as the next major editor pass.
+- **No public release tag yet.** Velopack packaging is wired and tested locally + via the CI workflow; the first GitHub Release (v0.1.0) is the last M7 step still pending.
 - **No SharedFolder / FTP / SFTP / S3 / Azure / B2 uploaders** — backlog (FTP+SharedFolder are next; cloud-storage providers come after).
 - **No scrolling capture / image combiner / hash checker / metadata viewer** — backlog. (Explorer context menu shipped; OCR was tried via Windows.Media.Ocr and dropped — too unreliable on dark themes / low contrast for the maintenance cost.)
 - **Bundled OAuth client IDs aren't shipped** in the public source. Maintainers create `src/ShareQ.Uploaders/Secrets.Local.cs` with their own credentials (gitignored). End users of a public release get zero-friction sign-in; users building from source themselves will see "isn't configured in this build" until they either drop in their own keys or paste credentials in the Configure dialog.
@@ -88,8 +104,11 @@ See [`docs/Improvements.md`](docs/Improvements.md) for the full feature-parity t
 - [Microsoft.Data.Sqlite](https://learn.microsoft.com/dotnet/standard/data/sqlite/) with WAL + FTS5 + DPAPI-encrypted payloads
 - DXGI Desktop Duplication + `Windows.Graphics.Capture` for screen capture
 - FFmpeg (auto-downloaded on first use) for screen recording
-- [QRCoder](https://github.com/codebude/QRCoder) for QR generation
-- [Velopack](https://github.com/velopack/velopack) (planned) for installer/portable packaging and auto-update via GitHub Releases
+- [SkiaSharp](https://github.com/mono/SkiaSharp) for the image-effects pipeline (ports of ShareX's per-pixel work to a managed surface)
+- [QRCoder](https://github.com/codebude/QRCoder) for QR generation (PNG + SVG)
+- [ZXing.Net](https://github.com/micjahn/ZXing.Net) for QR decoding
+- [Microsoft.Toolkit.Uwp.Notifications](https://learn.microsoft.com/windows/apps/design/shell/tiles-and-notifications/send-local-toast?tabs=desktop) for Windows toast notifications (Action Center persistence + inline images)
+- [Velopack](https://github.com/velopack/velopack) for installer / portable packaging and auto-update via GitHub Releases
 
 ## Roadmap
 
@@ -98,19 +117,20 @@ See [`docs/Improvements.md`](docs/Improvements.md) for the full feature-parity t
 | **M0** | Solution scaffold, CI green, WPF app opens with tray | ✅ done |
 | **M1** | Clipboard hook + storage + popup window with FTS search | ✅ done |
 | **M2** | Hotkeys + region capture + base pipeline | ✅ done |
-| **M3** | Image editor (port + UX fixes) | ✅ done (image effects framework deferred) |
+| **M3** | Image editor (port + UX fixes) | ✅ done |
 | **M4** | Plugin loader + Imgur uploader + upload pipeline | ✅ done (replaced DLL plugin loader with bundled-class architecture + `.sxcu` for the long tail) |
 | **M5** | OneDrive uploader + main window timeline + plugin manager UI | ✅ done (extended to OneDrive + GoogleDrive + Dropbox + 7 more) |
-| **M6** | Screen recorder + Beautify + Watermark/Step counter | 🟡 recorder done; Beautify / Watermark deferred to image-effects pass |
+| **M6** | Screen recorder + Beautify + Watermark/Step counter | ✅ done — recorder ships; Watermark + step-counter live in the image-effects pass below; Beautify (the standalone one-click "make this look nicer" tool) shelved as low-impact |
+| **M6.5** | Image-effects framework (60+ ShareX effects, `.sxie` round-trip, gradient + font pickers, live editor, pipeline task) | ✅ done |
+| **M6.6** | QR generator UX (live preview window + multiline editor + PNG/SVG export + Action-Center notifications) | ✅ done |
 | **M7** | Velopack packaging + GitHub auto-update + release v0.1.0 | 🟡 packaging + updater wired; first release tag still pending |
 
 After M7, the next themed passes (rough order):
-1. Image effects framework (resize / blur / borders / sepia / watermark)
-2. SharedFolder + FTP/FTPS/SFTP uploaders
-3. Cloud storage uploaders (S3 / Azure Blob / Backblaze B2 / Google Cloud / Cloudflare R2)
-4. Scrolling capture
-5. CLI for scripting
-6. i18n
+1. SharedFolder + FTP/FTPS/SFTP uploaders
+2. Cloud storage uploaders (S3 / Azure Blob / Backblaze B2 / Google Cloud / Cloudflare R2)
+3. Scrolling capture
+4. CLI for scripting
+5. i18n
 
 See [`docs/Improvements.md`](docs/Improvements.md) for the granular feature-parity checklist.
 
@@ -139,7 +159,16 @@ To cut a release (maintainer):
 2. Type the new semantic version (e.g. `0.1.0`) and tick "prerelease" if applicable.
 3. The workflow builds, packs with `vpk`, and uploads a published GitHub Release with all assets.
 
-The `vpk` CLI is pinned in [`.config/dotnet-tools.json`](.config/dotnet-tools.json) — `dotnet tool restore` installs the same version locally for testing the pack step before pushing a tag.
+The `vpk` CLI is pinned in [`.config/dotnet-tools.json`](.config/dotnet-tools.json) — `dotnet tool restore` installs the same version locally for testing the pack step before pushing a tag. The convenience wrapper [`tools/pack-local.ps1`](tools/pack-local.ps1) drives the same `dotnet publish` + `vpk pack` chain the workflow uses, with a few quality-of-life shortcuts:
+
+```powershell
+pwsh tools/pack-local.ps1                 # auto-pick the latest version in Releases\, overwrite
+pwsh tools/pack-local.ps1 -Version 0.2.0  # explicit version (cleans prior artifacts for the channel)
+pwsh tools/pack-local.ps1 -SkipBuild      # reuse the existing bin\Release output
+pwsh tools/pack-local.ps1 -Channel local  # produce artifacts on a separate channel so the public 'win' channel stays clean
+```
+
+After pack, `Releases\ShareQ-<channel>-Setup.exe` installs ShareQ into `%LocalAppData%\ShareQ` exactly as a real release would; `Releases\ShareQ-<channel>-Portable.zip` extracts into a folder you can run from anywhere.
 
 ## Acknowledgements
 

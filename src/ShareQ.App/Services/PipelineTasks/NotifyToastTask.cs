@@ -110,7 +110,22 @@ public sealed class NotifyToastTask : IPipelineTask
             }
         }
 
-        _notifier.Show(title, message, onClick);
+        // Inline image preview — only meaningful when the captured/generated payload is an
+        // image AND a SaveToFile step landed it on disk earlier in the chain (so we have an
+        // absolute path). For text/URL toasts we leave imagePath null and the notifier shows
+        // the standard text-only template.
+        string? imagePath = null;
+        if (context.Bag.TryGetValue(PipelineBagKeys.NewItem, out var rawItemForImage)
+            && rawItemForImage is NewItem itemForImage
+            && itemForImage.Kind == ItemKind.Image
+            && context.Bag.TryGetValue(PipelineBagKeys.LocalPath, out var rawPath)
+            && rawPath is string localPath
+            && !string.IsNullOrEmpty(localPath))
+        {
+            imagePath = localPath;
+        }
+
+        _notifier.Show(title, message, onClick, imagePath);
         return Task.CompletedTask;
     }
 
