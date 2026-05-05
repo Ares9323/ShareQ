@@ -93,6 +93,9 @@ public partial class ClipboardWindow : Wpf.Ui.Controls.FluentWindow
         {
             if (e.NewValue is not true) return;
             _isClosing = false;
+            // Pull the persisted type-chip state once. Idempotent — VM latches after the first
+            // load so subsequent shows reuse the in-memory values.
+            await ViewModel.LoadTypeFiltersAsync(CancellationToken.None).ConfigureAwait(true);
             // On-open immediate sweep: enforce per-category MaxItems + AutoCleanupAfter before
             // we paint the list, so a "1-minute cleanup" item that's already expired doesn't
             // flash onscreen for the gap between Now and the next 30s scheduler tick. Best-
@@ -621,21 +624,6 @@ public partial class ClipboardWindow : Wpf.Ui.Controls.FluentWindow
     {
         if (ViewModel.SelectedRow is null) return;
         HistoryList.ScrollIntoView(ViewModel.SelectedRow);
-    }
-
-    private void OnFilterChanged(object sender, SelectionChangedEventArgs e)
-    {
-        // SelectionChanged fires during XAML EndInit because of SelectedIndex="0", which is
-        // before the ctor wires DataContext / ViewModel. Bail in that early phase — the
-        // initial selection (All) already matches KindFilter's null default.
-        if (ViewModel is null) return;
-        if (FiltersBox.SelectedItem is not ComboBoxItem item) return;
-        ViewModel.KindFilter = item.Tag switch
-        {
-            "Text"  => ItemKind.Text,
-            "Image" => ItemKind.Image,
-            _       => null,
-        };
     }
 
     /// <summary>Hide on the next dispatcher cycle so the current event handler can fully

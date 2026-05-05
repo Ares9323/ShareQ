@@ -21,6 +21,18 @@ public sealed class LauncherStore
     /// <summary>Last drag-mode toggle state. Saved on every hide so closing the launcher while
     /// in drag mode reopens it the same way (the user was clearly in the middle of editing).</summary>
     private const string DragModeKey = "launcher.drag_mode";
+    /// <summary>Per-user cell sizing — icon edge length and label point-size in WPF DIPs. The
+    /// drag-mode panel exposes both via sliders; defaults match the original hardcoded values
+    /// (40 px icon / 11 pt label).</summary>
+    private const string IconSizeKey = "launcher.icon_size";
+    private const string LabelFontSizeKey = "launcher.label_font_size";
+
+    public const double DefaultIconSize = 40;
+    public const double DefaultLabelFontSize = 11;
+    public const double MinIconSize = 24;
+    public const double MaxIconSize = 96;
+    public const double MinLabelFontSize = 8;
+    public const double MaxLabelFontSize = 18;
 
     private readonly ISettingsStore _settings;
 
@@ -165,6 +177,35 @@ public sealed class LauncherStore
 
     public Task SaveDragModeAsync(bool dragMode, CancellationToken cancellationToken)
         => _settings.SetAsync(DragModeKey, dragMode ? "1" : "0", sensitive: false, cancellationToken);
+
+    /// <summary>Load icon / label sizes. Out-of-range or missing values fall back to defaults
+    /// — the slider's Min/Max already constrain user input, so we don't need a second clamp at
+    /// callers.</summary>
+    public async Task<(double IconSize, double LabelFontSize)> LoadSizingAsync(CancellationToken cancellationToken)
+    {
+        var rawIcon = await _settings.GetAsync(IconSizeKey, cancellationToken).ConfigureAwait(false);
+        var rawLabel = await _settings.GetAsync(LabelFontSizeKey, cancellationToken).ConfigureAwait(false);
+        var icon = ParseInRange(rawIcon, DefaultIconSize, MinIconSize, MaxIconSize);
+        var label = ParseInRange(rawLabel, DefaultLabelFontSize, MinLabelFontSize, MaxLabelFontSize);
+        return (icon, label);
+    }
+
+    public Task SaveIconSizeAsync(double iconSize, CancellationToken cancellationToken)
+        => _settings.SetAsync(IconSizeKey,
+            Math.Clamp(iconSize, MinIconSize, MaxIconSize).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            sensitive: false, cancellationToken);
+
+    public Task SaveLabelFontSizeAsync(double labelFontSize, CancellationToken cancellationToken)
+        => _settings.SetAsync(LabelFontSizeKey,
+            Math.Clamp(labelFontSize, MinLabelFontSize, MaxLabelFontSize).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            sensitive: false, cancellationToken);
+
+    private static double ParseInRange(string? raw, double @default, double min, double max)
+    {
+        if (!double.TryParse(raw, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var v)) return @default;
+        return Math.Clamp(v, min, max);
+    }
 
     private sealed record GeometryDto(double W, double H, double L, double T);
 

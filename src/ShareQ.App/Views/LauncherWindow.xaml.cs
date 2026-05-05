@@ -20,6 +20,47 @@ namespace ShareQ.App.Views;
 /// edit dialog; right-click on a tab header lets the user rename it.</summary>
 public partial class LauncherWindow : Wpf.Ui.Controls.FluentWindow
 {
+    /// <summary>Icon edge length (DIPs) shared by every cell template. Bound from XAML via
+    /// <c>{Binding IconSize, RelativeSource={RelativeSource AncestorType=Window}}</c>. Lives
+    /// as a DependencyProperty so the XAML bindings update immediately on slider drag without
+    /// a code-behind PropertyChanged round-trip; persisted asynchronously via the store on
+    /// every change.</summary>
+    public static readonly DependencyProperty IconSizeProperty =
+        DependencyProperty.Register(nameof(IconSize), typeof(double), typeof(LauncherWindow),
+            new PropertyMetadata(LauncherStore.DefaultIconSize, OnIconSizeChanged));
+
+    public static readonly DependencyProperty LabelFontSizeProperty =
+        DependencyProperty.Register(nameof(LabelFontSize), typeof(double), typeof(LauncherWindow),
+            new PropertyMetadata(LauncherStore.DefaultLabelFontSize, OnLabelFontSizeChanged));
+
+    public double IconSize
+    {
+        get => (double)GetValue(IconSizeProperty);
+        set => SetValue(IconSizeProperty, value);
+    }
+
+    public double LabelFontSize
+    {
+        get => (double)GetValue(LabelFontSizeProperty);
+        set => SetValue(LabelFontSizeProperty, value);
+    }
+
+    private static void OnIconSizeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not LauncherWindow win || !win._sizingLoaded) return;
+        _ = win._store.SaveIconSizeAsync((double)e.NewValue, CancellationToken.None);
+    }
+
+    private static void OnLabelFontSizeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not LauncherWindow win || !win._sizingLoaded) return;
+        _ = win._store.SaveLabelFontSizeAsync((double)e.NewValue, CancellationToken.None);
+    }
+
+    /// <summary>True once the persisted sizing values have been applied — keeps the OnChanged
+    /// callbacks from re-saving the freshly-loaded values back to the store.</summary>
+    private bool _sizingLoaded;
+
     private readonly LauncherStore _store;
     private readonly IconService _icons;
     private readonly ILogger<LauncherWindow> _logger;
@@ -110,6 +151,16 @@ public partial class LauncherWindow : Wpf.Ui.Controls.FluentWindow
                 var startDrag = StartInDragMode || await _store.LoadDragModeAsync(CancellationToken.None);
                 SetDragMode(startDrag);
                 StartInDragMode = false;   // consume the explicit flag so a normal re-open isn't sticky
+                // Apply persisted icon / label sizing exactly once per process lifetime —
+                // _sizingLoaded latches afterwards so subsequent IsVisibleChanged ticks (and the
+                // first slider drag) don't re-save the freshly-loaded values.
+                if (!_sizingLoaded)
+                {
+                    var (icon, label) = await _store.LoadSizingAsync(CancellationToken.None);
+                    IconSize = icon;
+                    LabelFontSize = label;
+                    _sizingLoaded = true;
+                }
                 // Focus the launcher root, NOT the search box — auto-focusing the search swallows
                 // every shortcut key (Q, F1, …) the user wanted to press to fire a cell. Ctrl+F
                 // gives them an explicit way into the search box when they actually want to type.
@@ -428,6 +479,7 @@ public partial class LauncherWindow : Wpf.Ui.Controls.FluentWindow
     {
         _dragMode = on;
         DragModeBanner.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        DragSizingPanel.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         DragToggle.Content = on ? "✓ Drag mode (on)" : "📥 Drag mode";
         // Persist so closing the launcher while in drag mode reopens it the same way next time.
         // Fire-and-forget: persistence is sub-ms (single SQLite key write).
@@ -871,17 +923,6 @@ public partial class LauncherWindow : Wpf.Ui.Controls.FluentWindow
         public string Title { get; }
         public bool IsActive { get; }
         public Visibility HeaderVisibility { get; }
-        public Brush HeaderBackground
-        {
-            get
-            {
-                var key = IsActive ? "AccentBackgroundBrush" : "AccentBackgroundDarkBrush";
-                return Application.Current?.Resources[key] as Brush
-                    ?? new SolidColorBrush(IsActive
-                        ? Color.FromRgb(0x75, 0x1C, 0x8B)
-                        : Color.FromRgb(0x37, 0x12, 0x42));
-            }
-        }
 
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnChanged([CallerMemberName] string? n = null) =>

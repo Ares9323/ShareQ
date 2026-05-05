@@ -23,6 +23,30 @@ internal static partial class AppNativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SetForegroundWindow(IntPtr hWnd);
 
+    /// <summary>EnumWindows callback. Return true to keep enumerating, false to stop. Used by
+    /// <see cref="ShareQ.App.Services.TargetWindowTracker"/> to walk the top-level Z-order
+    /// looking for a non-ShareQ paste candidate when ShareQ itself is foreground.</summary>
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool IsWindowVisible(IntPtr hWnd);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool IsWindow(IntPtr hWnd);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    public static partial int GetWindowLong(IntPtr hWnd, int nIndex);
+
+    public const int GWL_EXSTYLE = -20;
+    public const int WS_EX_TOOLWINDOW = 0x00000080;
+    public const int WS_EX_NOACTIVATE = 0x08000000;
+
     [StructLayout(LayoutKind.Sequential)]
     public struct INPUT
     {

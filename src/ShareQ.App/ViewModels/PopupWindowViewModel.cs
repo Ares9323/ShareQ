@@ -107,6 +107,49 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
         _ = RefreshAsync(CancellationToken.None);
     }
 
+    /// <summary>Image-row chip — when true, non-text rows are visible (images, files, videos);
+    /// when false they're all hidden. Persisted to <c>clipboard.show_images</c>. Default true.
+    /// Files / videos ride along with this chip rather than getting their own — they're rare
+    /// in normal clipboard usage and a third chip would just add noise.</summary>
+    [ObservableProperty] private bool _showImages = true;
+    /// <summary>Text-row chip — when true, text-shaped rows are visible (Text / Html / Rtf);
+    /// when false they're all hidden. Persisted to <c>clipboard.show_text</c>. Covers HTML
+    /// too because clipboard HTML (e.g. an &lt;img&gt; URL copied from a browser) is the same
+    /// "textual content" semantically — gating it under Image would surprise the user. Both
+    /// chips off = empty list.</summary>
+    [ObservableProperty] private bool _showText = true;
+    private bool _typeFiltersLoaded;
+    private const string ShowImagesKey = "clipboard.show_images";
+    private const string ShowTextKey = "clipboard.show_text";
+
+    partial void OnShowImagesChanged(bool value) => PersistTypeFilter(ShowImagesKey, value);
+    partial void OnShowTextChanged(bool value) => PersistTypeFilter(ShowTextKey, value);
+
+    private void PersistTypeFilter(string key, bool value)
+    {
+        if (!_typeFiltersLoaded) return;
+        var settings = _services.GetService<ShareQ.Storage.Settings.ISettingsStore>();
+        if (settings is null) return;
+        _ = settings.SetAsync(key, value ? "1" : "0", sensitive: false, CancellationToken.None);
+        _ = RefreshAsync(CancellationToken.None);
+    }
+
+    /// <summary>Pull the persisted chip state once at window-show time. Called from the view's
+    /// IsVisibleChanged hook — the VM constructor runs in DI before any settings can be read
+    /// reliably, so we defer until the popup actually opens.</summary>
+    public async Task LoadTypeFiltersAsync(CancellationToken cancellationToken)
+    {
+        if (_typeFiltersLoaded) return;
+        var settings = _services.GetService<ShareQ.Storage.Settings.ISettingsStore>();
+        if (settings is null) { _typeFiltersLoaded = true; return; }
+        var rawImg = await settings.GetAsync(ShowImagesKey, cancellationToken).ConfigureAwait(true);
+        var rawText = await settings.GetAsync(ShowTextKey, cancellationToken).ConfigureAwait(true);
+        // Default true — only an explicit "0" counts as off so a fresh DB shows everything.
+        ShowImages = rawImg != "0";
+        ShowText = rawText != "0";
+        _typeFiltersLoaded = true;
+    }
+
     // Preview state for the side panel. Code-behind on the clipboard window watches Rtf/Html
     // bytes since those formats can't be data-bound directly into RichTextBox / WebBrowser.
     [ObservableProperty] private PreviewKind _previewKind = PreviewKind.None;
@@ -291,10 +334,21 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
             Category: ActiveCategory);
         var previousId = SelectedRow?.Id;
         var loaded = await _items.ListAsync(query, cancellationToken).ConfigureAwait(false);
+        // Apply the type-chip filter after the query. ShowImages gates Image / Files / Video
+        // (anything visual or binary); ShowText gates Text / Html / Rtf. Both off = empty list,
+        // which is what the user expects ("hide everything"). Doing it post-query keeps
+        // ItemQuery as a single-Kind filter; the Limit=500 ceiling we already work under makes
+        // a SQL-level Kinds list unnecessary for v0.1.0.
+        var displayIndex = 0;
         Rows.Clear();
         for (var i = 0; i < loaded.Count; i++)
         {
-            Rows.Add(new ItemRowViewModel(loaded[i], displayIndex: i));
+            var record = loaded[i];
+            var isImageLike = record.Kind is ItemKind.Image or ItemKind.Files or ItemKind.Video;
+            var isTextLike = record.Kind is ItemKind.Text or ItemKind.Html or ItemKind.Rtf;
+            if (isImageLike && !ShowImages) continue;
+            if (isTextLike && !ShowText) continue;
+            Rows.Add(new ItemRowViewModel(record, displayIndex: displayIndex++));
         }
         // Preserve selection across reloads when the same id is still present.
         if (previousId is { } id) SelectedRow = Rows.FirstOrDefault(r => r.Id == id);

@@ -54,43 +54,112 @@
 
             <Grid Grid.Row="1" Margin="14,0,14,14">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />  <!-- header (Clear all + search) -->
-                    <RowDefinition Height="Auto" />  <!-- categories tabs + filters -->
+                    <RowDefinition Height="Auto" />  <!-- type chips + tabs + Clear all + search (combined header) -->
                     <RowDefinition Height="*" />     <!-- history + toolbar + preview -->
                     <RowDefinition Height="Auto" />  <!-- footer -->
                 </Grid.RowDefinitions>
 
-                <!-- ── Header chrome (Clear all + search). Title + icon now live in the
-                      ui:TitleBar above; this row only carries the actions that need to scroll
-                      with the body content. ───────────────────────────────────────────────── -->
+                <!-- ── Combined header: image/files chips, category tabs, Clear all, search.
+                      Single row to save vertical space — replaces the old two-row layout where
+                      Clear all + search lived above the tab strip and a kind-filter dropdown
+                      sat to the right of the tabs. ───────────────────────────────────────── -->
                 <Grid Grid.Row="0" Margin="0,0,0,8">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="Auto" />  <!-- type chips -->
+                        <ColumnDefinition Width="*" />     <!-- category tabs -->
+                        <ColumnDefinition Width="Auto" />  <!-- Clear all -->
+                        <ColumnDefinition Width="220" />   <!-- search -->
                     </Grid.ColumnDefinitions>
 
-                    <ui:Button Grid.Column="1"
-                               Content="Clear all"
-                               Appearance="Danger"
-                               Margin="0,0,8,0"
-                               Cursor="Arrow"
-                               Command="{Binding ClearAllCommand}"
-                               ToolTip="Delete every non-pinned item (Ctrl+Shift+Del)" />
-                    <ui:TextBox Grid.Column="2" x:Name="SearchBox"
-                                PlaceholderText="🔍 Search…"
-                                FontSize="11"
-                                Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-                </Grid>
+                    <!-- Type chips. ToggleButton; ON = include that kind in the list, OFF =
+                         hide. ShowImages also covers files / videos; ShowText covers HTML
+                         (an image-URL pasted from a browser is HTML clipboard, not Image — gating
+                         it under the text chip matches user expectation). Both off = empty list.
+                         State persisted to clipboard.show_images / clipboard.show_text.
+                         Background = AccentBackgroundDarkBrush so the chips match the unselected
+                         category-tab tone next to them; foreground stays the default light
+                         AccentForegroundBrush so the glyph reads on top. -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,12,0"
+                                VerticalAlignment="Center">
+                        <StackPanel.Resources>
+                            <!-- Off → Surface3Brush (neutral, "filter not applied").
+                                 On → AccentBackgroundDarkBrush (the inactive-tab tone, signals
+                                 the filter is active). Hover → AccentBackgroundBrush (highlight).
+                                 Foreground stays light at every state. -->
+                            <Style TargetType="ToggleButton">
+                                <Setter Property="Padding" Value="10,6" />
+                                <Setter Property="Cursor" Value="Hand" />
+                                <Setter Property="Background" Value="{DynamicResource Surface3Brush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource Surface3Brush}" />
+                                <Setter Property="BorderThickness" Value="1" />
+                                <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <Border x:Name="Bd"
+                                                    Background="{TemplateBinding Background}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    CornerRadius="4"
+                                                    Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsChecked" Value="True">
+                                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentBackgroundDarkBrush}" />
+                                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBackgroundDarkBrush}" />
+                                                </Trigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentBackgroundBrush}" />
+                                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBackgroundBrush}" />
+                                                </Trigger>
+                                                <Trigger Property="IsPressed" Value="True">
+                                                    <Setter TargetName="Bd" Property="Opacity" Value="0.85" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </StackPanel.Resources>
+                        <ToggleButton IsChecked="{Binding ShowImages, Mode=TwoWay}"
+                                      Margin="0,0,4,0">
+                            <ToggleButton.ToolTip>
+                                <ToolTip>
+                                    <StackPanel>
+                                        <TextBlock Text="Image filter" FontWeight="SemiBold" />
+                                        <TextBlock Text="When on, the list includes:" Margin="0,4,0,2" />
+                                        <TextBlock Text="• Images (PNG, JPEG, BMP, GIF, screenshots)" />
+                                        <TextBlock Text="• File copies (Explorer Ctrl+C / drag-drop, .sxie etc.)" />
+                                        <TextBlock Text="• Video / GIF recordings (.mp4, .gif)" />
+                                        <TextBlock Text="Click to hide all of these." Margin="0,4,0,0" FontStyle="Italic" />
+                                    </StackPanel>
+                                </ToolTip>
+                            </ToggleButton.ToolTip>
+                            <TextBlock Text="&#xEB9F;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
+                        </ToggleButton>
+                        <ToggleButton IsChecked="{Binding ShowText, Mode=TwoWay}">
+                            <ToggleButton.ToolTip>
+                                <ToolTip>
+                                    <StackPanel>
+                                        <TextBlock Text="Text filter" FontWeight="SemiBold" />
+                                        <TextBlock Text="When on, the list includes:" Margin="0,4,0,2" />
+                                        <TextBlock Text="• Plain text (everything you copy as text)" />
+                                        <TextBlock Text="• HTML (browsers' Copy link / Copy image address)" />
+                                        <TextBlock Text="• RTF (formatted text from Word / Outlook / etc.)" />
+                                        <TextBlock Text="Click to hide all of these." Margin="0,4,0,0" FontStyle="Italic" />
+                                    </StackPanel>
+                                </ToolTip>
+                            </ToggleButton.ToolTip>
+                            <!-- E8A5 = Document — universal page glyph available in both Segoe
+                                 Fluent Icons (Win11) and Segoe MDL2 Assets (Win10) fallback. -->
+                            <TextBlock Text="&#xE8A5;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
+                        </ToggleButton>
+                    </StackPanel>
 
-                <!-- ── Categories tab strip + Filters dropdown ─────────────────────────────── -->
-                <Grid Grid.Row="1" Margin="0,0,0,8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <ItemsControl Grid.Column="0" ItemsSource="{Binding Categories}">
+                    <ItemsControl Grid.Column="1" ItemsSource="{Binding Categories}"
+                                  VerticalAlignment="Center">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <StackPanel Orientation="Horizontal" />
@@ -119,23 +188,24 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <ComboBox Grid.Column="1"
-                              x:Name="FiltersBox"
-                              Width="120"
-                              SelectedIndex="0"
-                              SelectionChanged="OnFilterChanged"
-                              ToolTip="Filter by item type">
-                        <ComboBoxItem Content="All"   Tag="{x:Null}" />
-                        <ComboBoxItem Content="Text"  Tag="Text" />
-                        <ComboBoxItem Content="Image" Tag="Image" />
-                    </ComboBox>
+                    <ui:Button Grid.Column="2"
+                               Content="Clear all"
+                               Appearance="Danger"
+                               Margin="8,0,8,0"
+                               Cursor="Arrow"
+                               Command="{Binding ClearAllCommand}"
+                               ToolTip="Delete every non-pinned item (Ctrl+Shift+Del)" />
+                    <ui:TextBox Grid.Column="3" x:Name="SearchBox"
+                                PlaceholderText="🔍 Search…"
+                                FontSize="11"
+                                Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
                 </Grid>
 
                 <!-- ── Body: history list | splitter | preview pane | vertical toolbar ────── -->
                 <!-- Toolbar lives in the rightmost (Auto) column so the GridSplitter (col 1)
                      resizes only the list and the preview — the toolbar stays anchored to the
                      window's right edge and never gets in the way of the resize handle. -->
-                <Grid Grid.Row="2">
+                <Grid Grid.Row="1">
                     <!-- MinWidths kept low so the toolbar (Auto column on the right) is always
                          guaranteed its ~40 px regardless of how aggressively the user shrinks the
                          window. The preview column's content (text + image) wraps/scales below
@@ -244,8 +314,8 @@
                                                     <Setter Property="BorderBrush" Value="Transparent" />
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
-                                                            <Setter Property="Background" Value="{DynamicResource AccentBackgroundBrush}" />
-                                                            <Setter Property="BorderBrush" Value="{DynamicResource AccentBackgroundLightBrush}" />
+                                                            <Setter Property="Background" Value="{DynamicResource AccentBackgroundDarkBrush}" />
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource AccentBackgroundBrush}" />
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -263,15 +333,15 @@
                                                             HorizontalAlignment="Left"
                                                             Margin="0,0,8,0">
                                                     <Border Width="22" Height="22"
-                                                            Background="{DynamicResource AccentBackgroundDarkBrush}"
+                                                            Background="{DynamicResource AccentBackgroundLightBrush}"
                                                             CornerRadius="3"
                                                             HorizontalAlignment="Center"
                                                             Margin="0,0,0,2"
                                                             Visibility="{Binding HasIndexBadge, Converter={StaticResource BoolToVisibility}}">
                                                         <TextBlock Text="{Binding IndexBadge}"
-                                                                   Foreground="{DynamicResource AccentForegroundBrush}"
+                                                                   Foreground="{DynamicResource Surface1Brush}"
                                                                    FontSize="11"
-                                                                   FontWeight="SemiBold"
+                                                                   FontWeight="Bold"
                                                                    HorizontalAlignment="Center"
                                                                    VerticalAlignment="Center" />
                                                     </Border>
@@ -476,7 +546,7 @@
                 </Grid>
 
                 <!-- ── Footer hint ─────────────────────────────────────────────────────────── -->
-                <TextBlock Grid.Row="3"
+                <TextBlock Grid.Row="2"
                            Margin="0,10,0,0"
                            HorizontalAlignment="Center"
                            Foreground="#666" FontSize="11"
