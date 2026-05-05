@@ -75,6 +75,43 @@
             </Style.Triggers>
         </Style>
 
+        <!-- Title-as-link inside a hotkey row: clicking the workflow name opens its step list,
+             same action that a separate "Edit" button used to fire. Borderless / transparent so
+             the row still reads as a card rather than a button strip; hover brightens the text
+             and underlines it so the affordance is discoverable without adding chrome. -->
+        <Style x:Key="HotkeyTitleButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                            <TextBlock x:Name="Label"
+                                       Text="{TemplateBinding Content}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       FontWeight="SemiBold" FontSize="13"
+                                       VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Label" Property="Foreground" Value="White" />
+                                <Setter TargetName="Label" Property="TextDecorations" Value="Underline" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Label" Property="Opacity" Value="0.75" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="UploaderTabItemStyle" TargetType="TabItem">
             <Setter Property="Foreground" Value="{DynamicResource AccentForegroundDarkBrush}" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -447,21 +484,24 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
-                                               FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                                    <!-- Title is the affordance for the workflow's step list — click
+                                         it to open the editor. Borderless link-style button (see
+                                         HotkeyTitleButtonStyle): the card stays clean, the workflow
+                                         name itself reads as actionable. Replaces the previous
+                                         separate Edit button on the right. -->
+                                    <Button Grid.Column="0"
+                                            Style="{StaticResource HotkeyTitleButtonStyle}"
+                                            Content="{Binding DisplayName}"
+                                            Command="{Binding OpenInWorkflowsCommand}"
+                                            ToolTip="Open this workflow's step list" />
                                     <!-- Chip is the rebind affordance — clicking it opens the
                                          capture dialog. When unbound the text reads
                                          "Click to set hotkey…" so the action is self-explanatory. -->
                                     <Button Grid.Column="1" Style="{StaticResource HotkeyChipButtonStyle}"
                                             Content="{Binding BindingDisplay}"
                                             Command="{Binding RebindCommand}"
-                                            Margin="0,0,8,0"
                                             ToolTip="Click to assign / change / clear the hotkey" />
-                                    <ui:Button Grid.Column="2" Content="Edit"
-                                               Command="{Binding OpenInWorkflowsCommand}"
-                                               ToolTip="Open this workflow's step list" />
                                 </Grid>
                             </Border>
                         </DataTemplate>
@@ -483,7 +523,7 @@
                                        ToolTip="Reset every built-in workflow to its default steps and hotkey. Asks for confirmation; custom workflows are not touched." />
                         </Grid>
                         <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap"
-                                   Text="Click Rebind on a row to set a new key combo (Reset / Clear are inside the rebind dialog). Click Edit to open the workflow's step list." />
+                                   Text="Click the workflow name to open its step list. Click the hotkey chip to set / change / clear the key combo." />
                     </StackPanel>
 
                     <!-- Tabbed body: 4 built-in category tabs + Custom. Same UploaderTabItemStyle
@@ -824,6 +864,43 @@
                 <ui:NumberBox Value="{Binding Capture.DelaySeconds, Mode=TwoWay}"
                               Minimum="0" Maximum="30" SmallChange="1"
                               HorizontalAlignment="Left" Width="120" />
+
+                <!-- Image format. Drives both capture pipelines (CaptureCoordinator encodes new
+                     screenshots into the chosen format) and the editor's "Save" button (history
+                     entry created in the same format). "Save as…" inside the editor still lets
+                     the user override per-export. AutoJpeg + threshold mirror ShareX so the user
+                     can keep PNG default but fall back to JPEG when a screenshot would balloon
+                     above the threshold (uploads, history footprint). -->
+                <TextBlock Text="Image format" FontWeight="SemiBold" Margin="0,16,0,4" />
+                <ComboBox ItemsSource="{x:Static vm:CaptureDefaultsViewModel.ImageFormats}"
+                          SelectedItem="{Binding Capture.ImageFormat, Mode=TwoWay}"
+                          HorizontalAlignment="Left" Width="160" Margin="0,0,0,8" />
+
+                <TextBlock Text="JPEG quality" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="80" />
+                    </Grid.ColumnDefinitions>
+                    <Slider Grid.Column="0"
+                            Minimum="1" Maximum="100"
+                            Value="{Binding Capture.JpegQuality, Mode=TwoWay}"
+                            VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <ui:NumberBox Grid.Column="1"
+                                  Value="{Binding Capture.JpegQuality, Mode=TwoWay}"
+                                  Minimum="1" Maximum="100" SmallChange="5" />
+                </Grid>
+
+                <CheckBox Content="Auto-switch to JPEG when output exceeds threshold"
+                          IsChecked="{Binding Capture.AutoJpeg, Mode=TwoWay}"
+                          Margin="0,4,0,4" />
+                <TextBlock Text="Threshold (KB)" FontWeight="SemiBold" Margin="0,4,0,4" />
+                <ui:NumberBox Value="{Binding Capture.AutoJpegThresholdKb, Mode=TwoWay}"
+                              Minimum="64" Maximum="65536" SmallChange="256"
+                              IsEnabled="{Binding Capture.AutoJpeg}"
+                              HorizontalAlignment="Left" Width="120" Margin="0,0,0,8" />
+                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap"
+                           Text="Active only when format = PNG. Photographic content (gradients, video stills) compresses far more efficiently as JPEG; large screenshots fall back automatically without you noticing." />
             </StackPanel>
 
             <!-- Theme — wrapped in ScrollViewer because the page now has three colour rows +

@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using ShareQ.ImageEffects;
 using ShareQ.ImageEffects.Drawing;
+using ShareQ.ImageEffects.Drawings;
 using SkiaSharp;
 
 namespace ShareQ.App.ViewModels.ImageEffects;
@@ -70,6 +72,54 @@ public sealed partial class EffectEntryViewModel : ObservableObject
         // property panel renders these bools as a 3×3 chip grid above the linear param list,
         // and TryCreate flips IsInSideGroup on each member so the linear list skips them.
         SideToggles = SideToggleGroupViewModel.TryCreate(byName);
+
+        // DrawImage's Width/Height are interpreted differently per SizeMode (pixels vs percent
+        // vs irrelevant). Hook the SizeMode enum so the slider range retunes and the rows
+        // collapse when they don't apply — DontResize hides Width/Height entirely, AbsoluteSize
+        // gives 0..4000 px, Percentage modes give 0..200%.
+        if (entry.Effect is DrawImageImageEffect drawImage)
+            WireDrawImageSizeMode(drawImage, byName);
+    }
+
+    private static void WireDrawImageSizeMode(DrawImageImageEffect effect,
+        IReadOnlyDictionary<string, EffectParameterViewModel> byName)
+    {
+        if (!byName.TryGetValue(nameof(DrawImageImageEffect.SizeMode), out var sizeModeVm)) return;
+        if (!byName.TryGetValue(nameof(DrawImageImageEffect.Width), out var widthVm)) return;
+        if (!byName.TryGetValue(nameof(DrawImageImageEffect.Height), out var heightVm)) return;
+
+        void Apply()
+        {
+            switch (effect.SizeMode)
+            {
+                case DrawImageSizeMode.DontResize:
+                    SetRange(widthVm,  0, 0, applicable: false);
+                    SetRange(heightVm, 0, 0, applicable: false);
+                    break;
+                case DrawImageSizeMode.AbsoluteSize:
+                    SetRange(widthVm,  0, 4000, applicable: true);
+                    SetRange(heightVm, 0, 4000, applicable: true);
+                    break;
+                case DrawImageSizeMode.PercentageOfWatermark:
+                case DrawImageSizeMode.PercentageOfCanvas:
+                    SetRange(widthVm,  0, 200, applicable: true);
+                    SetRange(heightVm, 0, 200, applicable: true);
+                    break;
+            }
+        }
+
+        sizeModeVm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(EffectParameterViewModel.EnumValue)) Apply();
+        };
+        Apply();
+    }
+
+    private static void SetRange(EffectParameterViewModel vm, double min, double max, bool applicable)
+    {
+        vm.Min = min;
+        vm.Max = max;
+        vm.IsApplicable = applicable;
     }
 
     public bool Enabled

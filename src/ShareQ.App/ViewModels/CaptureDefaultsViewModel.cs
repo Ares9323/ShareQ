@@ -11,7 +11,13 @@ public sealed partial class CaptureDefaultsViewModel : ObservableObject
     private const string FolderKey = "capture.folder";
     private const string DelayKey  = "capture.delay_seconds";
     private const string SubFolderPatternKey = "capture.subfolder_pattern";
+    private const string ImageFormatKey = "capture.image_format";
+    private const string JpegQualityKey = "capture.jpeg_quality";
+    private const string AutoJpegKey = "capture.auto_jpeg";
+    private const string AutoJpegThresholdKbKey = "capture.auto_jpeg_threshold_kb";
     private const string DefaultFolder = "%USERPROFILE%\\Pictures\\ShareQ";
+
+    public static IReadOnlyList<string> ImageFormats { get; } = new[] { "PNG", "JPEG", "BMP", "GIF" };
 
     private readonly ISettingsStore _settings;
 
@@ -33,6 +39,28 @@ public sealed partial class CaptureDefaultsViewModel : ObservableObject
     [ObservableProperty]
     private string _subFolderPattern = string.Empty;
 
+    /// <summary>Output format for captures + editor saves. PascalCase string ("PNG"/"JPEG"/
+    /// "BMP"/"GIF") for the dropdown binding; the persisted setting (<c>capture.image_format</c>)
+    /// stores the same string and is parsed back through <see cref="ShareQ.Core.Imaging.ImageFormatExtensions.TryParse"/>
+    /// at consume time.</summary>
+    [ObservableProperty]
+    private string _imageFormat = "PNG";
+
+    /// <summary>JPEG quality 1..100. Visible for all formats but only applied when the chosen
+    /// format encodes JPEG (either <see cref="ImageFormat"/>=JPEG or auto-fallback kicked in).</summary>
+    [ObservableProperty]
+    private int _jpegQuality = 90;
+
+    /// <summary>When true and <see cref="ImageFormat"/>=PNG, captures whose PNG-encoded payload
+    /// would exceed <see cref="AutoJpegThresholdKb"/> get re-encoded as JPEG instead. Mirrors
+    /// ShareX's <c>ImageAutoUseJPEG</c> + <c>ImageAutoUseJPEGSize</c> pair so screenshots of
+    /// large photographic content (gradients, video stills) don't blow up uploads.</summary>
+    [ObservableProperty]
+    private bool _autoJpeg = true;
+
+    [ObservableProperty]
+    private int _autoJpegThresholdKb = 2048;
+
     private bool _suppressPersist;
 
     public async Task LoadAsync()
@@ -42,7 +70,33 @@ public sealed partial class CaptureDefaultsViewModel : ObservableObject
         var rawDelay = await _settings.GetAsync(DelayKey, CancellationToken.None).ConfigureAwait(true);
         DelaySeconds = int.TryParse(rawDelay, out var d) ? Math.Clamp(d, 0, 30) : 0;
         SubFolderPattern = (await _settings.GetAsync(SubFolderPatternKey, CancellationToken.None).ConfigureAwait(true)) ?? string.Empty;
+
+        var rawFormat = await _settings.GetAsync(ImageFormatKey, CancellationToken.None).ConfigureAwait(true);
+        ImageFormat = NormaliseFormat(rawFormat);
+        var rawQuality = await _settings.GetAsync(JpegQualityKey, CancellationToken.None).ConfigureAwait(true);
+        JpegQuality = int.TryParse(rawQuality, out var q) ? Math.Clamp(q, 1, 100) : 90;
+        var rawAuto = await _settings.GetAsync(AutoJpegKey, CancellationToken.None).ConfigureAwait(true);
+        AutoJpeg = rawAuto is null || bool.TryParse(rawAuto, out var a) && a; // default true
+        var rawThreshold = await _settings.GetAsync(AutoJpegThresholdKbKey, CancellationToken.None).ConfigureAwait(true);
+        AutoJpegThresholdKb = int.TryParse(rawThreshold, out var t) ? Math.Max(64, t) : 2048;
+
         _suppressPersist = false;
+    }
+
+    /// <summary>Coerce a stored format string back into the canonical PascalCase the dropdown
+    /// expects. Falls back to "PNG" for unknown / null values so a corrupted setting can't
+    /// leave the UI with a blank selection.</summary>
+    private static string NormaliseFormat(string? raw)
+    {
+        var parsed = ShareQ.Core.Imaging.ImageFormatExtensions.TryParse(raw);
+        return parsed switch
+        {
+            ShareQ.Core.Imaging.ImageFormat.Png  => "PNG",
+            ShareQ.Core.Imaging.ImageFormat.Jpeg => "JPEG",
+            ShareQ.Core.Imaging.ImageFormat.Bmp  => "BMP",
+            ShareQ.Core.Imaging.ImageFormat.Gif  => "GIF",
+            _ => "PNG",
+        };
     }
 
     partial void OnFolderChanged(string value)
@@ -62,6 +116,33 @@ public sealed partial class CaptureDefaultsViewModel : ObservableObject
     {
         if (_suppressPersist) return;
         _ = _settings.SetAsync(SubFolderPatternKey, value, sensitive: false, CancellationToken.None);
+    }
+
+    partial void OnImageFormatChanged(string value)
+    {
+        if (_suppressPersist) return;
+        _ = _settings.SetAsync(ImageFormatKey, value, sensitive: false, CancellationToken.None);
+    }
+
+    partial void OnJpegQualityChanged(int value)
+    {
+        if (_suppressPersist) return;
+        _ = _settings.SetAsync(JpegQualityKey, value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            sensitive: false, CancellationToken.None);
+    }
+
+    partial void OnAutoJpegChanged(bool value)
+    {
+        if (_suppressPersist) return;
+        _ = _settings.SetAsync(AutoJpegKey, value.ToString(),
+            sensitive: false, CancellationToken.None);
+    }
+
+    partial void OnAutoJpegThresholdKbChanged(int value)
+    {
+        if (_suppressPersist) return;
+        _ = _settings.SetAsync(AutoJpegThresholdKbKey, value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            sensitive: false, CancellationToken.None);
     }
 
     [RelayCommand]

@@ -30,12 +30,14 @@ public sealed class CaptureActiveWindowTask : IPipelineTask
 
     private readonly ICaptureSource _captureSource;
     private readonly ISettingsStore _settings;
+    private readonly CaptureImageOutputService _outputEncoder;
     private readonly ILogger<CaptureActiveWindowTask> _logger;
 
-    public CaptureActiveWindowTask(ICaptureSource captureSource, ISettingsStore settings, ILogger<CaptureActiveWindowTask> logger)
+    public CaptureActiveWindowTask(ICaptureSource captureSource, ISettingsStore settings, CaptureImageOutputService outputEncoder, ILogger<CaptureActiveWindowTask> logger)
     {
         _captureSource = captureSource;
         _settings = settings;
+        _outputEncoder = outputEncoder;
         _logger = logger;
     }
 
@@ -77,9 +79,10 @@ public sealed class CaptureActiveWindowTask : IPipelineTask
         var region = new CaptureRegion(snapshot.X, snapshot.Y, snapshot.Width, snapshot.Height,
             string.IsNullOrEmpty(snapshot.Title) ? "Active window" : snapshot.Title);
         var captured = await _captureSource.CaptureAsync(region, cancellationToken).ConfigureAwait(false);
+        var (bytes, ext) = await _outputEncoder.EncodeAsync(captured.PngBytes, cancellationToken).ConfigureAwait(false);
 
-        context.Bag[PipelineBagKeys.PayloadBytes] = captured.PngBytes;
-        context.Bag[PipelineBagKeys.FileExtension] = "png";
+        context.Bag[PipelineBagKeys.PayloadBytes] = bytes;
+        context.Bag[PipelineBagKeys.FileExtension] = ext;
         context.Bag[PipelineBagKeys.CaptureScreenPos] = (region.X, region.Y);
         if (!string.IsNullOrEmpty(region.WindowTitle))
         {
@@ -90,8 +93,8 @@ public sealed class CaptureActiveWindowTask : IPipelineTask
             Kind: ItemKind.Image,
             Source: ItemSource.CaptureWindow,
             CreatedAt: DateTimeOffset.UtcNow,
-            Payload: captured.PngBytes,
-            PayloadSize: captured.PngBytes.LongLength,
+            Payload: bytes,
+            PayloadSize: bytes.LongLength,
             SearchText: $"{searchText} {captured.Width}×{captured.Height}");
 
         _logger.LogInformation("CaptureActiveWindowTask: captured '{Title}' at ({X}, {Y}) {W}×{H} px",

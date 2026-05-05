@@ -74,11 +74,14 @@ public partial class EditorWindow : FluentWindow
     private double _panStartScrollV;
     private System.Windows.Input.Cursor? _panSavedCursor;
 
-    public EditorWindow(EditorViewModel viewModel)
+    private readonly ShareQ.Core.Imaging.IImageEncoder? _encoder;
+
+    public EditorWindow(EditorViewModel viewModel, ShareQ.Core.Imaging.IImageEncoder? encoder = null)
     {
         InitializeComponent();
         _vm = viewModel;
         DataContext = _vm;
+        _encoder = encoder;
 
         OutlineSwatch.SelectedColor = _vm.OutlineColor;
         FillSwatch.SelectedColor = _vm.FillColor;
@@ -507,6 +510,73 @@ public partial class EditorWindow : FluentWindow
         _vm.MarkSaved(); // belt-and-braces: the Closing handler also bypasses the prompt when Saved=true
         Close();
     }
+
+    /// <summary>"Save as…" — explicit user export. The user picks both the path and the format
+    /// (via the SaveFileDialog filter); we render the canvas to PNG, encode into the chosen
+    /// format, write to disk. Bypasses history entirely — Save-as is a one-shot export of
+    /// the current edits, not a state mutation. The editor stays open so the user can keep
+    /// editing or hit "Save" afterwards to also commit the result to the history item.</summary>
+    private void OnSaveAsClicked(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Save image as",
+            Filter = "PNG (*.png)|*.png|JPEG (*.jpg;*.jpeg)|*.jpg;*.jpeg|BMP (*.bmp)|*.bmp|GIF (*.gif)|*.gif",
+            FilterIndex = 1,
+            FileName = $"shareq-{DateTime.Now:yyyyMMdd-HHmmss}.png",
+            AddExtension = true,
+        };
+        if (dialog.ShowDialog(this) != true) return;
+
+        // FilterIndex is 1-based, mirrors the Filter ordering above.
+        var target = dialog.FilterIndex switch
+        {
+            2 => ShareQ.Core.Imaging.ImageFormat.Jpeg,
+            3 => ShareQ.Core.Imaging.ImageFormat.Bmp,
+            4 => ShareQ.Core.Imaging.ImageFormat.Gif,
+            _ => ShareQ.Core.Imaging.ImageFormat.Png,
+        };
+
+        try
+        {
+            var canvasHost = (System.Windows.Controls.Grid)FindName("CanvasHost")!;
+            var (exportW, exportH) = ResolveExportPixels(canvasHost);
+            var pngBytes = ShareQ.Editor.Rendering.CanvasPngExporter.Export(canvasHost, exportW, exportH);
+
+            byte[] outputBytes;
+            if (target == ShareQ.Core.Imaging.ImageFormat.Png || _encoder is null)
+                outputBytes = pngBytes;
+            else
+                outputBytes = _encoder.Encode(pngBytes, target, jpegQuality: 90);
+
+            System.IO.File.WriteAllBytes(dialog.FileName, outputBytes);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this,
+                $"Could not save the image:\n\n{ex.Message}",
+                "Save as failed",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+        }
+    }
+
+    /// <summary>Same logic <see cref="ShareQ.App.Services.EditorLauncher"/> uses to size the
+    /// export — find the source <c>BitmapSource</c> inside CanvasHost and use its native
+    /// pixel dimensions, falling back to the host's ActualWidth/Height if the lookup fails.</summary>
+    private static (int W, int H) ResolveExportPixels(System.Windows.Controls.Grid canvasHost)
+    {
+        foreach (var child in canvasHost.Children)
+        {
+            if (child is System.Windows.Controls.Image img &&
+                img.Source is System.Windows.Media.Imaging.BitmapSource src)
+            {
+                return (src.PixelWidth, src.PixelHeight);
+            }
+        }
+        return ((int)Math.Round(canvasHost.ActualWidth), (int)Math.Round(canvasHost.ActualHeight));
+    }
+
     private void OnCancelClicked(object sender, RoutedEventArgs e) { Saved = false; Close(); }
 
     private void OnZoomInClicked(object sender, RoutedEventArgs e) => SetZoom(_zoom * 1.25);

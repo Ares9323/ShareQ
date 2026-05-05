@@ -22,6 +22,7 @@ public sealed class CaptureCoordinator
     private readonly IPipelineProfileStore _profiles;
     private readonly ISettingsStore _settings;
     private readonly IServiceProvider _services;
+    private readonly CaptureImageOutputService _outputEncoder;
     private readonly ILogger<CaptureCoordinator> _logger;
 
     public CaptureCoordinator(
@@ -30,6 +31,7 @@ public sealed class CaptureCoordinator
         IPipelineProfileStore profiles,
         ISettingsStore settings,
         IServiceProvider services,
+        CaptureImageOutputService outputEncoder,
         ILogger<CaptureCoordinator> logger)
     {
         _captureSource = captureSource;
@@ -37,6 +39,7 @@ public sealed class CaptureCoordinator
         _profiles = profiles;
         _settings = settings;
         _services = services;
+        _outputEncoder = outputEncoder;
         _logger = logger;
     }
 
@@ -150,9 +153,15 @@ public sealed class CaptureCoordinator
             return;
         }
 
+        // Re-encode the captured PNG into the user's preferred format. The capture pipeline
+        // always produces PNG internally (DXGI / GDI surface → PNG) so we can decode that as
+        // the canonical source; the choice between PNG / JPEG / BMP / GIF is purely an output
+        // concern and lives entirely behind CaptureImageOutputService.
+        var (bytes, ext) = await _outputEncoder.EncodeAsync(captured.PngBytes, cancellationToken).ConfigureAwait(false);
+
         var ctx = new PipelineContext(_services);
-        ctx.Bag[PipelineBagKeys.PayloadBytes] = captured.PngBytes;
-        ctx.Bag[PipelineBagKeys.FileExtension] = "png";
+        ctx.Bag[PipelineBagKeys.PayloadBytes] = bytes;
+        ctx.Bag[PipelineBagKeys.FileExtension] = ext;
         if (!string.IsNullOrEmpty(region.WindowTitle))
         {
             ctx.Bag[PipelineBagKeys.WindowTitle] = region.WindowTitle;
@@ -162,8 +171,8 @@ public sealed class CaptureCoordinator
             Kind: ItemKind.Image,
             Source: source,
             CreatedAt: DateTimeOffset.UtcNow,
-            Payload: captured.PngBytes,
-            PayloadSize: captured.PngBytes.LongLength,
+            Payload: bytes,
+            PayloadSize: bytes.LongLength,
             SearchText: $"{searchTextPrefix} {captured.Width}×{captured.Height}");
 
         await _executor.RunAsync(profile, ctx, cancellationToken).ConfigureAwait(false);
@@ -177,6 +186,7 @@ public sealed class CaptureCoordinator
         try { await _settings.SetAsync(LastRegionKey, serialized, sensitive: false, cancellationToken).ConfigureAwait(false); }
         catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist last-region bounds"); }
     }
+
 
     private static bool TryParseRegion(string? raw, out CaptureRegion? region)
     {

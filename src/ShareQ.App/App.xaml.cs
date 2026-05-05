@@ -287,6 +287,8 @@ public partial class App : Application
                 services.AddSingleton<CaptureCoordinator>();
                 services.AddSingleton<ManualUploadService>();
                 services.AddSingleton<IToastNotifier, WindowsToastNotifier>();
+                services.AddSingleton<ShareQ.Core.Imaging.IImageEncoder, WpfImageEncoder>();
+                services.AddSingleton<CaptureImageOutputService>();
                 // Velopack-backed self-update. Disabled at runtime (IsAvailable=false) when the
                 // app isn't running from a Velopack-managed install — no harm, just shows the
                 // "Check for updates" button as disabled in Settings.
@@ -357,6 +359,12 @@ public partial class App : Application
                 return Array.Empty<string>();
             }
         };
+
+        // Image-format dropdown for SaveToFile's "format" override. Empty entry = "use the
+        // bag's current extension" (default — typically the global capture format set in
+        // Settings → Capture). Explicit format = re-encode through IImageEncoder before write.
+        ShareQ.App.ViewModels.WorkflowActionCatalog.OptionsProviders["image_formats"] = () =>
+            new[] { string.Empty, "PNG", "JPEG", "BMP", "GIF" };
 
         var incognito = _host.Services.GetRequiredService<IncognitoModeService>();
         await incognito.LoadAsync(CancellationToken.None);

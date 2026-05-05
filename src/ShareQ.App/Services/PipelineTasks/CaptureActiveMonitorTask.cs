@@ -27,12 +27,14 @@ public sealed class CaptureActiveMonitorTask : IPipelineTask
 
     private readonly ICaptureSource _captureSource;
     private readonly ISettingsStore _settings;
+    private readonly CaptureImageOutputService _outputEncoder;
     private readonly ILogger<CaptureActiveMonitorTask> _logger;
 
-    public CaptureActiveMonitorTask(ICaptureSource captureSource, ISettingsStore settings, ILogger<CaptureActiveMonitorTask> logger)
+    public CaptureActiveMonitorTask(ICaptureSource captureSource, ISettingsStore settings, CaptureImageOutputService outputEncoder, ILogger<CaptureActiveMonitorTask> logger)
     {
         _captureSource = captureSource;
         _settings = settings;
+        _outputEncoder = outputEncoder;
         _logger = logger;
     }
 
@@ -67,17 +69,18 @@ public sealed class CaptureActiveMonitorTask : IPipelineTask
 
         var region = new CaptureRegion(monitor.X, monitor.Y, monitor.Width, monitor.Height, $"Monitor {monitor.Name}");
         var captured = await _captureSource.CaptureAsync(region, cancellationToken).ConfigureAwait(false);
+        var (bytes, ext) = await _outputEncoder.EncodeAsync(captured.PngBytes, cancellationToken).ConfigureAwait(false);
 
-        context.Bag[PipelineBagKeys.PayloadBytes] = captured.PngBytes;
-        context.Bag[PipelineBagKeys.FileExtension] = "png";
+        context.Bag[PipelineBagKeys.PayloadBytes] = bytes;
+        context.Bag[PipelineBagKeys.FileExtension] = ext;
         context.Bag[PipelineBagKeys.CaptureScreenPos] = (region.X, region.Y);
         context.Bag[PipelineBagKeys.WindowTitle] = region.WindowTitle!;
         context.Bag[PipelineBagKeys.NewItem] = new NewItem(
             Kind: ItemKind.Image,
             Source: ItemSource.CaptureMonitor,
             CreatedAt: DateTimeOffset.UtcNow,
-            Payload: captured.PngBytes,
-            PayloadSize: captured.PngBytes.LongLength,
+            Payload: bytes,
+            PayloadSize: bytes.LongLength,
             SearchText: $"{region.WindowTitle} {captured.Width}×{captured.Height}");
 
         _logger.LogInformation("CaptureActiveMonitorTask: captured monitor '{Name}' at ({X}, {Y}) {W}×{H} px",

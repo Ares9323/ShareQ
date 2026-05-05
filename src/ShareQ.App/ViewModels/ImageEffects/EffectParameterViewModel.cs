@@ -25,10 +25,20 @@ public sealed partial class EffectParameterViewModel : ObservableObject
     private bool _suppress;
 
     public string Label { get; set; }
-    public double Min { get; set; }
-    public double Max { get; set; }
-    public double Step { get; set; }
+    /// <summary>Slider lower bound. <c>[ObservableProperty]</c> so a parent VM can retune the
+    /// range at runtime — e.g. DrawImage flips Width/Height between absolute pixels (0..4000)
+    /// and percentages (0..200) based on SizeMode, and the Slider's <c>Minimum</c> / <c>Maximum</c>
+    /// bindings refresh in place.</summary>
+    [ObservableProperty] private double _min;
+    [ObservableProperty] private double _max;
+    [ObservableProperty] private double _step;
     public string ValueFormat { get; set; }
+
+    /// <summary>External gate flipped by sibling parameters (e.g. DrawImage's SizeMode hides
+    /// Width/Height when set to DontResize). Folds into <see cref="IsActive"/> so the entire
+    /// row collapses out of the property grid rather than greying out — disabled-but-present
+    /// controls add noise without giving the user something to do.</summary>
+    [ObservableProperty] private bool _isApplicable = true;
 
     /// <summary>The CLR property name on the underlying <see cref="ImageEffect"/>. Exposed so
     /// the entry view-model can pair Color/UseGradient/Gradient triplets by naming convention
@@ -119,6 +129,7 @@ public sealed partial class EffectParameterViewModel : ObservableObject
     {
         get
         {
+            if (!IsApplicable) return false;
             if (IsInSideGroup) return false;
             if (IsPairedToggle) return false;
             return Kind switch
@@ -128,6 +139,8 @@ public sealed partial class EffectParameterViewModel : ObservableObject
             };
         }
     }
+
+    partial void OnIsApplicableChanged(bool value) => OnPropertyChanged(nameof(IsActive));
 
     /// <summary>For a Color row: show the Color swatch + Pick… button. True for unpaired
     /// Color params, or paired Color params whose toggle is off.</summary>
@@ -225,9 +238,9 @@ public sealed partial class EffectParameterViewModel : ObservableObject
         _property = property;
         var attr = property.GetCustomAttribute<EffectParameterAttribute>();
         Label = attr?.DisplayName ?? Humanize(property.Name);
-        Min = attr?.Min ?? -100;
-        Max = attr?.Max ?? 100;
-        Step = attr?.Step ?? 1;
+        _min = attr?.Min ?? -100;
+        _max = attr?.Max ?? 100;
+        _step = attr?.Step ?? 1;
         ValueFormat = (attr?.Decimals ?? 0) > 0 ? $"F{attr!.Decimals}" : "F0";
 
         Kind = ResolveKind(property.PropertyType);

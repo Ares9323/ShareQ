@@ -199,9 +199,38 @@ public sealed class TrayIconService : IDisposable
         menu.Items.Add(BuildMenuItem("Toggle incognito\tCtrl+Alt+I",
             () => Run<IncognitoModeService>(s => _ = s.ToggleAsync(CancellationToken.None))));
         menu.Items.Add(new Separator());
+        menu.Items.Add(BuildMenuItem("Open screenshot folder", OnOpenScreenshotFolder));
         menu.Items.Add(BuildMenuItem("Settings…", OnOpen));
         menu.Items.Add(BuildMenuItem("Quit", OnQuit));
         return menu;
+    }
+
+    /// <summary>Tray-menu shortcut to the configured capture folder. Mirrors what
+    /// <see cref="ShareQ.App.Services.PipelineTasks.OpenScreenshotFolderTask"/> does — read
+    /// <c>capture.folder</c>, expand env vars, ensure the folder exists, hand off to Explorer.
+    /// Inlined here (rather than dispatching the pipeline task) because the tray menu has no
+    /// PipelineContext and the operation is two lines. Uses fire-and-forget async so the menu
+    /// click returns immediately while the settings read + Explorer launch run on the
+    /// thread-pool — failures get logged, the user sees no popup.</summary>
+    private async void OnOpenScreenshotFolder()
+    {
+        try
+        {
+            var template = await _settings.GetAsync("capture.folder", CancellationToken.None).ConfigureAwait(true)
+                ?? "%USERPROFILE%\\Pictures\\ShareQ";
+            var folder = Environment.ExpandEnvironmentVariables(template);
+            System.IO.Directory.CreateDirectory(folder);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"\"{folder}\"",
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Tray: failed to open screenshot folder");
+        }
     }
 
     private MenuItem BuildMonitorSubmenu()

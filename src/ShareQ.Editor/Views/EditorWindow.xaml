@@ -64,7 +64,10 @@
                 <ui:Button Content="+" Margin="4,0,4,0" Click="OnZoomInClicked" />
                 <ui:Button Content="1:1" Margin="0,0,16,0" Click="OnZoomResetClicked" />
 
-                <ui:Button x:Name="SaveButton" Content="Save" Appearance="Primary" Margin="0,0,4,0" Click="OnSaveClicked" />
+                <ui:Button x:Name="SaveButton" Content="Save" Appearance="Primary" Margin="0,0,4,0" Click="OnSaveClicked"
+                           ToolTip="Save the edited image into history (uses the global image format from Settings → Capture)" />
+                <ui:Button x:Name="SaveAsButton" Content="Save as…" Margin="0,0,4,0" Click="OnSaveAsClicked"
+                           ToolTip="Export to a file you pick. Format chosen via the dialog filter (PNG / JPEG / BMP / GIF). Does not touch history." />
                 <ui:Button x:Name="CancelButton" Content="Cancel" Click="OnCancelClicked" />
             </StackPanel>
         </Border>

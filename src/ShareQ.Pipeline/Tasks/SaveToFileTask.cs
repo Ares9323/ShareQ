@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
+using ShareQ.Core.Imaging;
 using ShareQ.Core.Pipeline;
 using ShareQ.Storage.Settings;
 
@@ -12,13 +13,16 @@ public sealed class SaveToFileTask : IPipelineTask
     private const string DefaultFolder = "%USERPROFILE%\\Pictures\\ShareQ";
     private const string FolderSettingKey = "capture.folder";
     private const string SubFolderPatternSettingKey = "capture.subfolder_pattern";
+    private const string JpegQualitySettingKey = "capture.jpeg_quality";
 
     private readonly ISettingsStore _settings;
+    private readonly IImageEncoder? _encoder;
     private readonly ILogger<SaveToFileTask> _logger;
 
-    public SaveToFileTask(ISettingsStore settings, ILogger<SaveToFileTask> logger)
+    public SaveToFileTask(ISettingsStore settings, ILogger<SaveToFileTask> logger, IImageEncoder? encoder = null)
     {
         _settings = settings;
+        _encoder = encoder;
         _logger = logger;
     }
 
@@ -39,6 +43,41 @@ public sealed class SaveToFileTask : IPipelineTask
         var extension = context.Bag.TryGetValue(PipelineBagKeys.FileExtension, out var rawExt) && rawExt is string ext
             ? ext
             : "bin";
+
+        // Optional per-step format override. When set, the task re-encodes the bag's image
+        // bytes into the requested format before writing — handy for workflows that need a
+        // specific output regardless of the global capture preference (e.g. a JPEG-only Imgur
+        // workflow). Null / unrecognised → keep the bag bytes verbatim. Re-encode only fires
+        // when (a) the encoder service is available, (b) the override differs from the bag's
+        // current extension. The PayloadBytes in the bag is mutated so downstream steps
+        // (CopyImageToClipboard, AddToHistory) see the same transformed bytes.
+        var formatOverrideRaw = (string?)config?["format"];
+        var formatOverride = ImageFormatExtensions.TryParse(formatOverrideRaw);
+        if (formatOverride is not null && _encoder is not null)
+        {
+            var targetExt = formatOverride.Value.ToExtension();
+            if (!string.Equals(targetExt, extension.TrimStart('.'), StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var rawQuality = await _settings.GetAsync(JpegQualitySettingKey, cancellationToken).ConfigureAwait(false);
+                    var quality = int.TryParse(rawQuality, NumberStyles.Integer, CultureInfo.InvariantCulture, out var q)
+                        ? Math.Clamp(q, 1, 100) : 90;
+                    var encoded = _encoder.Encode(bytes, formatOverride.Value, quality);
+                    bytes = encoded;
+                    extension = targetExt;
+                    context.Bag[PipelineBagKeys.PayloadBytes] = bytes;
+                    context.Bag[PipelineBagKeys.FileExtension] = extension;
+                    _logger.LogDebug("SaveToFileTask: re-encoded {OldExt} → {NewExt} ({NewKb} KB)",
+                        rawExt, extension, bytes.Length / 1024);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "SaveToFileTask: format override to {Format} failed — writing original bytes",
+                        formatOverride);
+                }
+            }
+        }
 
         // Order of precedence: explicit step config → user setting (capture.folder) → default.
         var folderTemplate = (string?)config?["folder"]

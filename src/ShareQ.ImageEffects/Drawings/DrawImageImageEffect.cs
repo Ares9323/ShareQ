@@ -27,6 +27,23 @@ public enum DrawImageCompositingMode
     SourceCopy,
 }
 
+/// <summary>Rotate-then-flip transform applied to the overlay before compositing. Mirrors
+/// ShareX's <c>ImageRotateFlipType</c> (which itself wraps GDI+ <c>RotateFlipType</c>) so
+/// .sxie presets round-trip without translating the int / name. Semantics: rotate clockwise
+/// by the named degrees, then flip horizontally (FlipX) or vertically (FlipY) in the rotated
+/// orientation. <see cref="None"/> is the no-op default.</summary>
+public enum ImageRotateFlipType
+{
+    None = 0,
+    Rotate90 = 1,
+    Rotate180 = 2,
+    Rotate270 = 3,
+    FlipX = 4,
+    Rotate90FlipX = 5,
+    FlipY = 6,
+    Rotate90FlipY = 7,
+}
+
 /// <summary>Ported from ShareX (GPL v3) — ImageEffectsLib/Drawings/DrawImage.cs. Composites
 /// an external image onto the source bitmap (logo / watermark / border artwork). Supports
 /// SizeMode (DontResize / AbsoluteSize / PercentageOfWatermark / PercentageOfCanvas), Tile
@@ -68,9 +85,15 @@ public sealed class DrawImageImageEffect : DrawingImageEffectBase
     [EffectParameter(0, 100, DisplayName = "Opacity")]
     public int Opacity { get; set; } = 100;
 
+    [EffectParameter(DisplayName = "Auto hide if out of bounds")]
     public bool AutoHide { get; set; }
 
     public DrawImageCompositingMode CompositingMode { get; set; } = DrawImageCompositingMode.SourceOver;
+
+    /// <summary>Pre-transform applied to the overlay before resize / placement. ShareX exposes
+    /// the same eight-value enum on its DrawImage editor; presets that ship a flipped logo
+    /// (e.g. mirrored corner artwork) only render correctly when this is honoured.</summary>
+    public ImageRotateFlipType RotateFlip { get; set; } = ImageRotateFlipType.None;
 
     public override SKBitmap Apply(SKBitmap source)
     {
@@ -87,6 +110,17 @@ public sealed class DrawImageImageEffect : DrawingImageEffectBase
 
         try
         {
+            // Pre-transform the overlay if the preset asks for rotate/flip. Done before the
+            // resize step because Rotate90/270 swap the natural width/height — the percentage-
+            // and absolute-size calculators need to see the post-rotation dimensions to land
+            // where the .sxie author intended.
+            if (RotateFlip != ImageRotateFlipType.None)
+            {
+                var rotated = ApplyRotateFlip(overlay, RotateFlip);
+                overlay.Dispose();
+                overlay = rotated;
+            }
+
             var (resizedW, resizedH) = ResolveOverlaySize(overlay.Width, overlay.Height, source.Width, source.Height);
             if (resizedW != overlay.Width || resizedH != overlay.Height)
             {
@@ -112,7 +146,21 @@ public sealed class DrawImageImageEffect : DrawingImageEffectBase
                 BlendMode = CompositingMode == DrawImageCompositingMode.SourceCopy ? SKBlendMode.Src : SKBlendMode.SrcOver,
             };
 
-            if (Tile)
+            if (Tile && SizeMode == DrawImageSizeMode.DontResize)
+            {
+                // ShareQ-specific UX kicker: ShareX's Tile fills "imageRectangle" — when
+                // SizeMode=DontResize that rect is exactly one tile big, so Tile=on looks
+                // identical to Tile=off and users assume the toggle is broken. Without an
+                // explicit Size the natural mental model is "tile across the whole image", so
+                // we override the fill rect to the full canvas in this case. .sxie round-trip
+                // unaffected (we still serialize Tile / SizeMode / Width / Height verbatim).
+                using var shader = SKShader.CreateBitmap(overlay,
+                    SKShaderTileMode.Repeat, SKShaderTileMode.Repeat,
+                    SKMatrix.CreateTranslation(0, 0));
+                paint.Shader = shader;
+                canvas.DrawRect(new SKRect(0, 0, source.Width, source.Height), paint);
+            }
+            else if (Tile)
             {
                 // Tile fills only the placement rectangle (anchor + resized overlay size) with
                 // the bitmap repeating inside it — same shape as ShareX's TextureBrush+FillRectangle.
@@ -181,6 +229,42 @@ public sealed class DrawImageImageEffect : DrawingImageEffectBase
         if (w <= 0) w = (int)Math.Round(h * (sourceW / (float)sourceH));
         else if (h <= 0) h = (int)Math.Round(w * (sourceH / (float)sourceW));
         return (Math.Max(1, w), Math.Max(1, h));
+    }
+
+    /// <summary>Apply a rotate-then-flip transform to <paramref name="src"/> and return a new
+    /// bitmap. Rotation is clockwise around the centre; FlipX mirrors horizontally and FlipY
+    /// vertically — both performed in the rotated orientation, matching GDI+
+    /// <c>Image.RotateFlip</c> semantics so a ShareX preset's RotateFlip value produces the
+    /// same pixel layout here. <see cref="ImageRotateFlipType.None"/> is filtered out by the
+    /// caller so this method is only invoked for actual transforms.</summary>
+    private static SKBitmap ApplyRotateFlip(SKBitmap src, ImageRotateFlipType type)
+    {
+        var swap = type is ImageRotateFlipType.Rotate90 or ImageRotateFlipType.Rotate270
+                          or ImageRotateFlipType.Rotate90FlipX or ImageRotateFlipType.Rotate90FlipY;
+        var dstW = swap ? src.Height : src.Width;
+        var dstH = swap ? src.Width : src.Height;
+        var dst = new SKBitmap(dstW, dstH, src.ColorType, src.AlphaType);
+        using var canvas = new SKCanvas(dst);
+        canvas.Clear(SKColors.Transparent);
+
+        var angle = type switch
+        {
+            ImageRotateFlipType.Rotate90 or ImageRotateFlipType.Rotate90FlipX or ImageRotateFlipType.Rotate90FlipY => 90f,
+            ImageRotateFlipType.Rotate180 => 180f,
+            ImageRotateFlipType.Rotate270 => 270f,
+            _ => 0f,
+        };
+        var flipX = type is ImageRotateFlipType.FlipX or ImageRotateFlipType.Rotate90FlipX;
+        var flipY = type is ImageRotateFlipType.FlipY or ImageRotateFlipType.Rotate90FlipY;
+
+        // Compose the transform around the destination centre so the rotated image lands
+        // anchored, then translate by the source half-extent to cover the whole bitmap.
+        canvas.Translate(dstW / 2f, dstH / 2f);
+        if (angle != 0f) canvas.RotateDegrees(angle);
+        if (flipX || flipY) canvas.Scale(flipX ? -1f : 1f, flipY ? -1f : 1f);
+        canvas.Translate(-src.Width / 2f, -src.Height / 2f);
+        canvas.DrawBitmap(src, 0, 0);
+        return dst;
     }
 
     private SKPoint ResolveAnchor(int canvasW, int canvasH, int imageW, int imageH)

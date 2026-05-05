@@ -31,11 +31,13 @@ public sealed class CaptureWebpageTask : IPipelineTask
     public const string TaskId = "shareq.capture-webpage";
 
     private readonly WebpageCaptureService _capture;
+    private readonly CaptureImageOutputService _outputEncoder;
     private readonly ILogger<CaptureWebpageTask> _logger;
 
-    public CaptureWebpageTask(WebpageCaptureService capture, ILogger<CaptureWebpageTask> logger)
+    public CaptureWebpageTask(WebpageCaptureService capture, CaptureImageOutputService outputEncoder, ILogger<CaptureWebpageTask> logger)
     {
         _capture = capture;
+        _outputEncoder = outputEncoder;
         _logger = logger;
     }
 
@@ -65,16 +67,17 @@ public sealed class CaptureWebpageTask : IPipelineTask
             return;
         }
 
-        var bytes = await _capture.CaptureAsync(url, cancellationToken).ConfigureAwait(false);
-        if (bytes is null || bytes.Length == 0)
+        var pngBytes = await _capture.CaptureAsync(url, cancellationToken).ConfigureAwait(false);
+        if (pngBytes is null || pngBytes.Length == 0)
         {
             _logger.LogWarning("CaptureWebpageTask: capture returned no bytes for {Url}", url);
             context.Abort("webpage capture failed");
             return;
         }
+        var (bytes, ext) = await _outputEncoder.EncodeAsync(pngBytes, cancellationToken).ConfigureAwait(false);
 
         context.Bag[PipelineBagKeys.PayloadBytes] = bytes;
-        context.Bag[PipelineBagKeys.FileExtension] = "png";
+        context.Bag[PipelineBagKeys.FileExtension] = ext;
         // Stash the URL in the window-title slot so save-to-file can use a meaningful name and
         // toast / template substitution can show what was captured.
         context.Bag[PipelineBagKeys.WindowTitle] = url;

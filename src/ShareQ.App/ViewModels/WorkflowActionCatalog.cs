@@ -161,8 +161,10 @@ public static class WorkflowActionCatalog
 
         new("shareq.save-to-file",
             "Save to file",
-            "Write the current bytes to disk under the configured capture folder (Settings → Capture).",
-            "I/O"),
+            "Write the current bytes to disk under the configured capture folder (Settings → Capture). 'Format' is optional: leave empty to keep whatever's already in the bag (the global capture format), or pick one to force a re-encode for this step.",
+            "I/O",
+            StringParameters: [new StringParameter("format", "Format", string.Empty,
+                Placeholder: "(use bag format)", OptionsKey: "image_formats")]),
 
         new("shareq.add-to-history",
             "Add to clipboard history",

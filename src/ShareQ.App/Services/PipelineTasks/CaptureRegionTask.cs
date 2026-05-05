@@ -20,11 +20,13 @@ public sealed class CaptureRegionTask : IPipelineTask
     public const string TaskId = "shareq.capture-region";
 
     private readonly ICaptureSource _captureSource;
+    private readonly CaptureImageOutputService _outputEncoder;
     private readonly ILogger<CaptureRegionTask> _logger;
 
-    public CaptureRegionTask(ICaptureSource captureSource, ILogger<CaptureRegionTask> logger)
+    public CaptureRegionTask(ICaptureSource captureSource, CaptureImageOutputService outputEncoder, ILogger<CaptureRegionTask> logger)
     {
         _captureSource = captureSource;
+        _outputEncoder = outputEncoder;
         _logger = logger;
     }
 
@@ -59,9 +61,10 @@ public sealed class CaptureRegionTask : IPipelineTask
         }
 
         var captured = await _captureSource.CaptureAsync(region, cancellationToken).ConfigureAwait(false);
+        var (bytes, ext) = await _outputEncoder.EncodeAsync(captured.PngBytes, cancellationToken).ConfigureAwait(false);
 
-        context.Bag[PipelineBagKeys.PayloadBytes] = captured.PngBytes;
-        context.Bag[PipelineBagKeys.FileExtension] = "png";
+        context.Bag[PipelineBagKeys.PayloadBytes] = bytes;
+        context.Bag[PipelineBagKeys.FileExtension] = ext;
         // Stash the on-screen origin in physical pixels so a later pin-to-screen step in the same
         // workflow can place the pinned window exactly where the capture came from. Without this
         // the pin step only sees bytes and centres on the active monitor.
@@ -77,8 +80,8 @@ public sealed class CaptureRegionTask : IPipelineTask
             Kind: ItemKind.Image,
             Source: ItemSource.CaptureRegion,
             CreatedAt: DateTimeOffset.UtcNow,
-            Payload: captured.PngBytes,
-            PayloadSize: captured.PngBytes.LongLength,
+            Payload: bytes,
+            PayloadSize: bytes.LongLength,
             SearchText: $"{searchTextPrefix} {captured.Width}×{captured.Height}");
     }
 }

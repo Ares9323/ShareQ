@@ -25,4 +25,14 @@ public sealed class EffectParameterAttribute : Attribute
         Max = max;
         Step = step;
     }
+
+    /// <summary>Label-only annotation for non-numeric properties (bool / enum / string) where
+    /// Min/Max/Step have no meaning. Lets `[EffectParameter(DisplayName = "...")]` rename a
+    /// checkbox or combobox without inventing fake numeric ranges.</summary>
+    public EffectParameterAttribute()
+    {
+        Min = 0;
+        Max = 0;
+        Step = 1;
+    }
 }
