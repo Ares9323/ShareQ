@@ -36,6 +36,15 @@ public partial class ClipboardWindow : Window
     /// initial restore don't overwrite the user's last saved values.</summary>
     private bool _geometryRestored;
 
+    // RMB-pan state for the image preview ScrollViewer. Mirrors the editor canvas pan: hold
+    // RMB to drag the scroll offsets, release to stop. Cursor flips to SizeAll while panning
+    // and restores on release.
+    private bool _isPreviewPanning;
+    private System.Windows.Point _previewPanStartCursor;
+    private double _previewPanStartScrollH;
+    private double _previewPanStartScrollV;
+    private Cursor? _previewPanSavedCursor;
+
     public PopupWindowViewModel ViewModel { get; }
 
     private readonly ShareQ.Storage.Rotation.CategoryRotationService? _categoryRotation;
@@ -197,7 +206,150 @@ public partial class ClipboardWindow : Window
                     new Action(() => LoadHtmlPreview(ViewModel.PreviewHtml)),
                     DispatcherPriority.ContextIdle);
                 break;
+            case nameof(PopupWindowViewModel.PreviewImageBytes):
+                // Reset scroll, then size the LayoutTransform so the new image fits the pane
+                // (no upscale beyond 1:1 — small images stay at native size and don't blur).
+                // Ctrl+wheel can override afterwards. Defer to ContextIdle so the ScrollViewer
+                // has its real ViewportWidth/Height by the time we read them.
+                if (PreviewImageScroller is not null)
+                {
+                    PreviewImageScroller.ScrollToHorizontalOffset(0);
+                    PreviewImageScroller.ScrollToVerticalOffset(0);
+                }
+                Dispatcher.BeginInvoke(
+                    new Action(FitPreviewImageToPane),
+                    DispatcherPriority.ContextIdle);
+                break;
         }
+    }
+
+    /// <summary>Wheel handling on the image preview. Ctrl+wheel zooms the image; Shift+wheel
+    /// scrolls horizontally (standard Windows convention — WPF's ScrollViewer doesn't translate
+    /// the modifier itself). Bare wheel falls through to the ScrollViewer for vertical scroll.
+    /// Zoom range 0.1×..8× matches the PinnedImageWindow envelope so the two surfaces feel
+    /// the same.</summary>
+    private void OnPreviewImageWheel(object sender, MouseWheelEventArgs e)
+    {
+        var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+        var shift = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+
+        if (ctrl)
+        {
+            var factor = e.Delta > 0 ? 1.1 : 1.0 / 1.1;
+            var newScale = Math.Clamp(PreviewImageScale.ScaleX * factor, 0.1, 8.0);
+            if (Math.Abs(newScale - PreviewImageScale.ScaleX) < 1e-4) return;
+            PreviewImageScale.ScaleX = newScale;
+            PreviewImageScale.ScaleY = newScale;
+            e.Handled = true;
+            return;
+        }
+
+        if (shift)
+        {
+            // ~16px per logical scroll line × the user's WheelScrollLines preference (default 3).
+            var step = SystemParameters.WheelScrollLines * 16;
+            var direction = e.Delta > 0 ? -1 : 1;
+            PreviewImageScroller.ScrollToHorizontalOffset(PreviewImageScroller.HorizontalOffset + direction * step);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Compute the LayoutTransform scale that makes the current image fit the
+    /// preview pane and apply it. Decoding the bytes a second time (the converter already
+    /// produced a BitmapImage for the visual tree) is cheap for clipboard payloads and avoids
+    /// having to wait for the Image element's ActualWidth/Height after layout.</summary>
+    private void FitPreviewImageToPane()
+    {
+        if (PreviewImageScale is null || PreviewImageScroller is null) return;
+        var bytes = ViewModel.PreviewImageBytes;
+        if (bytes is null || bytes.Length == 0)
+        {
+            PreviewImageScale.ScaleX = 1.0;
+            PreviewImageScale.ScaleY = 1.0;
+            return;
+        }
+        int w, h;
+        try
+        {
+            using var ms = new MemoryStream(bytes);
+            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bmp.StreamSource = ms;
+            bmp.EndInit();
+            w = bmp.PixelWidth;
+            h = bmp.PixelHeight;
+        }
+        catch
+        {
+            PreviewImageScale.ScaleX = 1.0;
+            PreviewImageScale.ScaleY = 1.0;
+            return;
+        }
+        if (w <= 0 || h <= 0) return;
+        // Subtract the Image's 8-px margin on each side so the fit isn't clipped by it.
+        var vw = PreviewImageScroller.ViewportWidth - 20;
+        var vh = PreviewImageScroller.ViewportHeight - 20;
+        if (vw <= 0 || vh <= 0) return;
+        var fit = Math.Min(vw / w, vh / h);
+        // Never upscale on auto-fit — small images stay 1:1, large ones shrink to fit.
+        if (fit > 1.0) fit = 1.0;
+        if (fit < 0.1) fit = 0.1;
+        PreviewImageScale.ScaleX = fit;
+        PreviewImageScale.ScaleY = fit;
+    }
+
+    /// <summary>Start RMB-pan on the image preview — same gesture the editor canvas uses.
+    /// Captures the cursor + scroll offsets so MouseMove can translate the scroll, swaps
+    /// the cursor to SizeAll for feedback. Mouse-capture keeps MouseMove firing if the user
+    /// drags outside the ScrollViewer bounds.</summary>
+    private void OnPreviewImageRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (PreviewImageScroller is null) return;
+        // Skip when the click lands on a scrollbar — let it keep its own RMB semantics.
+        if (e.OriginalSource is DependencyObject src && IsOnScrollBar(src)) return;
+        _isPreviewPanning = true;
+        _previewPanStartCursor = e.GetPosition(PreviewImageScroller);
+        _previewPanStartScrollH = PreviewImageScroller.HorizontalOffset;
+        _previewPanStartScrollV = PreviewImageScroller.VerticalOffset;
+        _previewPanSavedCursor = PreviewImageScroller.Cursor;
+        PreviewImageScroller.Cursor = Cursors.SizeAll;
+        PreviewImageScroller.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void OnPreviewImageMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_isPreviewPanning) return;
+        if (e.RightButton != MouseButtonState.Pressed) return;
+        var current = e.GetPosition(PreviewImageScroller);
+        var dx = current.X - _previewPanStartCursor.X;
+        var dy = current.Y - _previewPanStartCursor.Y;
+        PreviewImageScroller.ScrollToHorizontalOffset(_previewPanStartScrollH - dx);
+        PreviewImageScroller.ScrollToVerticalOffset(_previewPanStartScrollV - dy);
+        e.Handled = true;
+    }
+
+    private void OnPreviewImageRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_isPreviewPanning) return;
+        _isPreviewPanning = false;
+        PreviewImageScroller.ReleaseMouseCapture();
+        PreviewImageScroller.Cursor = _previewPanSavedCursor;
+        _previewPanSavedCursor = null;
+        // Mark handled so the right-button release doesn't bubble up to a context menu.
+        e.Handled = true;
+    }
+
+    private static bool IsOnScrollBar(DependencyObject? node)
+    {
+        while (node is not null)
+        {
+            if (node is System.Windows.Controls.Primitives.ScrollBar) return true;
+            node = System.Windows.Media.VisualTreeHelper.GetParent(node)
+                   ?? (node is FrameworkElement fe ? fe.Parent : null);
+        }
+        return false;
     }
 
     private void LoadRtfPreview(byte[]? rtf)

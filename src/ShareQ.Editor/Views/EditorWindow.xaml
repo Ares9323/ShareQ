@@ -112,6 +112,8 @@
                       PreviewMouseLeftButtonDown="OnCanvasMouseDown"
                       PreviewMouseMove="OnCanvasMouseMove"
                       PreviewMouseLeftButtonUp="OnCanvasMouseUp"
+                      PreviewMouseRightButtonDown="OnCanvasRightButtonDown"
+                      PreviewMouseRightButtonUp="OnCanvasRightButtonUp"
                       Background="#1A1A1A">
             <Grid x:Name="CanvasHost" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Image x:Name="SourceImage" />

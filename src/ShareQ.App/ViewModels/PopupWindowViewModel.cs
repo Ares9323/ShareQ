@@ -187,6 +187,7 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
         OpenInEditorCommand.NotifyCanExecuteChanged();
         OpenInExplorerCommand.NotifyCanExecuteChanged();
         OpenInBrowserCommand.NotifyCanExecuteChanged();
+        CaptureWebpageCommand.NotifyCanExecuteChanged();
         // The XAML toolbar binds Visibility to these flags so the icons disappear (rather
         // than just disabling) when they don't apply to the current selection — matches the
         // behaviour the user expects from a discoverable shortcut bar.
@@ -359,6 +360,39 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
         {
             // Browser launch failed (no default handler, sandboxed context, etc.) — silent
             // since the user can fall back to copy-paste; surfacing a dialog would be noise.
+        }
+    }
+
+    /// <summary>Render the selected text item's URL through the headless WebView2 capture
+    /// pipeline and feed the resulting PNG into the standard webpage-capture profile (save +
+    /// history + clipboard + upload + toast). The CaptureWebpageTask short-circuits when it
+    /// finds payload bytes already in the bag, so the prompt never shows — we set them via
+    /// <see cref="ManualUploadService.IngestBytesAsync"/> before running the profile.</summary>
+    [RelayCommand(CanExecute = nameof(IsUrlSelected))]
+    private async Task CaptureWebpageAsync()
+    {
+        var url = ResolveSelectedUrl();
+        if (url is null) return;
+        var capture = _services.GetService<WebpageCaptureService>();
+        var ingest = _services.GetService<ManualUploadService>();
+        if (capture is null || ingest is null) return;
+        try
+        {
+            var bytes = await capture.CaptureAsync(url, CancellationToken.None).ConfigureAwait(true);
+            if (bytes is null || bytes.Length == 0) return;
+            await ingest.IngestBytesAsync(
+                bytes,
+                "png",
+                ItemKind.Image,
+                $"Webpage {url}",
+                ShareQ.Pipeline.Profiles.DefaultPipelineProfiles.WebpageCaptureId,
+                CancellationToken.None).ConfigureAwait(true);
+        }
+        catch
+        {
+            // Capture failures already log inside WebpageCaptureService; the rest of the
+            // pipeline (toast / upload errors) surfaces its own user feedback. Silent here so
+            // a stray exception doesn't crash the popup.
         }
     }
 

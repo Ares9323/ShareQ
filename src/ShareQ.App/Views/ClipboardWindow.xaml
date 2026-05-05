@@ -331,10 +331,29 @@
                                        TextTrimming="CharacterEllipsis"
                                        Text="{Binding PreviewMeta}" />
                             <Grid Grid.Row="1" Margin="0,0,0,4">
-                                <Image Source="{Binding PreviewImageBytes, Converter={StaticResource BytesToImage}}"
-                                       Stretch="Uniform"
-                                       Margin="8"
-                                       Visibility="{Binding IsImagePreview, Converter={StaticResource BoolToVisibility}}" />
+                                <!-- Image preview wrapped in a ScrollViewer so the user can pan after
+                                     zooming. Ctrl+wheel scales the LayoutTransform (PreviewMouseWheel
+                                     in code-behind to intercept before the ScrollViewer tries to
+                                     consume the event for vertical scroll). The wheel without Ctrl
+                                     keeps the default scroll behaviour. PreviewImageScale is reset
+                                     to 1.0 every time SelectedRow flips so a new item starts
+                                     fit-to-container instead of inheriting the previous zoom. -->
+                                <ScrollViewer x:Name="PreviewImageScroller"
+                                              HorizontalScrollBarVisibility="Auto"
+                                              VerticalScrollBarVisibility="Auto"
+                                              PreviewMouseWheel="OnPreviewImageWheel"
+                                              PreviewMouseRightButtonDown="OnPreviewImageRightButtonDown"
+                                              PreviewMouseMove="OnPreviewImageMouseMove"
+                                              PreviewMouseRightButtonUp="OnPreviewImageRightButtonUp"
+                                              Visibility="{Binding IsImagePreview, Converter={StaticResource BoolToVisibility}}">
+                                    <Image Source="{Binding PreviewImageBytes, Converter={StaticResource BytesToImage}}"
+                                           Stretch="Uniform"
+                                           Margin="8">
+                                        <Image.LayoutTransform>
+                                            <ScaleTransform x:Name="PreviewImageScale" ScaleX="1" ScaleY="1" />
+                                        </Image.LayoutTransform>
+                                    </Image>
+                                </ScrollViewer>
                                 <TextBox Text="{Binding PreviewText, Mode=OneWay}"
                                          IsReadOnly="True"
                                          IsTabStop="False"
@@ -423,6 +442,18 @@
                                        Command="{Binding OpenInBrowserCommand}"
                                        Visibility="{Binding IsUrlSelected, Converter={StaticResource BoolToVisibility}}">
                                 <TextBlock Text="&#xE774;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
+                            </ui:Button>
+                            <!-- Capture webpage — same visibility gate as Open URL. Renders the URL
+                                 in a hidden WebView2, feeds the PNG into the webpage-capture pipeline
+                                 (save / history / copy / upload / toast). Glyph: ScreenSnapshot
+                                 (E89E) — the snapshot rectangle reads as "capture this URL" without
+                                 confusing it with the plain Globe used by Open. -->
+                            <ui:Button Width="32" Height="32" Padding="0"
+                                       Margin="0,0,0,4"
+                                       ToolTip="Capture webpage (full-page screenshot of the URL)"
+                                       Command="{Binding CaptureWebpageCommand}"
+                                       Visibility="{Binding IsUrlSelected, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="&#xE89E;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
                             </ui:Button>
                             <ui:Button Width="32" Height="32" Padding="0"
                                        ToolTip="Delete (Del)"

@@ -45,7 +45,12 @@
                  many rows the catalog produces; each cell is a clickable Button that fires
                  OnIconClicked with the IconCatalogEntry.Glyph as Tag. -->
             <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <ItemsControl x:Name="IconGrid">
+                <!-- VerticalAlignment=Top breaks the stretch chain: without it the ItemsControl
+                     fills the ScrollViewer's full content area, and UniformGrid then divides
+                     that height across whatever rows it has — so 9 filtered icons in 2 rows end
+                     up with each row half the panel's height (huge gap between row 1 and row 2).
+                     Top-aligning makes the panel size to its natural content height instead. -->
+                <ItemsControl x:Name="IconGrid" VerticalAlignment="Top">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <UniformGrid Columns="8" />

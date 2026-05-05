@@ -63,6 +63,17 @@ public partial class EditorWindow : FluentWindow
     // Eyedropper state. While non-null, the next canvas click samples a pixel and feeds it back.
     private Action<ShapeColor?>? _eyedropperContinuation;
 
+    // RMB-pan state. While the right button is held over the canvas, dragging the mouse
+    // translates the ScrollViewer's scroll offsets — same gesture Photoshop / Aseprite / Figma
+    // use for canvas pan. We capture the screen-space cursor at mouse-down (RootVisual avoids
+    // jitter from the scroll motion itself moving the viewport relative to CanvasHost) and the
+    // initial scroll offsets; MouseMove computes a delta and adjusts the scrollbars.
+    private bool _isPanning;
+    private System.Windows.Point _panStartCursor;
+    private double _panStartScrollH;
+    private double _panStartScrollV;
+    private System.Windows.Input.Cursor? _panSavedCursor;
+
     public EditorWindow(EditorViewModel viewModel)
     {
         InitializeComponent();
@@ -506,6 +517,7 @@ public partial class EditorWindow : FluentWindow
     {
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
         var alt = (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt;
+        var shift = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
 
         if (ctrl)
         {
@@ -515,6 +527,20 @@ public partial class EditorWindow : FluentWindow
             // user would see content shift away from their cursor.
             var factor = e.Delta > 0 ? 1.15 : (1.0 / 1.15);
             ZoomAt(_zoom * factor, e.GetPosition(CanvasHost));
+            e.Handled = true;
+            return;
+        }
+
+        if (shift)
+        {
+            // Shift+wheel = horizontal scroll. Standard Windows convention (Edge/Chrome/VS).
+            // We intercept here because WPF's ScrollViewer doesn't translate the modifier
+            // automatically. Match the per-notch step the SystemParameters expose so the
+            // pacing feels native; SystemParameters.WheelScrollLines is the user's "lines per
+            // notch" preference (default 3).
+            var step = SystemParameters.WheelScrollLines * 16; // ~16px per logical line
+            var hScrollSign = e.Delta > 0 ? -1 : 1;
+            CanvasScrollViewer.ScrollToHorizontalOffset(CanvasScrollViewer.HorizontalOffset + hScrollSign * step);
             e.Handled = true;
             return;
         }
@@ -859,6 +885,21 @@ public partial class EditorWindow : FluentWindow
 
     private void OnCanvasMouseMove(object sender, MouseEventArgs e)
     {
+        // RMB pan takes precedence — when the right button is held, every mouse-move
+        // translates the scroll offsets and bypasses tool-specific behaviour. Computed in
+        // ScrollViewer-space (CanvasScrollViewer) because that's the surface the offsets
+        // live on; CanvasHost moves with the scroll, which would feed back into our delta.
+        if (_isPanning && e.RightButton == MouseButtonState.Pressed)
+        {
+            var current = e.GetPosition(CanvasScrollViewer);
+            var dx = current.X - _panStartCursor.X;
+            var dy = current.Y - _panStartCursor.Y;
+            CanvasScrollViewer.ScrollToHorizontalOffset(_panStartScrollH - dx);
+            CanvasScrollViewer.ScrollToVerticalOffset(_panStartScrollV - dy);
+            e.Handled = true;
+            return;
+        }
+
         // Cursor feedback on grip hover (independent of mouse button state).
         UpdateCursorForGripHover(e.GetPosition(DrawingCanvas));
 
@@ -1103,6 +1144,38 @@ public partial class EditorWindow : FluentWindow
         SmartEraserShape se => se with { X = se.X + dx, Y = se.Y + dy },
         _ => s
     };
+
+    /// <summary>Start RMB-pan: capture the scroll offsets + cursor in viewport coords, swap
+    /// the cursor to a hand. The PreviewMouseMove handler reads <see cref="_isPanning"/> and
+    /// translates the scroll to follow the cursor. Mouse-capture on the ScrollViewer makes
+    /// MouseMove keep firing even if the user drags outside the canvas bounds.</summary>
+    private void OnCanvasRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        // Skip when the click lands on a scrollbar / interactive child — they have their own
+        // RMB semantics (e.g. scrollbar context menu) we shouldn't override.
+        if (IsScrollBarOrInputControl(e.OriginalSource as DependencyObject)) return;
+
+        _isPanning = true;
+        _panStartCursor = e.GetPosition(CanvasScrollViewer);
+        _panStartScrollH = CanvasScrollViewer.HorizontalOffset;
+        _panStartScrollV = CanvasScrollViewer.VerticalOffset;
+        _panSavedCursor = CanvasScrollViewer.Cursor;
+        CanvasScrollViewer.Cursor = System.Windows.Input.Cursors.SizeAll;
+        CanvasScrollViewer.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void OnCanvasRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_isPanning) return;
+        _isPanning = false;
+        CanvasScrollViewer.ReleaseMouseCapture();
+        CanvasScrollViewer.Cursor = _panSavedCursor;
+        _panSavedCursor = null;
+        // Mark handled so the right-button release doesn't propagate to a parent that might
+        // open a context menu — RMB on the canvas is now exclusively pan.
+        e.Handled = true;
+    }
 
     private void OnSelectedShapeChanged()
     {

@@ -176,6 +176,20 @@ public sealed class WebpageCaptureService
         }
         finally
         {
+            // WebView2 hosts a COM CoreWebView2Controller that the GC's finalizer can't tear
+            // down safely once the underlying Edge process has gone (the HwndHost finalizer
+            // tries to QueryInterface on a dead RCW and crashes the app with E_NOINTERFACE).
+            // Dispose explicitly here, before window.Close(), so the finalizer sees the
+            // already-disposed flag and skips its cleanup.
+            try
+            {
+                window.Content = null;
+                web.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "WebpageCaptureService: WebView2 dispose threw — ignoring");
+            }
             window.Close();
         }
     }
