@@ -40,8 +40,12 @@ internal static partial class AppNativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool IsWindow(IntPtr hWnd);
 
-    [LibraryImport("user32.dll", SetLastError = true)]
-    public static partial int GetWindowLong(IntPtr hWnd, int nIndex);
+    /// <summary>x64-safe accessor for the WS_EX_* style flags. user32.dll only exports
+    /// <c>GetWindowLongPtrW</c> on 64-bit builds (no plain <c>GetWindowLong</c>); calling the
+    /// latter raises EntryPointNotFoundException at runtime. Returns nint so the cast survives
+    /// without truncation, but the WS_EX flags fit comfortably in int.</summary>
+    [LibraryImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
+    public static partial nint GetWindowLongPtr(IntPtr hWnd, int nIndex);
 
     public const int GWL_EXSTYLE = -20;
     public const int WS_EX_TOOLWINDOW = 0x00000080;

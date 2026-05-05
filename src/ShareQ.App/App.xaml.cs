@@ -290,6 +290,7 @@ public partial class App : Application
                 services.AddSingleton<ShareQ.Core.Imaging.IImageEncoder, WpfImageEncoder>();
                 services.AddSingleton<CaptureImageOutputService>();
                 services.AddSingleton<WebView2AvailabilityService>();
+                services.AddSingleton<ExternalTextEditorService>();
                 // Velopack-backed self-update. Disabled at runtime (IsAvailable=false) when the
                 // app isn't running from a Velopack-managed install — no harm, just shows the
                 // "Check for updates" button as disabled in Settings.
@@ -708,6 +709,7 @@ public partial class App : Application
             _host.Services.GetService<IClipboardListener>()?.Dispose();
             _host.Services.GetService<TrayIconService>()?.Dispose();
             _host.Services.GetService<SingleInstanceGuard>()?.Dispose();
+            _host.Services.GetService<ExternalTextEditorService>()?.Dispose();
             await _host.StopAsync(TimeSpan.FromSeconds(2));
             _host.Dispose();
         }

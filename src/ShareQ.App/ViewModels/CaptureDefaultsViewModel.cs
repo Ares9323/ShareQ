@@ -15,6 +15,7 @@ public sealed partial class CaptureDefaultsViewModel : ObservableObject
     private const string JpegQualityKey = "capture.jpeg_quality";
     private const string AutoJpegKey = "capture.auto_jpeg";
     private const string AutoJpegThresholdKbKey = "capture.auto_jpeg_threshold_kb";
+    private const string ExternalEditorKey = "editor.external_command";
     private const string DefaultFolder = "%USERPROFILE%\\Pictures\\ShareQ";
 
     public static IReadOnlyList<string> ImageFormats { get; } = new[] { "PNG", "JPEG", "BMP", "GIF" };
@@ -61,6 +62,13 @@ public sealed partial class CaptureDefaultsViewModel : ObservableObject
     [ObservableProperty]
     private int _autoJpegThresholdKb = 2048;
 
+    /// <summary>Path / command to launch when the user picks "Edit text in external editor"
+    /// from the clipboard popup. Empty = use Windows default for <c>.txt</c> (associated app
+    /// via ShellExecute). Examples: <c>code.cmd</c>, <c>"C:\Program Files\Notepad++\notepad++.exe"</c>,
+    /// <c>notepad</c>. Persisted to <c>editor.external_command</c>.</summary>
+    [ObservableProperty]
+    private string _externalEditorCommand = string.Empty;
+
     private bool _suppressPersist;
 
     public async Task LoadAsync()
@@ -77,6 +85,7 @@ public sealed partial class CaptureDefaultsViewModel : ObservableObject
         JpegQuality = int.TryParse(rawQuality, out var q) ? Math.Clamp(q, 1, 100) : 90;
         var rawAuto = await _settings.GetAsync(AutoJpegKey, CancellationToken.None).ConfigureAwait(true);
         AutoJpeg = rawAuto is null || bool.TryParse(rawAuto, out var a) && a; // default true
+        ExternalEditorCommand = (await _settings.GetAsync(ExternalEditorKey, CancellationToken.None).ConfigureAwait(true)) ?? string.Empty;
         var rawThreshold = await _settings.GetAsync(AutoJpegThresholdKbKey, CancellationToken.None).ConfigureAwait(true);
         AutoJpegThresholdKb = int.TryParse(rawThreshold, out var t) ? Math.Max(64, t) : 2048;
 
@@ -143,6 +152,24 @@ public sealed partial class CaptureDefaultsViewModel : ObservableObject
         if (_suppressPersist) return;
         _ = _settings.SetAsync(AutoJpegThresholdKbKey, value.ToString(System.Globalization.CultureInfo.InvariantCulture),
             sensitive: false, CancellationToken.None);
+    }
+
+    partial void OnExternalEditorCommandChanged(string value)
+    {
+        if (_suppressPersist) return;
+        _ = _settings.SetAsync(ExternalEditorKey, value, sensitive: false, CancellationToken.None);
+    }
+
+    [RelayCommand]
+    private void BrowseExternalEditor()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Choose external text editor",
+            Filter = "Programs (*.exe;*.cmd;*.bat)|*.exe;*.cmd;*.bat|All files (*.*)|*.*",
+            CheckFileExists = true,
+        };
+        if (dialog.ShowDialog() == true) ExternalEditorCommand = dialog.FileName;
     }
 
     [RelayCommand]

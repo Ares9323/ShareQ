@@ -36,6 +36,11 @@ public partial class ClipboardWindow : Wpf.Ui.Controls.FluentWindow
     /// (size/location/preview) bail out until then so the WPF layout pass and the
     /// initial restore don't overwrite the user's last saved values.</summary>
     private bool _geometryRestored;
+    /// <summary>True while the popup spawns an in-process child window (QR generator, etc.)
+    /// that takes focus. The Deactivated handler reads this and skips its auto-hide pass —
+    /// without the gate the popup would slam shut as soon as the QR window stole focus.
+    /// Mirrors the launcher's _suppressDeactivation pattern.</summary>
+    private bool _suppressDeactivation;
 
     // RMB-pan state for the image preview ScrollViewer. Mirrors the editor canvas pan: hold
     // RMB to drag the scroll offsets, release to stop. Cursor flips to SizeAll while panning
@@ -83,6 +88,9 @@ public partial class ClipboardWindow : Wpf.Ui.Controls.FluentWindow
         // cancel it, and Hide instead — matches Esc / paste-completion flow. App shutdown
         // closes via Application.Current.Shutdown() which doesn't go through this event.
         Closing += OnClosing;
+        // Click-outside / alt-tab dismiss. Skipped when pinned (sticky mode) or when a child
+        // window of ours is taking focus (QR generator). Mirrors the launcher's behaviour.
+        Deactivated += OnDeactivated;
         // GridSplitter drags don't trigger the window's SizeChanged — listen on the preview
         // pane itself so we capture both window resizes and splitter drags.
         PreviewPane.SizeChanged += OnPreviewPaneSizeChanged;
@@ -204,8 +212,39 @@ public partial class ClipboardWindow : Wpf.Ui.Controls.FluentWindow
         BeginHide();
     }
 
+    /// <summary>Auto-dismiss when the user clicks outside the popup (the standard Win+V
+    /// behaviour). Skipped in three cases:
+    ///   • Pinned mode — sticky stays open until the user explicitly toggles or Win+V again.
+    ///   • _suppressDeactivation — set around in-process child-window launches (QR generator).
+    ///   • _isClosing — guard against re-entry while BeginHide is mid-flight.
+    /// App shutdown also bypasses since IsShuttingDown closes everything anyway.</summary>
+    private void OnDeactivated(object? sender, EventArgs e)
+    {
+        if (App.IsShuttingDown) return;
+        if (_isClosing) return;
+        if (_suppressDeactivation) return;
+        if (ViewModel.IsPinned) return;
+        BeginHide();
+    }
+
     private void OnPasteCompleted(object? sender, EventArgs e)
     {
+        // Pinned mode keeps the popup open across pastes for multi-paste workflows. AutoPaster
+        // just transferred foreground to the target and sent Ctrl+V; without grabbing focus
+        // back, the next Ctrl+digit / Enter would land on the target instead of the popup.
+        // The grab needs a brief delay (~80 ms) so the Ctrl+V keystrokes already in the
+        // target's input queue process before we steal the foreground — otherwise a fast
+        // sequence (Ctrl+1, Ctrl+2) can race and skip the second paste.
+        if (ViewModel.IsPinned)
+        {
+            Dispatcher.BeginInvoke(async () =>
+            {
+                await Task.Delay(80).ConfigureAwait(true);
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero) ShareQ.App.Services.TargetWindowTracker.ForceForeground(hwnd);
+            }, DispatcherPriority.Background);
+            return;
+        }
         // AutoPaster's SetForegroundWindow has already handed focus to the target by the time
         // this fires, so simply hiding here is safe — we're no longer the foreground window
         // and Win32's anti-focus-stealing rules don't kick in.
@@ -636,6 +675,14 @@ public partial class ClipboardWindow : Wpf.Ui.Controls.FluentWindow
         Dispatcher.BeginInvoke(new Action(Hide), DispatcherPriority.Background);
     }
 
+    /// <summary>Pinned mode toggle in the titlebar — flips the VM flag (which persists via
+    /// the OnIsPinnedChanged partial) and updates the button caption via the Style DataTrigger.
+    /// Mirrors the launcher's "Drag mode" toggle pattern.</summary>
+    private void OnPinnedToggleClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.IsPinned = !ViewModel.IsPinned;
+    }
+
     /// <summary>"Generate QR code…" right-click action — pre-fills the live generator with
     /// the selected row's preview text. Preview is truncated at 200 chars in the row VM,
     /// which is fine for URLs / short snippets; longer payloads (full vCards, JSON blobs)
@@ -650,6 +697,12 @@ public partial class ClipboardWindow : Wpf.Ui.Controls.FluentWindow
             ? null
             : row.Preview;
         var win = new QrGeneratorWindow(_qrService, initial, _settings, _ingestion) { Owner = this };
+        // Keep the popup open while the QR generator is up — the focus shift to the child
+        // window would otherwise trip OnDeactivated and slam the clipboard popup shut.
+        // Cleared on the QR window's Closed event so a normal click-outside afterwards still
+        // dismisses the popup as before.
+        _suppressDeactivation = true;
+        win.Closed += (_, _) => _suppressDeactivation = false;
         win.Show();
         win.Activate();
     }

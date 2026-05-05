@@ -44,99 +44,87 @@
                 <RowDefinition Height="*" />     <!-- 1 main content -->
             </Grid.RowDefinitions>
 
-            <!-- WPF-UI titlebar — handles drag, double-click maximise, min/max/close buttons,
-                 dark caption color via DWM. Replaces the old custom drag-on-mode chrome that had
-                 to live inside an AllowsTransparency=True window. Standard edge-resize comes
-                 with FluentWindow so the conditional Thumb resize is gone. -->
-            <ui:TitleBar Grid.Row="0" Title="ShareQ - Launcher">
+            <!-- WPF-UI titlebar — drag / max / min / close + dark caption via DWM. The title's
+                 right-side hosts inline content: search → drag toggle → sliders. Sliders show
+                 only in drag mode (Visibility flipped by SetDragMode in code-behind). The drag
+                 banner moved out of here and into the footer. -->
+            <!-- Title="" intentionally — WPF-UI's Title slot gets hidden behind a wide Header,
+                 so we render the title text explicitly as the first column of the Header. With
+                 Title set, an empty placeholder slot still reserves space and pushes our text
+                 further right; clearing it lets the Header sit flush against the icon. -->
+            <ui:TitleBar Grid.Row="0" Title="">
                 <ui:TitleBar.Icon>
-                    <ui:ImageIcon Source="{StaticResource ShareQLogo}" />
+                    <!-- Negative right margin pulls the title text closer to the icon — WPF-UI's
+                         default TitleBar template leaves a wide gap. -->
+                    <ui:ImageIcon Source="{StaticResource ShareQLogo}" Margin="0,0,-12,0" />
                 </ui:TitleBar.Icon>
+                <ui:TitleBar.Header>
+                <Grid Margin="0,0,8,0" VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />    <!-- title text -->
+                        <ColumnDefinition Width="200" />     <!-- search -->
+                        <ColumnDefinition Width="Auto" />    <!-- drag toggle -->
+                        <ColumnDefinition Width="*" />       <!-- sliders (drag-mode only) -->
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="ShareQ - Launcher"
+                               Foreground="#FFF" FontWeight="SemiBold" FontSize="13"
+                               VerticalAlignment="Center" Margin="0,0,16,0" />
+                    <ui:TextBox Grid.Column="1" x:Name="SearchBox"
+                                PlaceholderText="🔍 Search…"
+                                FontSize="11"
+                                Margin="0,0,8,0"
+                                TextChanged="OnSearchTextChanged"
+                                ToolTip="Filter cells by label or path. Empty cells and the F-row are unaffected; tabs without matches lose their title." />
+                    <ui:Button Grid.Column="2" x:Name="DragToggle" Content="📥 Drag mode"
+                               Padding="10,4" FontSize="11" Margin="0,0,8,0" Click="OnDragToggleClick"
+                               ToolTip="Toggle drag-and-drop mode — the launcher stays open and cells accept dropped files / folders / shortcuts." />
+                    <Grid x:Name="DragSizingPanel" Grid.Column="3" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="32" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="32" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Icon" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0"
+                                   Foreground="{DynamicResource AccentForegroundDarkBrush}" />
+                        <Slider Grid.Column="1"
+                                Minimum="24" Maximum="96"
+                                Value="{Binding IconSize, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
+                                VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding IconSize, RelativeSource={RelativeSource AncestorType=Window}, StringFormat={}{0:F0}}"
+                                   FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                   Foreground="{DynamicResource AccentForegroundDarkBrush}" Margin="0,0,12,0" />
+                        <TextBlock Grid.Column="3" Text="Label" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0"
+                                   Foreground="{DynamicResource AccentForegroundDarkBrush}" />
+                        <Slider Grid.Column="4"
+                                Minimum="8" Maximum="18"
+                                Value="{Binding LabelFontSize, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
+                                VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBlock Grid.Column="5"
+                                   Text="{Binding LabelFontSize, RelativeSource={RelativeSource AncestorType=Window}, StringFormat={}{0:F0}}"
+                                   FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                   Foreground="{DynamicResource AccentForegroundDarkBrush}" />
+                    </Grid>
+                </Grid>
+                </ui:TitleBar.Header>
             </ui:TitleBar>
 
         <Grid Grid.Row="1" Margin="14,0,14,14">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />     <!-- 0: header -->
-                <RowDefinition Height="Auto" />     <!-- 1: F-strip — sizes to its icon + label content (drag-mode sliders) -->
-                <RowDefinition Height="Auto" />     <!-- 2: gap -->
-                <RowDefinition Height="Auto" />     <!-- 3: tab strip -->
-                <RowDefinition Height="*" />        <!-- 4: row 1 — leftover height split equally -->
-                <RowDefinition Height="*" />        <!-- 5: row 2 -->
-                <RowDefinition Height="*" />        <!-- 6: row 3 -->
-                <RowDefinition Height="Auto" />     <!-- 7: footer -->
+                <RowDefinition Height="Auto" />     <!-- 0: F-strip -->
+                <RowDefinition Height="Auto" />     <!-- 1: gap -->
+                <RowDefinition Height="Auto" />     <!-- 2: tab strip -->
+                <RowDefinition Height="*" />        <!-- 3: row 1 -->
+                <RowDefinition Height="*" />        <!-- 4: row 2 -->
+                <RowDefinition Height="*" />        <!-- 5: row 3 -->
+                <RowDefinition Height="Auto" />     <!-- 6: footer -->
             </Grid.RowDefinitions>
 
-            <!-- ── Header: drag-mode banner + drag toggle + search. Title + icon now live in
-                  the ui:TitleBar above; this row only carries the controls that act on the
-                  launcher state. ─────────────────────────────────────────────────────────── -->
-            <Grid Grid.Row="0" Margin="0,0,0,8">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="220" />
-                </Grid.ColumnDefinitions>
-                <TextBlock x:Name="DragModeBanner" Grid.Row="0" Grid.Column="0"
-                           Text="🎯 Drag-and-drop mode — drop files / folders / shortcuts onto cells to map them. Esc or click toggle to exit."
-                           Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" VerticalAlignment="Center"
-                           Visibility="Collapsed" />
-                <!-- Drag toggle sits left of the search box now: search lives at the extreme
-                     right (consistent placement with the popup's search) and the toggle
-                     button is the secondary action that bumps inward. -->
-                <ui:Button Grid.Row="0" Grid.Column="1" x:Name="DragToggle" Content="📥 Drag mode"
-                           Padding="10,4" FontSize="11" Margin="0,0,8,0" Click="OnDragToggleClick"
-                           ToolTip="Toggle drag-and-drop mode — the launcher stays open and cells accept dropped files / folders / shortcuts." />
-                <ui:TextBox Grid.Row="0" Grid.Column="2" x:Name="SearchBox"
-                            PlaceholderText="🔍 Search…"
-                            FontSize="11"
-                            TextChanged="OnSearchTextChanged"
-                            ToolTip="Filter cells by label or path. Empty cells and the F-row are unaffected; tabs without matches lose their title." />
-
-                <!-- Drag-mode sizing panel: only visible while drag mode is on. Two sliders
-                     bound to the LauncherWindow's IconSize / LabelFontSize DependencyProperties
-                     so a drag re-renders every cell live; the change is persisted via the
-                     property-changed callback (no Apply button needed). Layout: Icon + Label
-                     side by side, full window width, just under the main header. -->
-                <Grid x:Name="DragSizingPanel" Grid.Row="1" Grid.ColumnSpan="3" Margin="0,8,0,0"
-                      Visibility="Collapsed">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="40" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="40" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Icon" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"
-                               Foreground="{DynamicResource AccentForegroundDarkBrush}" />
-                    <Slider Grid.Column="1"
-                            Minimum="24" Maximum="96"
-                            Value="{Binding IconSize, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
-                            VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <TextBlock Grid.Column="3"
-                               Text="{Binding IconSize, RelativeSource={RelativeSource AncestorType=Window}, StringFormat={}{0:F0}}"
-                               FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right"
-                               Foreground="{DynamicResource AccentForegroundDarkBrush}" Margin="0,0,16,0" />
-                    <TextBlock Grid.Column="4" Text="Label" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"
-                               Foreground="{DynamicResource AccentForegroundDarkBrush}" />
-                    <Slider Grid.Column="5"
-                            Minimum="8" Maximum="18"
-                            Value="{Binding LabelFontSize, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
-                            VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <TextBlock Grid.Column="7"
-                               Text="{Binding LabelFontSize, RelativeSource={RelativeSource AncestorType=Window}, StringFormat={}{0:F0}}"
-                               FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right"
-                               Foreground="{DynamicResource AccentForegroundDarkBrush}" />
-                </Grid>
-            </Grid>
-
             <!-- ── Function-key strip — global, visible regardless of selected tab ──────────── -->
-            <ItemsControl x:Name="FunctionRow" Grid.Row="1">
+            <ItemsControl x:Name="FunctionRow" Grid.Row="0">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <UniformGrid Columns="10" Rows="1" />
@@ -185,9 +173,9 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <Border Grid.Row="2" Height="8" /> <!-- gap between the function keys and the tab strip -->
+            <Border Grid.Row="1" Height="8" /> <!-- gap between the function keys and the tab strip -->
 
-            <ItemsControl x:Name="TabStrip" Grid.Row="3">
+            <ItemsControl x:Name="TabStrip" Grid.Row="2">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <UniformGrid Columns="10" Rows="1" />
@@ -238,12 +226,12 @@
                  the cells render on top. All four corners round so the panel reads as a real
                  self-contained card regardless of which tab is active (the active tab might be
                  anywhere in the strip, not necessarily the first slot). -->
-            <Border Grid.Row="4" Grid.RowSpan="3"
+            <Border Grid.Row="3" Grid.RowSpan="3"
                     Background="{DynamicResource AccentBackgroundBrush}"
                     CornerRadius="6"
                     Margin="-3,0,-3,-3" />
 
-            <ItemsControl x:Name="Row1Host" Grid.Row="4" Margin="0,4,0,0">
+            <ItemsControl x:Name="Row1Host" Grid.Row="3" Margin="0,4,0,0">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <UniformGrid Columns="10" Rows="1" />
@@ -295,7 +283,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <ItemsControl x:Name="Row2Host" Grid.Row="5" Margin="0,0,0,0">
+            <ItemsControl x:Name="Row2Host" Grid.Row="4" Margin="0,0,0,0">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <UniformGrid Columns="10" Rows="1" />
@@ -347,7 +335,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <ItemsControl x:Name="Row3Host" Grid.Row="6">
+            <ItemsControl x:Name="Row3Host" Grid.Row="5">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <UniformGrid Columns="10" Rows="1" />
@@ -399,9 +387,21 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <TextBlock Grid.Row="7" Margin="0,10,0,0" HorizontalAlignment="Center"
-                       Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="10"
-                       Text="F1-F10 fire global · 1-9,0 / arrows switch tab · QWERTY fires tab cell · Esc closes · right-click to edit" />
+            <!-- Footer hint + drag-mode banner side by side, both centred horizontally. The
+                 banner only renders while drag mode is on (DragModeBanner.Visibility flipped
+                 in SetDragMode); when off the F1-F10 hint sits alone, centred. Banner uses
+                 AccentBackgroundLightBrush to read brighter than the always-on hint. -->
+            <StackPanel Grid.Row="6" Margin="0,10,0,0" Orientation="Horizontal"
+                        HorizontalAlignment="Center">
+                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="10"
+                           VerticalAlignment="Center"
+                           Text="F1-F10 fire global · 1-9,0 / arrows switch tab · QWERTY fires tab cell · Esc closes · right-click to edit" />
+                <TextBlock x:Name="DragModeBanner" Margin="16,0,0,0" FontSize="10"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource AccentBackgroundLightBrush}"
+                           Visibility="Collapsed"
+                           Text="🎯 Drag-and-drop mode — drop files / folders / shortcuts onto cells to map them. Esc or click toggle to exit." />
+            </StackPanel>
 
         </Grid>
     </Grid>

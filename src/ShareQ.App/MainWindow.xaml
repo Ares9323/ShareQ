@@ -174,7 +174,7 @@
              so the chrome reads as the same brand at every size. -->
         <ui:TitleBar Grid.Row="0" Grid.ColumnSpan="2" Title="ShareQ">
             <ui:TitleBar.Icon>
-                <ui:ImageIcon Source="{StaticResource ShareQLogo}" />
+                <ui:ImageIcon Source="{StaticResource ShareQLogo}" Margin="0,0,-12,0" />
             </ui:TitleBar.Icon>
         </ui:TitleBar>
 
@@ -901,6 +901,25 @@
                               HorizontalAlignment="Left" Width="120" Margin="0,0,0,8" />
                 <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap"
                            Text="Active only when format = PNG. Photographic content (gradients, video stills) compresses far more efficiently as JPEG; large screenshots fall back automatically without you noticing." />
+
+                <!-- External editor for clipboard text rows. Empty = let Windows open the temp
+                     .txt with whatever's the user's default handler (notepad, VSCode if it
+                     hijacked .txt, etc.). Otherwise the path / command runs with the temp
+                     file path as argument. The clipboard popup's Edit button (text-row only)
+                     fires this; edits stream back via FileSystemWatcher. -->
+                <TextBlock Text="External text editor" FontWeight="SemiBold" Margin="0,16,0,4" />
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBox Grid.Column="0"
+                                Text="{Binding Capture.ExternalEditorCommand, UpdateSourceTrigger=PropertyChanged}"
+                                PlaceholderText="(empty = Windows default for .txt — e.g. notepad)" />
+                    <ui:Button Grid.Column="1" Content="Browse…" Command="{Binding Capture.BrowseExternalEditorCommand}" Margin="6,0,0,0" />
+                </Grid>
+                <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap"
+                           Text="Used by the clipboard popup's Edit button on text rows. Examples: code (VSCode), code.cmd, notepad++.exe, notepad. Edits sync back automatically when you save the file." />
             </StackPanel>
 
             <!-- Theme — wrapped in ScrollViewer because the page now has three colour rows +

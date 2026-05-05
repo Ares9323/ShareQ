@@ -16,7 +16,7 @@ namespace ShareQ.Editor.Views;
 /// representation is computed from those on demand. <see cref="_suppress"/> guards every UI sync
 /// pass against feedback loops (a slider firing ValueChanged → updating HSV → updating sliders →
 /// firing ValueChanged again).</summary>
-public partial class ColorPickerWindow : Window
+public partial class ColorPickerWindow : Wpf.Ui.Controls.FluentWindow
 {
     // Authoritative state in HSV [0,1] + alpha byte. Everything else is derived.
     private double _h, _s, _v;
@@ -94,10 +94,38 @@ public partial class ColorPickerWindow : Window
         {
             _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, ref useDark, sizeof(int));
         }
+        // Win11 (build 22000+) honours per-window caption + border colour. Caption tinted
+        // dark (the FluentWindow draws its own caption above this so the value mostly matters
+        // before our content paints); border tinted to the runtime AccentForegroundDarkBrush
+        // so the 1-px DWM outline matches the app's accent ring around other windows.
+        int captionRef = 0x001E1E1E; // Win32 COLORREF: 0x00BBGGRR
+        _ = DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, ref captionRef, sizeof(int));
+        var borderRef = ResolveAccentDarkColorRef();
+        _ = DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderRef, sizeof(int));
+    }
+
+    /// <summary>Read the live <c>AccentForegroundDarkBrush</c> from the app resource scope and
+    /// pack it into a Win32 COLORREF (0x00BBGGRR). Falls back to a dark grey when the brush
+    /// isn't a SolidColorBrush (the theme system can swap brushes at runtime so the lookup
+    /// isn't strictly stable, but for the OnSourceInitialized one-shot it's fine).</summary>
+    private static int ResolveAccentDarkColorRef()
+    {
+        try
+        {
+            if (System.Windows.Application.Current?.Resources["AccentForegroundDarkBrush"] is System.Windows.Media.SolidColorBrush b)
+            {
+                var c = b.Color;
+                return (c.B << 16) | (c.G << 8) | c.R;
+            }
+        }
+        catch { /* resource unavailable — fall through to default */ }
+        return 0x001E1E1E;
     }
 
     private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
     private const int DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
+    private const int DWMWA_CAPTION_COLOR = 35;   // Win11 build 22000+
+    private const int DWMWA_BORDER_COLOR = 34;    // Win11 build 22000+
 
     [LibraryImport("dwmapi.dll")]
     private static partial int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);

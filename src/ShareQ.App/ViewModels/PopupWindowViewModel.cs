@@ -118,12 +118,30 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
     /// "textual content" semantically — gating it under Image would surprise the user. Both
     /// chips off = empty list.</summary>
     [ObservableProperty] private bool _showText = true;
+
+    /// <summary>"Sticky" / pinned mode — when on, the clipboard window stays open after a paste
+    /// (single Enter / Ctrl+digit / double-click) so the user can paste several entries in a
+    /// row without re-summoning the popup. Win+V (the toggle) and Esc still dismiss it; click-
+    /// outside is already non-dismissing, so this flag only gates the paste-completed close.
+    /// Persisted to <c>clipboard.pinned</c>.</summary>
+    [ObservableProperty] private bool _isPinned;
+
     private bool _typeFiltersLoaded;
     private const string ShowImagesKey = "clipboard.show_images";
     private const string ShowTextKey = "clipboard.show_text";
+    private const string PinnedKey = "clipboard.pinned";
 
     partial void OnShowImagesChanged(bool value) => PersistTypeFilter(ShowImagesKey, value);
     partial void OnShowTextChanged(bool value) => PersistTypeFilter(ShowTextKey, value);
+    partial void OnIsPinnedChanged(bool value) => PersistFlag(PinnedKey, value);
+
+    private void PersistFlag(string key, bool value)
+    {
+        if (!_typeFiltersLoaded) return;
+        var settings = _services.GetService<ShareQ.Storage.Settings.ISettingsStore>();
+        if (settings is null) return;
+        _ = settings.SetAsync(key, value ? "1" : "0", sensitive: false, CancellationToken.None);
+    }
 
     private void PersistTypeFilter(string key, bool value)
     {
@@ -144,9 +162,12 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
         if (settings is null) { _typeFiltersLoaded = true; return; }
         var rawImg = await settings.GetAsync(ShowImagesKey, cancellationToken).ConfigureAwait(true);
         var rawText = await settings.GetAsync(ShowTextKey, cancellationToken).ConfigureAwait(true);
-        // Default true — only an explicit "0" counts as off so a fresh DB shows everything.
+        var rawPinned = await settings.GetAsync(PinnedKey, cancellationToken).ConfigureAwait(true);
+        // Filter chips default true (fresh DB shows everything); pinned defaults false (the
+        // popup behaves as before until the user opts in).
         ShowImages = rawImg != "0";
         ShowText = rawText != "0";
+        IsPinned = rawPinned == "1";
         _typeFiltersLoaded = true;
     }
 
@@ -228,6 +249,7 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
         DeleteSelectedCommand.NotifyCanExecuteChanged();
         PasteSelectedCommand.NotifyCanExecuteChanged();
         OpenInEditorCommand.NotifyCanExecuteChanged();
+        OpenInExternalEditorCommand.NotifyCanExecuteChanged();
         OpenInExplorerCommand.NotifyCanExecuteChanged();
         OpenInBrowserCommand.NotifyCanExecuteChanged();
         CaptureWebpageCommand.NotifyCanExecuteChanged();
@@ -417,6 +439,21 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
         if (SelectedRow is null || SelectedRow.Kind != ItemKind.Image) return;
         var launcher = _services.GetRequiredService<EditorLauncher>();
         await launcher.OpenAsync(SelectedRow.Id, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    /// <summary>Open a text-shaped row in the external editor (VSCode / Notepad / whatever
+    /// the user picked in Settings → Capture → External editor command, or Windows default
+    /// for .txt when the setting is empty). Edits sync back into the SQLite store via the
+    /// service's FileSystemWatcher — the popup list refreshes automatically through
+    /// ItemsChanged. Image rows have their own in-app editor (<see cref="OpenInEditorAsync"/>);
+    /// this is the text-row counterpart.</summary>
+    [RelayCommand(CanExecute = nameof(IsTextSelected))]
+    private async Task OpenInExternalEditorAsync()
+    {
+        if (SelectedRow is null) return;
+        var editor = _services.GetService<ExternalTextEditorService>();
+        if (editor is null) return;
+        await editor.EditAsync(SelectedRow.Id, CancellationToken.None).ConfigureAwait(false);
     }
 
     [RelayCommand(CanExecute = nameof(IsUrlSelected))]

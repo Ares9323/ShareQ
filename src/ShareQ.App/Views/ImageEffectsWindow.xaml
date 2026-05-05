@@ -140,7 +140,7 @@
 
             <ui:TitleBar Grid.Row="0" Title="ShareQ - Image effects">
                 <ui:TitleBar.Icon>
-                    <ui:ImageIcon Source="{StaticResource ShareQLogo}" />
+                    <ui:ImageIcon Source="{StaticResource ShareQLogo}" Margin="0,0,-12,0" />
                 </ui:TitleBar.Icon>
             </ui:TitleBar>
 

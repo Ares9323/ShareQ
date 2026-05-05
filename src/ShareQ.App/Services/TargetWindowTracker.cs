@@ -57,8 +57,9 @@ public sealed class TargetWindowTracker
         {
             if (!AppNativeMethods.IsWindowVisible(hwnd)) return true;
             if (IsOwnProcess(hwnd)) return true;
-            // Skip tool / no-activate windows — they're never paste targets.
-            var exStyle = AppNativeMethods.GetWindowLong(hwnd, AppNativeMethods.GWL_EXSTYLE);
+            // Skip tool / no-activate windows — they're never paste targets. GetWindowLongPtr
+            // is the x64-safe variant; GetWindowLong is unexported on 64-bit user32.
+            var exStyle = (long)AppNativeMethods.GetWindowLongPtr(hwnd, AppNativeMethods.GWL_EXSTYLE);
             if ((exStyle & (AppNativeMethods.WS_EX_TOOLWINDOW | AppNativeMethods.WS_EX_NOACTIVATE)) != 0) return true;
             // Skip windows with no visible title — usually invisible helper surfaces.
             if (AppNativeMethods.GetWindowTextLength(hwnd) == 0) return true;
@@ -68,16 +69,27 @@ public sealed class TargetWindowTracker
         return best;
     }
 
-    public bool TryRestoreCaptured()
+    public bool TryRestoreCaptured() => ForceForeground(_captured);
+
+    /// <summary>Force any window to the foreground, bypassing Win32's anti-focus-stealing
+    /// rules via the AttachThreadInput + alt-tap workaround. Used both to send focus TO the
+    /// captured paste target (TryRestoreCaptured) and to bring focus BACK to the clipboard
+    /// popup after a paste in pinned mode — the popup needs keyboard focus so the next
+    /// Enter / Ctrl+digit lands on it instead of the target app.
+    ///
+    /// Returns false when the target hwnd is zero or its thread can't be queried; otherwise
+    /// returns the result of SetForegroundWindow (which may still fail in heavily locked-down
+    /// foreground states, but the alt-tap nudge handles the common case).</summary>
+    public static bool ForceForeground(IntPtr hwnd)
     {
-        if (_captured == IntPtr.Zero) return false;
+        if (hwnd == IntPtr.Zero) return false;
 
         // Win32 SetForegroundWindow has anti-focus-stealing rules: only the foreground process
         // (or one that just got input) can call it successfully. Two tricks combined make this reliable:
         //   1. AttachThreadInput between us and the target's thread to share the foreground state.
         //   2. Send a fake Alt key press to "unlock" the foreground assignment.
         var thisThread = AppNativeMethods.GetCurrentThreadId();
-        var targetThread = AppNativeMethods.GetWindowThreadProcessId(_captured, out _);
+        var targetThread = AppNativeMethods.GetWindowThreadProcessId(hwnd, out _);
 
         if (targetThread == 0) return false;
         if (thisThread != targetThread)
@@ -86,7 +98,7 @@ public sealed class TargetWindowTracker
         }
 
         SendAltTap();
-        var ok = AppNativeMethods.SetForegroundWindow(_captured);
+        var ok = AppNativeMethods.SetForegroundWindow(hwnd);
 
         if (thisThread != targetThread)
         {

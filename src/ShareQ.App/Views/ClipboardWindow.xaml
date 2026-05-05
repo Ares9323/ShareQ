@@ -43,13 +43,53 @@
                 <RowDefinition Height="*" />     <!-- 1 main content -->
             </Grid.RowDefinitions>
 
-            <!-- WPF-UI titlebar — handles drag, double-click maximise, min/max/close buttons,
-                 and the dark caption color via DWM. Replaces the old custom DragHandle that had
-                 to live inside an AllowsTransparency=True window with a manual Thumb resize. -->
-            <ui:TitleBar Grid.Row="0" Title="ShareQ - Clipboard">
+            <!-- WPF-UI titlebar — drag / max / min / close + dark caption via DWM. Mirrors
+                 LauncherWindow's layout: the title's right-side carries Search + Pinned mode
+                 toggle. Title text rendered explicitly inside the Header Grid because a wide
+                 Header can otherwise hide WPF-UI's own Title slot. -->
+            <!-- Title="" intentionally — see LauncherWindow for rationale. -->
+            <ui:TitleBar Grid.Row="0" Title="">
                 <ui:TitleBar.Icon>
-                    <ui:ImageIcon Source="{StaticResource ShareQLogo}" />
+                    <ui:ImageIcon Source="{StaticResource ShareQLogo}" Margin="0,0,-12,0" />
                 </ui:TitleBar.Icon>
+                <ui:TitleBar.Header>
+                    <Grid Margin="0,0,8,0" VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />    <!-- title text -->
+                            <ColumnDefinition Width="200" />     <!-- search -->
+                            <ColumnDefinition Width="Auto" />    <!-- pinned toggle -->
+                            <ColumnDefinition Width="*" />       <!-- spacer -->
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="ShareQ - Clipboard"
+                                   Foreground="#FFF" FontWeight="SemiBold" FontSize="13"
+                                   VerticalAlignment="Center" Margin="0,0,16,0" />
+                        <ui:TextBox Grid.Column="1" x:Name="SearchBox"
+                                    PlaceholderText="🔍 Search…"
+                                    FontSize="11"
+                                    Margin="0,0,8,0"
+                                    Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                        <!-- Pinned (sticky) mode toggle. When on, paste / double-click no
+                             longer auto-dismisses the popup — the focus is force-grabbed back
+                             so multi-paste workflows keep firing into the same target. Esc and
+                             Win+V still dismiss. State persisted to clipboard.pinned. Caption
+                             swaps via DataTrigger to mirror the launcher's drag-mode toggle. -->
+                        <ui:Button Grid.Column="2"
+                                   Padding="10,4" FontSize="11"
+                                   Click="OnPinnedToggleClick"
+                                   ToolTip="Toggle pinned (sticky) mode — popup stays open after paste / double-click. Esc or Win+V still dismiss.">
+                            <ui:Button.Style>
+                                <Style TargetType="{x:Type ui:Button}" BasedOn="{StaticResource {x:Type ui:Button}}">
+                                    <Setter Property="Content" Value="📌 Pinned mode" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsPinned}" Value="True">
+                                            <Setter Property="Content" Value="✓ Pinned (on)" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ui:Button.Style>
+                        </ui:Button>
+                    </Grid>
+                </ui:TitleBar.Header>
             </ui:TitleBar>
 
             <Grid Grid.Row="1" Margin="14,0,14,14">
@@ -59,16 +99,13 @@
                     <RowDefinition Height="Auto" />  <!-- footer -->
                 </Grid.RowDefinitions>
 
-                <!-- ── Combined header: image/files chips, category tabs, Clear all, search.
-                      Single row to save vertical space — replaces the old two-row layout where
-                      Clear all + search lived above the tab strip and a kind-filter dropdown
-                      sat to the right of the tabs. ───────────────────────────────────────── -->
+                <!-- ── Combined header: image/text chips, category tabs, Clear all. Search +
+                      Pinned toggle moved to the titlebar (matching the launcher's layout). -->
                 <Grid Grid.Row="0" Margin="0,0,0,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />  <!-- type chips -->
                         <ColumnDefinition Width="*" />     <!-- category tabs -->
                         <ColumnDefinition Width="Auto" />  <!-- Clear all -->
-                        <ColumnDefinition Width="220" />   <!-- search -->
                     </Grid.ColumnDefinitions>
 
                     <!-- Type chips. ToggleButton; ON = include that kind in the list, OFF =
@@ -191,14 +228,10 @@
                     <ui:Button Grid.Column="2"
                                Content="Clear all"
                                Appearance="Danger"
-                               Margin="8,0,8,0"
+                               Margin="8,0,0,0"
                                Cursor="Arrow"
                                Command="{Binding ClearAllCommand}"
                                ToolTip="Delete every non-pinned item (Ctrl+Shift+Del)" />
-                    <ui:TextBox Grid.Column="3" x:Name="SearchBox"
-                                PlaceholderText="🔍 Search…"
-                                FontSize="11"
-                                Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
                 </Grid>
 
                 <!-- ── Body: history list | splitter | preview pane | vertical toolbar ────── -->
@@ -495,14 +528,25 @@
                                        Visibility="{Binding IsTextSelected, Converter={StaticResource BoolToVisibility}}">
                                 <TextBlock Text="&#xED14;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
                             </ui:Button>
-                            <!-- Edit / show-in-explorer hidden (Visibility=Collapsed) when they
-                                 don't apply to the current selection — text rows have nothing to
-                                 edit, ephemeral entries have no file on disk to reveal. -->
+                            <!-- Edit (image): in-app annotation editor. Hidden for text /
+                                 file rows. -->
                             <ui:Button Width="32" Height="32" Padding="0"
                                        Margin="0,0,0,4"
-                                       ToolTip="Open in editor (image only)"
+                                       ToolTip="Open in image editor"
                                        Command="{Binding OpenInEditorCommand}"
                                        Visibility="{Binding IsImageSelected, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="&#xE70F;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
+                            </ui:Button>
+                            <!-- Edit (text / HTML / RTF): external editor — VSCode / Notepad /
+                                 whatever's set in Settings → Capture → External editor command,
+                                 falling back to the Windows .txt default. Edits stream back to
+                                 the SQLite item via FileSystemWatcher. Same Edit glyph as the
+                                 image button — both buttons share the slot mutually-exclusively. -->
+                            <ui:Button Width="32" Height="32" Padding="0"
+                                       Margin="0,0,0,4"
+                                       ToolTip="Edit text in external editor (VSCode / Notepad / …)"
+                                       Command="{Binding OpenInExternalEditorCommand}"
+                                       Visibility="{Binding IsTextSelected, Converter={StaticResource BoolToVisibility}}">
                                 <TextBlock Text="&#xE70F;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
                             </ui:Button>
                             <ui:Button Width="32" Height="32" Padding="0"
