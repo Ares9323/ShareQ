@@ -129,11 +129,10 @@ jobs:
       # in Releases\. The user reviews + publishes from the GitHub UI — keeps "I want to release"
       # an explicit final click instead of an automatic-on-merge surprise.
       - name: Upload to GitHub Releases (draft)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >
           dotnet vpk upload github
           --repoUrl https://github.com/${{ github.repository }}
+          --token ${{ secrets.GITHUB_TOKEN }}
           --tag v${{ github.event.inputs.version }}
           --releaseName "ShareQ ${{ github.event.inputs.version }}"
           --publish
