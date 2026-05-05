@@ -52,4 +52,69 @@ public static partial class DarkTitleBar
 
     private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;   // Win11 build 22000+
     private const int DWMWCP_ROUND = 2;                      // round on a small radius
+
+    /// <summary>Suppress the white flash WPF Windows show during a DWM resize. Three layers
+    /// of fix because the flash has two sources:
+    ///   1. <c>WM_ERASEBKGND</c> — Win32 paints the window class brush (default white) before
+    ///      WPF gets a chance to repaint. Returning 1 (handled) skips the erase pass.
+    ///   2. The window class background brush — replaced with a solid dark brush via
+    ///      SetClassLongPtr, so even if WM_ERASEBKGND does fire (some WPF-UI internals call
+    ///      DefWindowProc which re-runs the default erase) the colour matches Surface1.
+    ///   3. DWM-revealed area during resize — DWM expands its frame buffer with the caption /
+    ///      border colour. DWMWA_BORDER_COLOR + DWMWA_CAPTION_COLOR set to dark make that area
+    ///      blend into the rest of the window instead of flashing white.
+    /// ClipboardWindow / LauncherWindow don't need this because <c>AllowsTransparency=True</c>
+    /// bypasses the Win32 + DWM erase pipelines entirely. Apply to every FluentWindow
+    /// (MainWindow, ImageEffectsWindow, GradientEditorWindow, QrGeneratorWindow, …) — anything
+    /// with native DWM chrome.</summary>
+    public static void SuppressResizeFlicker(Window window)
+    {
+        window.SourceInitialized += (_, _) =>
+        {
+            var hwnd = new WindowInteropHelper(window).Handle;
+            if (hwnd == IntPtr.Zero) return;
+
+            // Layer 1 — message hook that short-circuits WM_ERASEBKGND.
+            var src = HwndSource.FromHwnd(hwnd);
+            src?.AddHook(WndProc);
+
+            // Layer 2 — replace the window class brush so the rare unhooked erase doesn't
+            // flash white. RGB colour stored as 0x00BBGGRR (Win32 COLORREF order). #1E1E1E
+            // matches the dark surface roughly; close enough that one frame of mismatch is
+            // imperceptible.
+            try
+            {
+                var darkBrush = CreateSolidBrush(0x001E1E1E);
+                _ = SetClassLongPtr(hwnd, GCLP_HBRBACKGROUND, darkBrush);
+            }
+            catch { /* GDI32 missing on bare server SKUs — no-op */ }
+
+            // Layer 3 — DWM caption + border colour. Build 22000+ (Win11) honours these; older
+            // Windows ignores them silently.
+            int colorRef = 0x001E1E1E;
+            _ = DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, ref colorRef, sizeof(int));
+            _ = DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref colorRef, sizeof(int));
+        };
+
+        static IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            const int WM_ERASEBKGND = 0x0014;
+            if (msg == WM_ERASEBKGND)
+            {
+                handled = true;
+                return new IntPtr(1);
+            }
+            return IntPtr.Zero;
+        }
+    }
+
+    [LibraryImport("user32.dll", EntryPoint = "SetClassLongPtrW")]
+    private static partial IntPtr SetClassLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    [LibraryImport("gdi32.dll")]
+    private static partial IntPtr CreateSolidBrush(uint color);
+
+    private const int GCLP_HBRBACKGROUND = -10;
+    private const int DWMWA_CAPTION_COLOR = 35;   // Win11 build 22000+
+    private const int DWMWA_BORDER_COLOR = 34;    // Win11 build 22000+
 }

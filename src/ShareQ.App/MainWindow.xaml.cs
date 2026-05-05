@@ -51,6 +51,7 @@ public partial class MainWindow : FluentWindow
         ShareQ.Storage.ImageEffects.IImageEffectPresetStore imageEffectPresetStore)
     {
         InitializeComponent();
+        ShareQ.App.Services.DarkTitleBar.SuppressResizeFlicker(this);
         DataContext = viewModel;
         _screenSampler = screenSampler;
         _colorRecents = colorRecents;

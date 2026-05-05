@@ -1,26 +1,28 @@
-using System.IO;
 using System.Text.Json.Nodes;
 using System.Windows;
-using System.Windows.Media.Imaging;
 using Microsoft.Extensions.Logging;
-using QRCoder;
+using ShareQ.App.Services.Qr;
 using ShareQ.App.Views;
 using ShareQ.Core.Pipeline;
 
 namespace ShareQ.App.Services.PipelineTasks;
 
-/// <summary>
-/// Generates a QR code from <c>bag.upload_url</c> (or <c>config.text</c>) and pops up a small
-/// window showing it. Typical use: drop after an Upload step so the user can scan the result on
-/// a phone. Doesn't write anywhere — pure display task.
-/// </summary>
+/// <summary>Generates a QR code from <c>bag.upload_url</c> (or <c>config.text</c>) and pops up
+/// a small window showing it. Also writes the rendered PNG to <c>bag.payload_bytes</c> +
+/// sets <c>bag.file_extension</c> = "png" so downstream tasks (Save image as…, Copy image
+/// to clipboard, Add to history, Upload) can chain off the same image without re-rendering.</summary>
 public sealed class QrCodeTask : IPipelineTask
 {
     public const string TaskId = "shareq.show-qr-code";
 
     private readonly ILogger<QrCodeTask> _logger;
+    private readonly QrCodeService _qr;
 
-    public QrCodeTask(ILogger<QrCodeTask> logger) { _logger = logger; }
+    public QrCodeTask(ILogger<QrCodeTask> logger, QrCodeService qr)
+    {
+        _logger = logger;
+        _qr = qr;
+    }
 
     public string Id => TaskId;
     public string DisplayName => "Show QR code";
@@ -28,8 +30,6 @@ public sealed class QrCodeTask : IPipelineTask
 
     public Task ExecuteAsync(PipelineContext context, JsonNode? config, CancellationToken cancellationToken)
     {
-        // Source text: explicit config wins, otherwise pick the upload URL out of the bag. No
-        // text → log a warning and bail.
         var text = (string?)config?["text"]
                    ?? (context.Bag.TryGetValue(PipelineBagKeys.UploadUrl, out var raw) && raw is string u ? u : null);
         if (string.IsNullOrEmpty(text))
@@ -38,29 +38,17 @@ public sealed class QrCodeTask : IPipelineTask
             return Task.CompletedTask;
         }
 
-        BitmapSource? bitmap;
-        try
-        {
-            using var generator = new QRCodeGenerator();
-            using var data = generator.CreateQrCode(text, QRCodeGenerator.ECCLevel.Q);
-            // PngByteQRCode keeps QRCoder fully managed (no System.Drawing dependency for the QR
-            // generation itself); we then decode the PNG bytes into a WPF BitmapSource.
-            using var png = new PngByteQRCode(data);
-            var pngBytes = png.GetGraphic(pixelsPerModule: 12);
-            using var ms = new MemoryStream(pngBytes);
-            var bmp = new BitmapImage();
-            bmp.BeginInit();
-            bmp.StreamSource = ms;
-            bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.EndInit();
-            bmp.Freeze();
-            bitmap = bmp;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "QrCodeTask: failed to generate QR for {Len}-char string", text.Length);
-            return Task.CompletedTask;
-        }
+        var pngBytes = _qr.TryRenderPng(text);
+        if (pngBytes is null) return Task.CompletedTask;
+
+        // Make the rendered PNG available to whatever the user chains after — Save image as…,
+        // Copy image to clipboard, Add to history. Without this they'd have to re-render via
+        // a Generate-QR task.
+        context.Bag[PipelineBagKeys.PayloadBytes] = pngBytes;
+        context.Bag[PipelineBagKeys.FileExtension] = "png";
+
+        var bitmap = _qr.TryRenderBitmap(text);
+        if (bitmap is null) return Task.CompletedTask;
 
         // Show the window on the UI thread without awaiting — workflow continues immediately.
         // No Owner: when the workflow is triggered from tray / hotkey the MainWindow is usually

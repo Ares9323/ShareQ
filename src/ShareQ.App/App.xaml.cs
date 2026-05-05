@@ -254,7 +254,11 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, OpenUrlTask>();
                 services.AddSingleton<IPipelineTask, ShowInExplorerTask>();
                 services.AddSingleton<IPipelineTask, SaveAsTask>();
+                services.AddSingleton<ShareQ.App.Services.Qr.QrCodeService>();
                 services.AddSingleton<IPipelineTask, QrCodeTask>();
+                services.AddSingleton<IPipelineTask, SaveQrCodeAsImageTask>();
+                services.AddSingleton<IPipelineTask, SaveQrCodeAsSvgTask>();
+                services.AddSingleton<IPipelineTask, CopyQrCodeToClipboardTask>();
                 services.AddSingleton<IPipelineTask, PinToScreenTask>();
                 services.AddSingleton<IPipelineTask, LaunchAppTask>();
                 services.AddSingleton<IPipelineTask, OpenFileTask>();

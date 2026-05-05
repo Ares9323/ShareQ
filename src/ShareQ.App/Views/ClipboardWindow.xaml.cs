@@ -39,14 +39,16 @@ public partial class ClipboardWindow : Window
     public PopupWindowViewModel ViewModel { get; }
 
     private readonly ShareQ.Storage.Rotation.CategoryRotationService? _categoryRotation;
+    private readonly ShareQ.App.Services.Qr.QrCodeService? _qrService;
 
-    public ClipboardWindow(PopupWindowViewModel viewModel, ISettingsStore settings, ShareQ.Storage.Rotation.CategoryRotationService? categoryRotation = null)
+    public ClipboardWindow(PopupWindowViewModel viewModel, ISettingsStore settings, ShareQ.Storage.Rotation.CategoryRotationService? categoryRotation = null, ShareQ.App.Services.Qr.QrCodeService? qrService = null)
     {
         InitializeComponent();
         ViewModel = viewModel;
         DataContext = viewModel;
         _settings = settings;
         _categoryRotation = categoryRotation;
+        _qrService = qrService;
         _current = this;
 
         // Tunneling so Ctrl+digits / arrows / Enter reach this handler before SearchBox
@@ -485,5 +487,23 @@ public partial class ClipboardWindow : Window
         if (_isClosing) return;
         _isClosing = true;
         Dispatcher.BeginInvoke(new Action(Hide), DispatcherPriority.Background);
+    }
+
+    /// <summary>"Generate QR code…" right-click action — pre-fills the live generator with
+    /// the selected row's preview text. Preview is truncated at 200 chars in the row VM,
+    /// which is fine for URLs / short snippets; longer payloads (full vCards, JSON blobs)
+    /// the user can paste manually into the editor.</summary>
+    private void OnGenerateQrFromItemClicked(object sender, RoutedEventArgs e)
+    {
+        if (_qrService is null) return;
+        if (ViewModel.SelectedRow is not { } row) return;
+        // Non-text rows produce placeholder previews like "[image]" — pop the editor empty
+        // in that case rather than seeding it with junk.
+        var initial = row.Kind == ItemKind.Image || row.Kind == ItemKind.Video || row.Kind == ItemKind.Files
+            ? null
+            : row.Preview;
+        var win = new QrGeneratorWindow(_qrService, initial, _settings) { Owner = this };
+        win.Show();
+        win.Activate();
     }
 }

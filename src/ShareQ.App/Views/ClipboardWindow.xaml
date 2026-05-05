@@ -130,10 +130,15 @@
                      resizes only the list and the preview — the toolbar stays anchored to the
                      window's right edge and never gets in the way of the resize handle. -->
                 <Grid Grid.Row="2">
+                    <!-- MinWidths kept low so the toolbar (Auto column on the right) is always
+                         guaranteed its ~40 px regardless of how aggressively the user shrinks the
+                         window. The preview column's content (text + image) wraps/scales below
+                         these mins, which is the right trade-off — losing toolbar buttons on
+                         shrink is much worse than a tighter preview. -->
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" MinWidth="280" />
+                        <ColumnDefinition Width="*" MinWidth="160" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition x:Name="PreviewColumn" Width="2*" MinWidth="240" />
+                        <ColumnDefinition x:Name="PreviewColumn" Width="2*" MinWidth="120" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
@@ -214,6 +219,13 @@
                                                             </Style>
                                                         </MenuItem.ItemContainerStyle>
                                                     </MenuItem>
+                                                    <Separator />
+                                                    <!-- Generate QR — only meaningful for text items, but we leave it
+                                                         enabled regardless and let the handler bail out gracefully on
+                                                         non-text rows; keeps the menu shape stable across selection
+                                                         types. -->
+                                                    <MenuItem Header="Generate QR code…"
+                                                              Click="OnGenerateQrFromItemClicked" />
                                                     <Separator />
                                                     <MenuItem Header="Delete"
                                                               Command="{Binding DeleteSelectedCommand}" />
@@ -355,57 +367,71 @@
 
                     <!-- Vertical CopyQ-style icon toolbar — anchored to the window's right edge
                          so the GridSplitter has clear vertical track. Glyphs are Segoe Fluent
-                         Icons (built-in on Win11; Segoe MDL2 Assets on Win10 — same code points). -->
-                    <StackPanel Grid.Column="3"
-                                Orientation="Vertical"
-                                Margin="8,2,0,2"
-                                VerticalAlignment="Top">
-                        <ui:Button Width="32" Height="32" Padding="0"
-                                   Margin="0,0,0,4"
-                                   ToolTip="Paste (Enter)"
-                                   Appearance="Primary"
-                                   Command="{Binding PasteSelectedCommand}">
-                            <TextBlock Text="&#xE77F;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
-                        </ui:Button>
-                        <ui:Button Width="32" Height="32" Padding="0"
-                                   Margin="0,0,0,4"
-                                   ToolTip="Pin / unpin (Ctrl+P)"
-                                   Command="{Binding TogglePinSelectedCommand}">
-                            <TextBlock Text="&#xE718;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
-                        </ui:Button>
-                        <!-- Edit / show-in-explorer hidden (Visibility=Collapsed) when they
-                             don't apply to the current selection — text rows have nothing to
-                             edit, ephemeral entries have no file on disk to reveal. -->
-                        <ui:Button Width="32" Height="32" Padding="0"
-                                   Margin="0,0,0,4"
-                                   ToolTip="Open in editor (image only)"
-                                   Command="{Binding OpenInEditorCommand}"
-                                   Visibility="{Binding IsImageSelected, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Text="&#xE70F;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
-                        </ui:Button>
-                        <ui:Button Width="32" Height="32" Padding="0"
-                                   Margin="0,0,0,4"
-                                   ToolTip="Show in explorer"
-                                   Command="{Binding OpenInExplorerCommand}"
-                                   Visibility="{Binding HasFileOnDisk, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Text="&#xE838;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
-                        </ui:Button>
-                        <!-- Open URL in browser — visible only when the selected text item parses
-                             as an http(s) URL. Glyph: Globe (Segoe Fluent Icons E774). -->
-                        <ui:Button Width="32" Height="32" Padding="0"
-                                   Margin="0,0,0,4"
-                                   ToolTip="Open URL in browser"
-                                   Command="{Binding OpenInBrowserCommand}"
-                                   Visibility="{Binding IsUrlSelected, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Text="&#xE774;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
-                        </ui:Button>
-                        <ui:Button Width="32" Height="32" Padding="0"
-                                   ToolTip="Delete (Del)"
-                                   Appearance="Danger"
-                                   Command="{Binding DeleteSelectedCommand}">
-                            <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
-                        </ui:Button>
-                    </StackPanel>
+                         Icons (built-in on Win11; Segoe MDL2 Assets on Win10 — same code points).
+                         Wrapped in a ScrollViewer so a very short window can scroll the toolbar
+                         instead of clipping the bottom buttons. -->
+                    <ScrollViewer Grid.Column="3"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Margin="8,2,0,2">
+                        <StackPanel Orientation="Vertical" VerticalAlignment="Top">
+                            <ui:Button Width="32" Height="32" Padding="0"
+                                       Margin="0,0,0,4"
+                                       ToolTip="Paste (Enter)"
+                                       Appearance="Primary"
+                                       Command="{Binding PasteSelectedCommand}">
+                                <TextBlock Text="&#xE77F;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
+                            </ui:Button>
+                            <ui:Button Width="32" Height="32" Padding="0"
+                                       Margin="0,0,0,4"
+                                       ToolTip="Pin / unpin (Ctrl+P)"
+                                       Command="{Binding TogglePinSelectedCommand}">
+                                <TextBlock Text="&#xE718;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
+                            </ui:Button>
+                            <!-- Generate QR — opens the live generator pre-filled with the row's
+                                 preview text. Always visible (not selection-conditional) so the
+                                 spot stays muscle-memory-stable; clicking on a non-text row just
+                                 opens an empty editor (handler picks the right behaviour). -->
+                            <ui:Button Width="32" Height="32" Padding="0"
+                                       Margin="0,0,0,4"
+                                       ToolTip="Generate QR code…"
+                                       Click="OnGenerateQrFromItemClicked">
+                                <TextBlock Text="&#xED14;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
+                            </ui:Button>
+                            <!-- Edit / show-in-explorer hidden (Visibility=Collapsed) when they
+                                 don't apply to the current selection — text rows have nothing to
+                                 edit, ephemeral entries have no file on disk to reveal. -->
+                            <ui:Button Width="32" Height="32" Padding="0"
+                                       Margin="0,0,0,4"
+                                       ToolTip="Open in editor (image only)"
+                                       Command="{Binding OpenInEditorCommand}"
+                                       Visibility="{Binding IsImageSelected, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="&#xE70F;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
+                            </ui:Button>
+                            <ui:Button Width="32" Height="32" Padding="0"
+                                       Margin="0,0,0,4"
+                                       ToolTip="Show in explorer"
+                                       Command="{Binding OpenInExplorerCommand}"
+                                       Visibility="{Binding HasFileOnDisk, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="&#xE838;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
+                            </ui:Button>
+                            <!-- Open URL in browser — visible only when the selected text item parses
+                                 as an http(s) URL. Glyph: Globe (Segoe Fluent Icons E774). -->
+                            <ui:Button Width="32" Height="32" Padding="0"
+                                       Margin="0,0,0,4"
+                                       ToolTip="Open URL in browser"
+                                       Command="{Binding OpenInBrowserCommand}"
+                                       Visibility="{Binding IsUrlSelected, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="&#xE774;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
+                            </ui:Button>
+                            <ui:Button Width="32" Height="32" Padding="0"
+                                       ToolTip="Delete (Del)"
+                                       Appearance="Danger"
+                                       Command="{Binding DeleteSelectedCommand}">
+                                <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
+                            </ui:Button>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Grid>
 
                 <!-- ── Footer hint ─────────────────────────────────────────────────────────── -->

@@ -158,6 +158,14 @@ public sealed class TrayIconService : IDisposable
             () => Run<ColorWheelLauncher>(l => _ = l.ShowAsync())));
         tools.Items.Add(BuildMenuItem("Pin to screen…",
             () => Run<PinToScreenLauncher>(p => _ = p.ShowAsync(CancellationToken.None))));
+        tools.Items.Add(BuildMenuItem("QR generator…",
+            () => Run<ShareQ.App.Services.Qr.QrCodeService>(qr =>
+                  Run<ShareQ.Storage.Settings.ISettingsStore>(settings =>
+            {
+                var win = new ShareQ.App.Views.QrGeneratorWindow(qr, null, settings);
+                win.Show();
+                win.Activate();
+            }))));
         menu.Items.Add(tools);
 
         menu.Items.Add(new Separator());
