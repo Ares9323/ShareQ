@@ -22,6 +22,11 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write    # Needed for `vpk upload github` (creates the Release + uploads assets).
+    env:
+      # Node.js 20 is being phased out (full removal 2026-09-16) — opt every JS-based action
+      # in this job onto Node 24 ahead of GitHub's forced flip on 2026-06-02 so the deprecation
+      # warning is gone now and we surface any Node 24 incompat immediately.
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
     steps:
       - name: Checkout

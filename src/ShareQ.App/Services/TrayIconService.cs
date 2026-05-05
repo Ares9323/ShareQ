@@ -35,6 +35,7 @@ public sealed class TrayIconService : IDisposable
     private readonly ISettingsStore _settings;
     private readonly IPipelineProfileStore _profiles;
     private readonly PipelineExecutor _executor;
+    private readonly Hotkeys.HotkeyConfigService _hotkeys;
     private readonly TaskbarIcon _icon;
     private MainWindow? _mainWindow;
     // Click handler bound to the most recently shown toast. Cleared after the toast closes
@@ -46,12 +47,14 @@ public sealed class TrayIconService : IDisposable
         ISettingsStore settings,
         IPipelineProfileStore profiles,
         PipelineExecutor executor,
+        Hotkeys.HotkeyConfigService hotkeys,
         ILogger<TrayIconService> logger)
     {
         _services = services;
         _settings = settings;
         _profiles = profiles;
         _executor = executor;
+        _hotkeys = hotkeys;
         _logger = logger;
         _icon = new TaskbarIcon
         {
@@ -59,6 +62,13 @@ public sealed class TrayIconService : IDisposable
             ToolTipText = "ShareQ",
             Visibility = Visibility.Visible
         };
+
+        // Rebuild the menu whenever the user rebinds a hotkey so the "\tCtrl+Alt+R" suffixes
+        // next to Region / Recording / Color sampler / etc. stay in sync. ContextMenu can be
+        // swapped wholesale — H.NotifyIcon doesn't cache anything off it. Marshal to UI thread
+        // because Changed fires from whichever thread did the rebind.
+        _hotkeys.Changed += (_, _) => Application.Current?.Dispatcher.BeginInvoke(
+            new Action(() => _icon.ContextMenu = BuildMenu()));
 
         _icon.ContextMenu = BuildMenu();
         // Click routing reads from settings on every event so changes apply without restart.
@@ -125,7 +135,7 @@ public sealed class TrayIconService : IDisposable
         capture.Items.Add(BuildMonitorSubmenu());
         capture.Items.Add(BuildMenuItem("Active window",
             () => Run<CaptureCoordinator>(c => _ = c.CaptureActiveWindowAsync(CancellationToken.None))));
-        capture.Items.Add(BuildMenuItem("Region\tCtrl+Alt+R",
+        capture.Items.Add(BuildShortcutMenuItem("Region", DefaultPipelineProfiles.RegionCaptureId,
             () => Run<CaptureCoordinator>(c => _ = c.CaptureRegionAsync(CancellationToken.None))));
         capture.Items.Add(BuildMenuItem("Last region",
             () => Run<CaptureCoordinator>(c => _ = c.CaptureLastRegionAsync(CancellationToken.None))));
@@ -144,12 +154,12 @@ public sealed class TrayIconService : IDisposable
                 () => webView2?.OpenInstallerPage()));
         }
         capture.Items.Add(new Separator());
-        capture.Items.Add(BuildMenuItem("Screen recording\tCtrl+Alt+S",
+        capture.Items.Add(BuildShortcutMenuItem("Screen recording", DefaultPipelineProfiles.RecordScreenMp4Id,
             () => Run<Services.Recording.RecordingCoordinator>(c => _ = c.ToggleAsync(ShareQ.Capture.Recording.RecordingFormat.Mp4, CancellationToken.None))));
-        capture.Items.Add(BuildMenuItem("Screen recording (GIF)\tCtrl+Alt+G",
+        capture.Items.Add(BuildShortcutMenuItem("Screen recording (GIF)", DefaultPipelineProfiles.RecordScreenGifId,
             () => Run<Services.Recording.RecordingCoordinator>(c => _ = c.ToggleAsync(ShareQ.Capture.Recording.RecordingFormat.Gif, CancellationToken.None))));
         capture.Items.Add(new Separator());
-        capture.Items.Add(BuildMenuItem("Color sampler\tCtrl+Shift+P",
+        capture.Items.Add(BuildShortcutMenuItem("Color sampler", DefaultPipelineProfiles.ColorSamplerId,
             () => Run<ScreenColorPickerService>(s => s.PickAtCursor())));
         capture.Items.Add(BuildMenuItem("Color picker…",
             () => Run<ColorWheelLauncher>(l => _ = l.ShowAsync())));
@@ -182,7 +192,7 @@ public sealed class TrayIconService : IDisposable
         menu.Items.Add(tools);
 
         menu.Items.Add(new Separator());
-        menu.Items.Add(BuildMenuItem("Open clipboard\tWin+V",
+        menu.Items.Add(BuildShortcutMenuItem("Open clipboard", DefaultPipelineProfiles.ShowPopupId,
             () =>
             {
                 // Same toggle / capture-foreground / show-and-activate sequence the
@@ -196,7 +206,7 @@ public sealed class TrayIconService : IDisposable
                 Run<TargetWindowTracker>(t => t.CaptureCurrentForeground());
                 Run<ShareQ.App.Views.ClipboardWindow>(w => { w.Show(); w.Activate(); });
             }));
-        menu.Items.Add(BuildMenuItem("Open launcher\tWin+Z",
+        menu.Items.Add(BuildShortcutMenuItem("Open launcher", DefaultPipelineProfiles.OpenLauncherId,
             () =>
             {
                 // Same toggle pattern as OpenLauncherMenuTask: closed → open + activate; open
@@ -208,7 +218,7 @@ public sealed class TrayIconService : IDisposable
                 }
                 Run<ShareQ.App.Views.LauncherWindow>(w => { w.Show(); w.Activate(); });
             }));
-        menu.Items.Add(BuildMenuItem("Toggle incognito\tCtrl+Alt+I",
+        menu.Items.Add(BuildShortcutMenuItem("Toggle incognito", DefaultPipelineProfiles.ToggleIncognitoId,
             () => Run<IncognitoModeService>(s => _ = s.ToggleAsync(CancellationToken.None))));
         menu.Items.Add(new Separator());
         // Three extra entries before "Open screenshot folder" — deep-link into the matching
@@ -345,6 +355,38 @@ public sealed class TrayIconService : IDisposable
     {
         _logger.LogInformation("Quit requested from tray menu");
         Application.Current.Shutdown();
+    }
+
+    /// <summary>Variant of <see cref="BuildMenuItem"/> that fetches the current hotkey for
+    /// <paramref name="profileId"/> and tacks it onto the label as the "\tShortcut" suffix.
+    /// When the hotkey is unbound, only the bare label renders (no trailing whitespace). Lets
+    /// menu items reflect a user-edited binding the next time the menu is built — combined
+    /// with the Changed-handler in the ctor (rebuilds the menu on rebind), the suffix stays
+    /// in sync without a restart.</summary>
+    private MenuItem BuildShortcutMenuItem(string label, string profileId, Action onClick)
+    {
+        var shortcut = LookupShortcut(profileId);
+        var header = string.IsNullOrEmpty(shortcut) ? label : $"{label}\t{shortcut}";
+        return BuildMenuItem(header, onClick);
+    }
+
+    /// <summary>Synchronous lookup of the effective hotkey for a pipeline profile id. The
+    /// underlying SQLite read is sub-millisecond, so blocking the menu-build dispatcher tick
+    /// is fine. Returns the formatted "Ctrl + Alt + R"-style string, or empty when unbound /
+    /// the lookup fails (the menu just renders without a shortcut suffix).</summary>
+    private string LookupShortcut(string profileId)
+    {
+        try
+        {
+            var def = _hotkeys.GetEffectiveAsync(profileId, CancellationToken.None).GetAwaiter().GetResult();
+            if (def.Modifiers == ShareQ.Hotkeys.HotkeyModifiers.None && def.VirtualKey == 0) return string.Empty;
+            return Hotkeys.HotkeyDisplay.Format(def.Modifiers, def.VirtualKey);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Tray menu: failed to resolve shortcut for {Id}", profileId);
+            return string.Empty;
+        }
     }
 
     /// <summary>Build a tray menu entry. Headers can carry a "Label\tShortcut" form (legacy

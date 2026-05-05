@@ -10,6 +10,11 @@ jobs:
   build-and-test:
     runs-on: windows-latest
     timeout-minutes: 15
+    env:
+      # Opt JS-based actions onto Node 24 ahead of GitHub's deprecation of Node 20 (forced flip
+      # 2026-06-02, full removal 2026-09-16). Silences the deprecation warning + surfaces any
+      # Node 24 incompat now rather than at the deadline.
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
     steps:
       - name: Checkout

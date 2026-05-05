@@ -278,8 +278,6 @@ public partial class App : Application
                 // IsVisibleChanged inside the window itself.
                 services.AddSingleton<LauncherWindow>();
 
-                services.AddSingleton<NativeClipboardHistoryProbe>();
-                services.AddSingleton<NativeClipboardHistoryBanner>();
                 services.AddSingleton<IncognitoModeService>();
                 services.AddSingleton<ClipboardIngestionService>();
                 services.AddSingleton<TargetWindowTracker>();
@@ -373,9 +371,6 @@ public partial class App : Application
         var notifier = _host.Services.GetRequiredService<IToastNotifier>();
         incognito.StateChanged += (_, _) =>
             notifier.Show("Incognito mode", incognito.IsActive ? "ON — clipboard items won't be captured" : "OFF — capture resumed");
-
-        var banner = _host.Services.GetRequiredService<NativeClipboardHistoryBanner>();
-        _ = banner.EvaluateAsync(CancellationToken.None);
 
         var tray = _host.Services.GetRequiredService<TrayIconService>();
         var window = _host.Services.GetRequiredService<MainWindow>();
