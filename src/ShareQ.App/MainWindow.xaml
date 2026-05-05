@@ -29,19 +29,17 @@
              previous "Border + separate Rebind button" combo so the whole chip is the affordance,
              which matches what users naturally try first anyway. Hover lifts the background,
              pressed dims it; cursor flips to Hand to advertise the click target. -->
+        <!-- Hotkey chip — same accent-dark resting / accent-light hover treatment as the
+             "Add" button in Clipboard categories. Unbound rows dim the foreground to
+             AccentForegroundDarkBrush so "Click to set hotkey…" reads as a placeholder
+             instead of competing with real shortcuts. -->
         <Style x:Key="HotkeyChipButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="{DynamicResource Surface3Brush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource AccentForegroundDarkBrush}" />
+            <Setter Property="Background" Value="{DynamicResource AccentBackgroundDarkBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBackgroundDarkBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="10,4" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="VerticalAlignment" Value="Center" />
-            <!-- Default Foreground = AccentForegroundBrush ("Foreground Light" in the theme
-                 tab) so the bound shortcut text reads as the user's brand foreground colour.
-                 The DataTrigger below dims it to AccentForegroundDarkBrush when IsAssigned=false
-                 so unbound rows read as a faded "Click to set hotkey…" placeholder instead of
-                 competing with real shortcuts. Both states still flip to white on hover for
-                 affordance. -->
             <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -58,11 +56,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentBackgroundBrush}" />
                                 <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBackgroundBrush}" />
-                                <Setter Property="Foreground" Value="White" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.75" />
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.85" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -224,7 +222,7 @@
                      now where the version / repo links naturally cluster. -->
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Margin="0,0,0,4"
-                           Content="Hotkeys &amp; workflows"
+                           Content="Hotkeys &amp; Workflows"
                            Command="{Binding ShowHotkeysCommand}"
                            Appearance="{Binding IsHotkeysSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
@@ -234,27 +232,27 @@
                            Appearance="{Binding IsUploadersSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Margin="0,0,0,4"
-                           Content="Capture"
-                           Command="{Binding ShowCaptureCommand}"
-                           Appearance="{Binding IsCaptureSelected, Converter={StaticResource BoolToAppearance}}" />
-                <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                           Margin="0,0,0,4"
-                           Content="Categories"
+                           Content="Clipboard Categories"
                            Command="{Binding ShowCategoriesCommand}"
                            Appearance="{Binding IsCategoriesSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Margin="0,0,0,4"
-                           Content="Settings"
+                           Content="Capture Settings"
+                           Command="{Binding ShowCaptureCommand}"
+                           Appearance="{Binding IsCaptureSelected, Converter={StaticResource BoolToAppearance}}" />
+                <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                           Margin="0,0,0,4"
+                           Content="App Settings"
                            Command="{Binding ShowSettingsCommand}"
                            Appearance="{Binding IsSettingsSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Margin="0,0,0,4"
-                           Content="Theme"
+                           Content="App Theme"
                            Command="{Binding ShowThemeCommand}"
                            Appearance="{Binding IsThemeSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                            Margin="0,0,0,4"
-                           Content="Debug"
+                           Content="Debug Console"
                            Command="{Binding ShowDebugCommand}"
                            Appearance="{Binding IsDebugSelected, Converter={StaticResource BoolToAppearance}}" />
                 <ui:Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
@@ -479,7 +477,7 @@
                              pre-tabs flat-list row so muscle memory carries over. -->
                         <DataTemplate x:Key="HotkeyRowTemplate" DataType="{x:Type vm:HotkeyItemViewModel}">
                             <Border Margin="0,0,0,8" Padding="14,10" Background="{DynamicResource Surface1Brush}"
-                                    BorderBrush="{DynamicResource AccentForegroundDarkBrush}" BorderThickness="1" CornerRadius="6">
+                                    BorderThickness="0" CornerRadius="6">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -515,7 +513,7 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Hotkeys" FontSize="20" FontWeight="SemiBold"
+                            <TextBlock Grid.Column="0" Text="Hotkeys &amp; Workflows" FontSize="20" FontWeight="SemiBold"
                                        VerticalAlignment="Center" />
                             <ui:Button Grid.Column="1" Content="Reset all"
                                        Appearance="Danger"
@@ -838,7 +836,7 @@
             <!-- Capture -->
             <StackPanel Visibility="{Binding IsCaptureSelected, Converter={StaticResource BoolToVisibility}}"
                         Margin="24,16,24,16">
-                <TextBlock Text="Capture" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
+                <TextBlock Text="Capture Settings" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
                 <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
                            Text="Defaults applied when triggering captures from the tray menu or hotkeys. The pipeline that runs after each capture is configured under Workflows." />
 
@@ -928,7 +926,7 @@
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="24,16,24,16">
-                <TextBlock Text="Theme" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
+                <TextBlock Text="App Theme" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
                 <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
                            Text="Two colors that flow everywhere ShareQ uses an accent: primary buttons, toggle switches, the pinned-image border, drag-to-reorder indicators, and selected sidebar entries. Edit the hex values to see the changes apply live." />
 
@@ -1160,7 +1158,7 @@
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="24,16,24,16">
-                    <TextBlock Text="Categories" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <TextBlock Text="Clipboard Categories" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
                     <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
                                Text="Categories are buckets for clipboard items. Right-click any item in the popup → Move to → … to file it. Items in deleted categories return to the default 'Clipboard' bucket; pinned items keep their pin." />
 
@@ -1223,7 +1221,7 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:CategoryRowViewModel}">
                                 <Border Background="{DynamicResource Surface1Brush}"
-                                        BorderBrush="{DynamicResource AccentForegroundDarkBrush}" BorderThickness="1" CornerRadius="6"
+                                        BorderThickness="0" CornerRadius="6"
                                         Padding="14,10" Margin="0,0,0,8">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -1374,7 +1372,7 @@
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="24,16,24,16">
-                    <TextBlock Text="Settings" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <TextBlock Text="App Settings" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4" />
                     <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
                                Text="App-level preferences. Toggle behaviours that don't belong on a specific feature page." />
 
@@ -1487,7 +1485,7 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Debug log" FontSize="20" FontWeight="SemiBold"
+                    <TextBlock Grid.Column="0" Text="Debug Console" FontSize="20" FontWeight="SemiBold"
                                VerticalAlignment="Center" />
                     <ui:Button Grid.Column="1" Content="Copy all" Margin="0,0,4,0"
                                Command="{Binding Debug.CopyAllCommand}"

@@ -614,8 +614,26 @@
                                       Margin="0,0,0,6"
                                       ToolTip="Re-render during slider drag (~30 fps) instead of waiting for the drag to settle." />
                         </Grid>
-                        <Border Grid.Row="1" Background="#202020" CornerRadius="4">
-                            <Image Source="{Binding PreviewImage}" Stretch="Uniform" />
+                        <!-- Preview pane. Background follows the theme (Surface1) instead of
+                             hardcoded #202020. Image lives inside a ScrollViewer so the user
+                             can pan once zoomed; LayoutTransform's ScaleTransform handles the
+                             zoom factor (driven by Ctrl+wheel in code-behind). -->
+                        <Border Grid.Row="1" Background="{DynamicResource Surface1Brush}" CornerRadius="4"
+                                ClipToBounds="True">
+                            <ScrollViewer x:Name="PreviewScroller"
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Auto"
+                                          PreviewMouseWheel="OnPreviewWheel"
+                                          PreviewMouseRightButtonDown="OnPreviewRightButtonDown"
+                                          PreviewMouseMove="OnPreviewMouseMove"
+                                          PreviewMouseRightButtonUp="OnPreviewRightButtonUp">
+                                <Image x:Name="PreviewImageHost" Source="{Binding PreviewImage}"
+                                       Stretch="Uniform" Margin="8">
+                                    <Image.LayoutTransform>
+                                        <ScaleTransform x:Name="PreviewScale" ScaleX="1" ScaleY="1" />
+                                    </Image.LayoutTransform>
+                                </Image>
+                            </ScrollViewer>
                         </Border>
                         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
                             <ui:Button Content="Load image…" Margin="0,0,4,0" Click="OnLoadImageClicked" ToolTip="Replace the sample image" />

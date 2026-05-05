@@ -5,7 +5,7 @@ using ShareQ.Hotkeys;
 
 namespace ShareQ.App.Views;
 
-public partial class HotkeyCaptureWindow : Window
+public partial class HotkeyCaptureWindow : Wpf.Ui.Controls.FluentWindow
 {
     // Hook-tracked modifier state. We can't trust GetAsyncKeyState here because we suppress
     // (return 1 from) every keystroke while the dialog is open — the OS skips its kernel-level

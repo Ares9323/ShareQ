@@ -36,6 +36,100 @@ public partial class ImageEffectsWindow : Wpf.Ui.Controls.FluentWindow
         SizeChanged += OnPlacementChanged;
         LocationChanged += OnPlacementChanged;
         StateChanged += OnPlacementChanged;
+        // Auto-fit the preview image to the pane whenever the VM swaps the BitmapImage (initial
+        // load, sample reset, after each effect render). Same flow the clipboard window uses.
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ImageEffectsViewModel.PreviewImage))
+                Dispatcher.BeginInvoke(new Action(FitPreviewToPane), System.Windows.Threading.DispatcherPriority.ContextIdle);
+        };
+    }
+
+    // RMB-pan state for the preview ScrollViewer. Mirrors the clipboard preview pattern:
+    // hold RMB, drag to translate scroll offsets; cursor flips to SizeAll while panning.
+    private bool _isPreviewPanning;
+    private System.Windows.Point _previewPanStart;
+    private double _previewPanScrollH, _previewPanScrollV;
+    private Cursor? _previewPanSavedCursor;
+
+    /// <summary>Wheel: Ctrl+wheel zooms (0.1×..8×, anchor stays under cursor implicitly via
+    /// LayoutTransform), Shift+wheel scrolls horizontally (Windows convention), bare wheel
+    /// falls through to the ScrollViewer for vertical scroll.</summary>
+    private void OnPreviewWheel(object sender, MouseWheelEventArgs e)
+    {
+        var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+        var shift = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+        if (ctrl)
+        {
+            var factor = e.Delta > 0 ? 1.1 : 1.0 / 1.1;
+            var newScale = Math.Clamp(PreviewScale.ScaleX * factor, 0.1, 8.0);
+            if (Math.Abs(newScale - PreviewScale.ScaleX) < 1e-4) return;
+            PreviewScale.ScaleX = newScale;
+            PreviewScale.ScaleY = newScale;
+            e.Handled = true;
+            return;
+        }
+        if (shift)
+        {
+            var step = SystemParameters.WheelScrollLines * 16;
+            var dir = e.Delta > 0 ? -1 : 1;
+            PreviewScroller.ScrollToHorizontalOffset(PreviewScroller.HorizontalOffset + dir * step);
+            e.Handled = true;
+        }
+    }
+
+    private void OnPreviewRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (PreviewScroller is null) return;
+        _isPreviewPanning = true;
+        _previewPanStart = e.GetPosition(PreviewScroller);
+        _previewPanScrollH = PreviewScroller.HorizontalOffset;
+        _previewPanScrollV = PreviewScroller.VerticalOffset;
+        _previewPanSavedCursor = PreviewScroller.Cursor;
+        PreviewScroller.Cursor = Cursors.SizeAll;
+        PreviewScroller.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void OnPreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_isPreviewPanning) return;
+        if (e.RightButton != MouseButtonState.Pressed) return;
+        var current = e.GetPosition(PreviewScroller);
+        PreviewScroller.ScrollToHorizontalOffset(_previewPanScrollH - (current.X - _previewPanStart.X));
+        PreviewScroller.ScrollToVerticalOffset(_previewPanScrollV - (current.Y - _previewPanStart.Y));
+        e.Handled = true;
+    }
+
+    private void OnPreviewRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_isPreviewPanning) return;
+        _isPreviewPanning = false;
+        PreviewScroller.ReleaseMouseCapture();
+        PreviewScroller.Cursor = _previewPanSavedCursor;
+        _previewPanSavedCursor = null;
+        e.Handled = true;
+    }
+
+    /// <summary>Compute the LayoutTransform scale that fits the current PreviewImage into
+    /// the ScrollViewer viewport (no upscale beyond 1× — small images stay 1:1). Reset scroll
+    /// offsets to 0 at the same time so a new render starts from the top-left corner.</summary>
+    private void FitPreviewToPane()
+    {
+        if (_viewModel.PreviewImage is not { } img) return;
+        if (PreviewScroller is null || PreviewScale is null) return;
+        var w = img.PixelWidth; var h = img.PixelHeight;
+        if (w <= 0 || h <= 0) return;
+        var vw = PreviewScroller.ViewportWidth - 20;
+        var vh = PreviewScroller.ViewportHeight - 20;
+        if (vw <= 0 || vh <= 0) return;
+        var fit = Math.Min(vw / w, vh / h);
+        if (fit > 1.0) fit = 1.0;
+        if (fit < 0.1) fit = 0.1;
+        PreviewScale.ScaleX = fit;
+        PreviewScale.ScaleY = fit;
+        PreviewScroller.ScrollToHorizontalOffset(0);
+        PreviewScroller.ScrollToVerticalOffset(0);
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)

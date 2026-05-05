@@ -211,8 +211,20 @@ public sealed class TrayIconService : IDisposable
         menu.Items.Add(BuildMenuItem("Toggle incognito\tCtrl+Alt+I",
             () => Run<IncognitoModeService>(s => _ = s.ToggleAsync(CancellationToken.None))));
         menu.Items.Add(new Separator());
-        menu.Items.Add(BuildMenuItem("Open screenshot folder", OnOpenScreenshotFolder));
-        menu.Items.Add(BuildMenuItem("Settings…", OnOpen));
+        // Three extra entries before "Open screenshot folder" — deep-link into the matching
+        // Settings tabs. Beside the user value (one-click into common tabs), they push the
+        // bottom items lower on screen so the Capture submenu (which auto-flips upward when
+        // the tray menu is anchored at the screen edge) has room to render adjacent to its
+        // parent without the gap WPF-UI's shadow margin would otherwise reveal.
+        menu.Items.Add(BuildMenuItem("App Theme",
+            () => OnOpenSettingsTab(ShareQ.App.ViewModels.SettingsTab.Theme)));
+        menu.Items.Add(BuildMenuItem("Hotkeys",
+            () => OnOpenSettingsTab(ShareQ.App.ViewModels.SettingsTab.Hotkeys)));
+        menu.Items.Add(BuildMenuItem("Capture Settings",
+            () => OnOpenSettingsTab(ShareQ.App.ViewModels.SettingsTab.Capture)));
+        menu.Items.Add(BuildMenuItem("Open Screenshot Folder", OnOpenScreenshotFolder));
+        menu.Items.Add(BuildMenuItem("App Settings",
+            () => OnOpenSettingsTab(ShareQ.App.ViewModels.SettingsTab.Settings)));
         menu.Items.Add(BuildMenuItem("Quit", OnQuit));
         return menu;
     }
@@ -317,6 +329,16 @@ public sealed class TrayIconService : IDisposable
         if (_mainWindow.WindowState == WindowState.Minimized)
             _mainWindow.WindowState = WindowState.Normal;
         _mainWindow.Activate();
+    }
+
+    /// <summary>Open the main window and switch to a specific Settings tab in one go. The
+    /// SettingsViewModel is the MainWindow's DataContext; flipping <see cref="ShareQ.App.ViewModels.SettingsViewModel.SelectedTab"/>
+    /// triggers the tab-strip + page-router bindings.</summary>
+    private void OnOpenSettingsTab(ShareQ.App.ViewModels.SettingsTab tab)
+    {
+        OnOpen();
+        if (_mainWindow?.DataContext is ShareQ.App.ViewModels.SettingsViewModel vm)
+            vm.SelectedTab = tab;
     }
 
     private void OnQuit()
