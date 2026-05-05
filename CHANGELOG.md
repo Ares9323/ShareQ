@@ -76,9 +76,9 @@ on Windows; OAuth uploaders only sign in when bundled credentials are configured
   `%LOCALAPPDATA%\ShareQ\custom-uploaders\`.
 - File-association toggle for `.sxcu`.
 
-### Pipeline & workflows
+### Pipeline and workflows
 - All capture / clipboard / upload flows run as composable pipelines (named "workflows").
-- Steps user-editable in Settings → Hotkeys & workflows: add / remove / reorder / disable.
+- Steps user-editable in Settings → Hotkeys and workflows: add / remove / reorder / disable.
 - Hotkey rebinder via low-level keyboard hook (handles Win+V, Win+Shift+S etc. that
   `RegisterHotKey` can't bind).
 - Built-in profiles: region capture, screen recording, color picker/sampler, pin to screen,
