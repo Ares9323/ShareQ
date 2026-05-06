@@ -41,4 +41,16 @@ public static class ImageEffectLocalizer
         var key = "Param_" + propertyName;
         return Strings.ResourceManager.GetString(key, Culture) ?? fallback;
     }
+
+    /// <summary>Translate a single enum value rendered in a property-grid ComboBox. The lookup
+    /// is by the raw .NET enum name ("TopLeft", "Solid", "DontResize"…) so values shared across
+    /// enums (e.g. "Solid" used by DashStyle and any future style enum) get one translation.
+    /// Effect-specific values not in the resx fall back to <paramref name="fallback"/>, which
+    /// the parameter VM populates via Humanize() — same behaviour as before localisation.</summary>
+    public static string LocalizeEnumValue(string enumValueName, string fallback)
+    {
+        if (string.IsNullOrEmpty(enumValueName)) return fallback;
+        var key = "EnumValue_" + enumValueName;
+        return Strings.ResourceManager.GetString(key, Culture) ?? fallback;
+    }
 }

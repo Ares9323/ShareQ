@@ -84,7 +84,8 @@ public sealed partial class WorkflowStepViewModel : ObservableObject
                     try { options = provider(); }
                     catch { options = Array.Empty<string>(); }
                 }
-                StringParameters.Add(new StringParameterEntry(sp.Key, sp.Label, sp.Placeholder, initial, sp.Picker, options,
+                StringParameters.Add(new StringParameterEntry(sp.Key, sp.Label, sp.Placeholder, initial,
+                    sp.Picker, options, sp.IsEditable, sp.LocalizeOptionsAsEnum,
                     (key, value) => _onStringParameterChanged?.Invoke(this, key, value)));
             }
         }
@@ -230,13 +231,42 @@ public sealed partial class StringParameterEntry : ObservableObject
         string initialValue,
         StringPickerKind picker,
         IReadOnlyList<string>? options,
+        bool isEditable,
+        bool localizeOptionsAsEnum,
         Action<string, string> onChanged)
     {
         Key = key;
         Label = label;
         Placeholder = placeholder;
         Picker = picker;
-        Options = options;
+        IsEditable = isEditable;
+        // Build OptionEntries with Raw/Display pairs. When LocalizeOptionsAsEnum is true the
+        // Display passes through ImageEffectLocalizer (EnumValue_<raw>) — Crop / Rectangle /
+        // … render in the active culture. The empty entry keeps an explicit "(use last)"
+        // label so the user understands what selecting it does — without that, an empty row
+        // looks like a UI glitch.
+        if (options is { Count: > 0 })
+        {
+            var list = new List<OptionEntry>(options.Count);
+            foreach (var raw in options)
+            {
+                string display;
+                if (string.IsNullOrEmpty(raw))
+                {
+                    display = placeholder ?? "(use last)";
+                }
+                else if (localizeOptionsAsEnum)
+                {
+                    display = Services.ImageEffectLocalizer.LocalizeEnumValue(raw, raw);
+                }
+                else
+                {
+                    display = raw;
+                }
+                list.Add(new OptionEntry(raw, display));
+            }
+            OptionEntries = list;
+        }
         _onChanged = onChanged;
         _suppress = true;
         Value = initialValue;
@@ -247,13 +277,15 @@ public sealed partial class StringParameterEntry : ObservableObject
     public string Label { get; }
     public string? Placeholder { get; }
     public StringPickerKind Picker { get; }
-    /// <summary>Optional dropdown source. When non-null and non-empty the editor renders a
-    /// ComboBox (editable so the user can still type a value not in the list — a preset
-    /// the user is about to create / a fallback name).</summary>
-    public IReadOnlyList<string>? Options { get; }
-    public bool HasOptions => Options is { Count: > 0 };
+    public bool IsEditable { get; }
+    /// <summary>Pre-built (Raw, Display) pairs the ComboBox renders. Display is what the user
+    /// sees, Raw is what gets written back to <see cref="Value"/> when the row is selected.</summary>
+    public IReadOnlyList<OptionEntry>? OptionEntries { get; }
+    public bool HasOptions => OptionEntries is { Count: > 0 };
     public bool ShowFileButton => Picker is StringPickerKind.File or StringPickerKind.FileOrFolder;
     public bool ShowFolderButton => Picker is StringPickerKind.Folder or StringPickerKind.FileOrFolder;
+
+    public sealed record OptionEntry(string Raw, string Display);
 
     [ObservableProperty]
     private string _value = string.Empty;

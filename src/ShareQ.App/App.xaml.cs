@@ -378,6 +378,28 @@ public partial class App : Application
         ShareQ.App.ViewModels.WorkflowActionCatalog.OptionsProviders["image_formats"] = () =>
             new[] { string.Empty, "PNG", "JPEG", "BMP", "GIF" };
 
+        // Default-tool dropdown for "Open editor". Empty entry = "use last-used" (whatever the
+        // user last left selected in EditorDefaultsStore); explicit value preselects that tool
+        // on open. List = the EditorTool enum minus the Select pointer (not a drawing tool —
+        // confusingly close to the empty "use last" entry) and Image (one-shot file picker).
+        ShareQ.App.ViewModels.WorkflowActionCatalog.OptionsProviders["editor_tools"] = () =>
+            new[]
+            {
+                string.Empty,
+                nameof(ShareQ.Editor.Tools.EditorTool.Crop),
+                nameof(ShareQ.Editor.Tools.EditorTool.Rectangle),
+                nameof(ShareQ.Editor.Tools.EditorTool.Ellipse),
+                nameof(ShareQ.Editor.Tools.EditorTool.Line),
+                nameof(ShareQ.Editor.Tools.EditorTool.Arrow),
+                nameof(ShareQ.Editor.Tools.EditorTool.Freehand),
+                nameof(ShareQ.Editor.Tools.EditorTool.Text),
+                nameof(ShareQ.Editor.Tools.EditorTool.StepCounter),
+                nameof(ShareQ.Editor.Tools.EditorTool.Blur),
+                nameof(ShareQ.Editor.Tools.EditorTool.Pixelate),
+                nameof(ShareQ.Editor.Tools.EditorTool.Spotlight),
+                nameof(ShareQ.Editor.Tools.EditorTool.SmartEraser),
+            };
+
         var incognito = _host.Services.GetRequiredService<IncognitoModeService>();
         await incognito.LoadAsync(CancellationToken.None);
         var notifier = _host.Services.GetRequiredService<IToastNotifier>();

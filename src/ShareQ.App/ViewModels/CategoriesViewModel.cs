@@ -88,7 +88,16 @@ public sealed partial class CategoryRowViewModel : ObservableObject
         _original = category;
         _owner = owner;
         IsDefault = isDefault;
-        _name = category.Name;
+        // The default ("Clipboard") row is read-only — we can safely show a localised label in
+        // its Name field without ever writing it back to the DB. CanModify=false keeps the
+        // TextBox disabled and the rename code-path is gated on the same flag, so the original
+        // raw Name stays the storage identity.
+        _name = isDefault
+            ? Resources.Strings.ResourceManager.GetString(
+                  "Clipboard_DefaultCategory",
+                  Markup.LocalizedStrings.Instance.Culture ?? System.Globalization.CultureInfo.CurrentUICulture)
+              ?? category.Name
+            : category.Name;
         _icon = category.Icon ?? string.Empty;
         _maxItems = category.MaxItems;
         _autoCleanupAfter = category.AutoCleanupAfter;

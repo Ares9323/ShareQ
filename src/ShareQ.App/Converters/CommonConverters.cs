@@ -12,6 +12,20 @@ public sealed class BoolToAppearanceConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => Binding.DoNothing;
 }
 
+/// <summary>Translates an enum value to its localised display label via the same `EnumValue_<Name>`
+/// resx lookup the property-grid combos use. ConvertBack is a no-op since DisplayMemberPath /
+/// item-template usage is one-way (the SelectedItem stays the raw enum value).</summary>
+public sealed class EnumValueDisplayConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is null) return string.Empty;
+        var raw = value.ToString() ?? string.Empty;
+        return Services.ImageEffectLocalizer.LocalizeEnumValue(raw, raw);
+    }
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => Binding.DoNothing;
+}
+
 public sealed class BoolToVisibilityConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)

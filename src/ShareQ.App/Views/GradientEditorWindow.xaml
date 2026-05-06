@@ -5,7 +5,7 @@
                  xmlns:vm="clr-namespace:ShareQ.App.ViewModels.ImageEffects"
                  xmlns:drawing="clr-namespace:ShareQ.ImageEffects.Drawing;assembly=ShareQ.ImageEffects"
                  xmlns:Markup="clr-namespace:ShareQ.App.Markup"
-                 Title="ShareQ - Gradient editor"
+                 Title="{Markup:Loc GradientEditor_TitleFull}"
                  Width="900" Height="560"
                  MinWidth="780" MinHeight="480"
                  WindowStartupLocation="CenterOwner"
@@ -75,7 +75,7 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <ui:TitleBar Grid.Row="0" Title="Gradient editor" />
+            <ui:TitleBar Grid.Row="0" Title="{Markup:Loc GradientEditor_Title}" />
 
             <Grid Grid.Row="1" Margin="12,8,12,12">
                 <Grid.ColumnDefinitions>
@@ -96,14 +96,14 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" Text="Stops" Style="{StaticResource HeaderText}" />
+                        <TextBlock Grid.Row="0" Text="{Markup:Loc GradientEditor_Stops}" Style="{StaticResource HeaderText}" />
                         <!-- Compact toolbar — just add / remove. The destructive op uses Danger
                              appearance and is gated to ≥2 remaining stops in the VM. -->
                         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,6">
-                            <ui:Button Margin="0,0,4,0" Command="{Binding AddStopCommand}" ToolTip="Add stop">
+                            <ui:Button Margin="0,0,4,0" Command="{Binding AddStopCommand}" ToolTip="{Markup:Loc GradientEditor_TooltipAddStop}">
                                 <TextBlock Text="&#xF067;" Style="{StaticResource GlyphTextBlock}" />
                             </ui:Button>
-                            <ui:Button Appearance="Danger" Command="{Binding RemoveStopCommand}" ToolTip="Remove selected stop">
+                            <ui:Button Appearance="Danger" Command="{Binding RemoveStopCommand}" ToolTip="{Markup:Loc GradientEditor_TooltipRemoveStop}">
                                 <TextBlock Text="&#xF068;" Style="{StaticResource GlyphTextBlock}" />
                             </ui:Button>
                         </StackPanel>
@@ -128,7 +128,7 @@
                                                 BorderBrush="{DynamicResource AccentForegroundDarkBrush}" BorderThickness="1"
                                                 Background="{StaticResource CheckerBrush}"
                                                 Cursor="Hand"
-                                                ToolTip="Click to change colour"
+                                                ToolTip="{Markup:Loc GradientEditor_TooltipChangeColor}"
                                                 MouseLeftButtonDown="OnStopSwatchMouseDown">
                                             <Rectangle Fill="{Binding ColorBrush}" RadiusX="2" RadiusY="2" />
                                         </Border>
@@ -147,14 +147,14 @@
 
                         <!-- Secondary actions — operate on the whole list rather than one stop. -->
                         <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0">
-                            <ui:Button Content="Distribute" Margin="0,0,4,0"
+                            <ui:Button Content="{Markup:Loc GradientEditor_Distribute}" Margin="0,0,4,0"
                                        Command="{Binding DistributeEvenlyCommand}"
-                                       ToolTip="Spread stops evenly across 0..100%" />
-                            <ui:Button Content="Reverse"
+                                       ToolTip="{Markup:Loc GradientEditor_TooltipDistribute}" />
+                            <ui:Button Content="{Markup:Loc GradientEditor_Reverse}"
                                        Command="{Binding ReverseCommand}"
-                                       ToolTip="Mirror stop locations 0↔100" />
+                                       ToolTip="{Markup:Loc GradientEditor_TooltipReverse}" />
                         </StackPanel>
-                        <ui:Button Grid.Row="4" Content="Pick color for selected stop…"
+                        <ui:Button Grid.Row="4" Content="{Markup:Loc GradientEditor_PickColor}"
                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                    Margin="0,6,0,0" Click="OnPickStopColorClicked" />
                     </Grid>
@@ -170,14 +170,14 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="Preview" Style="{StaticResource HeaderText}" />
+                        <TextBlock Grid.Row="0" Text="{Markup:Loc GradientEditor_Preview}" Style="{StaticResource HeaderText}" />
                         <Border Grid.Row="1" Background="#202020" CornerRadius="4">
                             <Grid Margin="6">
                                 <Rectangle Fill="{StaticResource CheckerBrush}" />
                                 <Rectangle Fill="{Binding PreviewBrush}" />
                             </Grid>
                         </Border>
-                        <TextBlock Grid.Row="2" Text="Direction" Style="{StaticResource HeaderText}"
+                        <TextBlock Grid.Row="2" Text="{Markup:Loc GradientEditor_Direction}" Style="{StaticResource HeaderText}"
                                    Margin="0,12,0,6" />
                         <ComboBox Grid.Row="3"
                                   SelectedItem="{Binding Direction, Mode=TwoWay}">
@@ -189,6 +189,14 @@
                                     <x:Static Member="drawing:LinearGradientMode.BackwardDiagonal" />
                                 </x:Array>
                             </ComboBox.ItemsSource>
+                            <!-- Render the enum value through EnumValueDisplay so each row reads
+                                 in the active culture. SelectedItem stays the raw enum value so
+                                 the binding to GradientInfo.Type round-trips unchanged. -->
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Converter={StaticResource EnumValueDisplay}}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
                         </ComboBox>
                     </Grid>
                 </Border>
@@ -200,7 +208,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="Presets" Style="{StaticResource HeaderText}" />
+                        <TextBlock Grid.Row="0" Text="{Markup:Loc GradientEditor_Presets}" Style="{StaticResource HeaderText}" />
                         <ListBox Grid.Row="1"
                                  x:Name="PresetsList"
                                  ItemsSource="{Binding Presets}"

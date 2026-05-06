@@ -123,9 +123,16 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
             var step = _storage[i];
             var descriptor = WorkflowActionCatalog.LookupForStep(_descriptors, step);
             if (descriptor?.IsPlumbing == true) continue; // hidden plumbing
-            var display = descriptor?.DisplayName ?? step.TaskId;
-            var description = descriptor?.Description ?? $"Custom task ({step.TaskId})";
-            var category = descriptor?.Category;
+            // Localised wrappers for the editor list. Identity (TaskId, descriptor.Category) is
+            // unchanged so DataContext lookups keep working; only the rendered strings flip
+            // through the resx.
+            var display = Services.WorkflowActionLocalizer.LocalizeTitle(
+                step.TaskId, descriptor?.DisplayName ?? step.TaskId, descriptor?.LocalizationKey);
+            var description = Services.WorkflowActionLocalizer.LocalizeDescription(
+                step.TaskId, descriptor?.Description ?? $"Custom task ({step.TaskId})", descriptor?.LocalizationKey);
+            var category = descriptor?.Category is { } cat
+                ? Services.WorkflowActionLocalizer.LocalizeCategory(cat, cat)
+                : null;
             var parameter = descriptor?.IntParameter;
             var parameterValue = parameter is null
                 ? 0
@@ -152,6 +159,56 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
                     stringValues[sp.Key] = (string?)step.Config?[sp.Key] ?? sp.DefaultValue;
                 }
             }
+
+            // Seed missing defaults into step.Config so the runtime task reads what the user
+            // sees in the dropdown. Without this, a built-in profile seeded before the catalog
+            // grew a parameter would render the descriptor's DefaultValue in the UI but
+            // step.Config would still lack the key — the task then falls back to its own
+            // hardcoded default (or worse, to "last used" semantics) and the user-visible
+            // value disagrees with the executed value. Seeding once at sync time also covers
+            // the case where the user picks the already-shown value from the combo: that
+            // selection doesn't fire PropertyChanged because Value is unchanged.
+            if (descriptor is not null
+                && (descriptor.BoolParameters is { Count: > 0 } || descriptor.StringParameters is { Count: > 0 }))
+            {
+                var configObj = step.Config as JsonObject ?? (step.Config is null ? new JsonObject() : null);
+                var changed = false;
+                if (configObj is not null && step.Config is null) changed = true;
+                if (configObj is not null && descriptor.BoolParameters is { } bps)
+                {
+                    foreach (var bp in bps)
+                    {
+                        if (configObj.ContainsKey(bp.Key)) continue;
+                        configObj[bp.Key] = JsonValue.Create(boolValues![bp.Key]);
+                        changed = true;
+                    }
+                }
+                if (configObj is not null && descriptor.StringParameters is { } sps)
+                {
+                    foreach (var sp in sps)
+                    {
+                        if (configObj.ContainsKey(sp.Key)) continue;
+                        configObj[sp.Key] = JsonValue.Create(stringValues![sp.Key]);
+                        changed = true;
+                    }
+                }
+                if (changed)
+                {
+                    _storage[i] = step with { Config = configObj };
+                    step = _storage[i];
+                    _pendingSeedPersist = true;
+                }
+            }
+            // Localise parameter labels. The catalog entries are immutable records, so we
+            // build a fresh collection where each entry's Label is swapped for its translation
+            // (with the original Label as fallback). Keys, defaults, picker / options stay
+            // intact — only the user-facing label flips.
+            var localizedBools = descriptor?.BoolParameters?.Select(bp =>
+                bp with { Label = Services.WorkflowActionLocalizer.LocalizeParameter(step.TaskId, bp.Key, bp.Label) })
+                .ToList();
+            var localizedStrings = descriptor?.StringParameters?.Select(sp =>
+                sp with { Label = Services.WorkflowActionLocalizer.LocalizeParameter(step.TaskId, sp.Key, sp.Label) })
+                .ToList();
             Items.Add(new WorkflowStepViewModel(
                 storageIndex: i,
                 taskId: step.TaskId,
@@ -161,9 +218,9 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
                 initiallyEnabled: step.Enabled,
                 parameter: parameter,
                 parameterValue: parameterValue,
-                boolParameters: descriptor?.BoolParameters,
+                boolParameters: localizedBools,
                 boolParameterValues: boolValues,
-                stringParameters: descriptor?.StringParameters,
+                stringParameters: localizedStrings,
                 stringParameterValues: stringValues,
                 onEnabledChanged: (item, value)   => _ = OnEnabledChangedAsync(item, value),
                 onMove:           (item, delta)   => _ = OnMoveAsync(item, delta),
@@ -173,7 +230,19 @@ public sealed partial class WorkflowEditorViewModel : ObservableObject
                 onStringParameterChanged: (item, key, value) => _ = OnStringParameterChangedAsync(item, key, value)));
         }
         UpdateMoveFlags();
+        // If we filled in any missing default values into step.Config above, flush the change
+        // to disk so subsequent runs (and other surfaces reading the profile straight from the
+        // store) see the same values the editor renders.
+        if (_pendingSeedPersist && !_isReloading && _profileId is not null)
+        {
+            _pendingSeedPersist = false;
+            _ = PersistAsync();
+        }
     }
+
+    /// <summary>Set by <see cref="SyncItemsFromStorage"/> when it patches missing default
+    /// parameter values into a step's Config. Cleared after the persist runs.</summary>
+    private bool _pendingSeedPersist;
 
     private async Task OnEnabledChangedAsync(WorkflowStepViewModel item, bool value)
     {

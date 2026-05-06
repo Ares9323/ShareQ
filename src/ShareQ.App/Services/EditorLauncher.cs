@@ -110,7 +110,16 @@ public sealed class EditorLauncher
     /// steps (upload, copy-image, save) see it. Returns the edited PNG bytes on save, or null
     /// when the user cancelled — in that case the caller keeps the original bytes.
     /// </summary>
-    public async Task<byte[]?> EditAsync(byte[] sourcePngBytes, CancellationToken cancellationToken)
+    public Task<byte[]?> EditAsync(byte[] sourcePngBytes, CancellationToken cancellationToken)
+        => EditAsync(sourcePngBytes, fullscreen: false, defaultTool: null, cancellationToken);
+
+    /// <summary>Same flow as the simple <see cref="EditAsync(byte[], CancellationToken)"/>,
+    /// plus optional pipeline knobs: <paramref name="fullscreen"/> places the editor on the
+    /// active monitor and forces fit-to-viewport, and <paramref name="defaultTool"/> preselects
+    /// a specific drawing tool ("Crop", "Rectangle", …) on open — winning over whatever the
+    /// user last left selected. <paramref name="defaultTool"/> = null / empty falls back to
+    /// the persisted <see cref="EditorDefaults"/> ("last used" semantics).</summary>
+    public async Task<byte[]?> EditAsync(byte[] sourcePngBytes, bool fullscreen, string? defaultTool, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sourcePngBytes);
         if (sourcePngBytes.Length == 0) return null;
@@ -120,11 +129,27 @@ public sealed class EditorLauncher
         ColorSwatchButton.OnColorPicked = c => _ = _recentsStore.PushAsync(c, CancellationToken.None);
 
         var defaults = await _defaultsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        // Workflow override wins over the last-used persisted default. Bad / unknown enum
+        // values fall through silently — the editor keeps the persisted last-used so a stale
+        // workflow config doesn't lock the user out of a usable tool.
+        var resolvedTool = defaults.Tool;
+        if (!string.IsNullOrWhiteSpace(defaultTool)
+            && Enum.TryParse<ShareQ.Editor.Tools.EditorTool>(defaultTool, ignoreCase: true, out var parsedTool))
+        {
+            resolvedTool = parsedTool;
+        }
+        _logger.LogInformation("EditorLauncher.EditAsync: opening with tool={Tool} (lastUsed={LastUsed}, override='{Override}')",
+            resolvedTool, defaults.Tool, defaultTool ?? "(none)");
 
         // Editor is WPF — must be created and shown on the UI thread. The pipeline runs on a
-        // background thread, so dispatch.
+        // background thread, so we marshal the show + the post-show snapshot of editor state
+        // through the dispatcher; the persistence call afterwards happens off the dispatcher
+        // thread (it's just SQLite IO via SettingsStore).
         var dispatcher = System.Windows.Application.Current.Dispatcher;
-        var resultTcs = new TaskCompletionSource<byte[]?>();
+        EditorDefaults? snapshot = null;
+        bool wasSaved = false;
+        byte[]? exportedPng = null;
+        int exportW = 0, exportH = 0;
 
         await dispatcher.InvokeAsync(() =>
         {
@@ -135,39 +160,55 @@ public sealed class EditorLauncher
             vm.OutlineColor = defaults.Outline;
             vm.FillColor = defaults.Fill;
             vm.StrokeWidth = defaults.StrokeWidth;
-            vm.CurrentTool = defaults.Tool;
+            vm.CurrentTool = resolvedTool;
             vm.CurrentTextStyle = defaults.TextStyle;
             vm.FreehandSmoothDefault = defaults.FreehandSmooth;
             vm.FreehandEndArrowDefault = defaults.FreehandEndArrow;
             vm.ResetStepCounter();
             window.Owner = System.Windows.Application.Current.MainWindow;
+            if (fullscreen)
+            {
+                // Active monitor = the one currently under the cursor. Falls back to the primary
+                // when the cursor sits in a multi-monitor gap (rare). EnableFullscreen positions
+                // + maximises the editor and flips its initial fit pass to "fit-to-viewport".
+                var monitor = ShareQ.Capture.MonitorEnumeration.GetMonitorUnderCursor();
+                if (monitor is not null)
+                    window.EnableFullscreen(monitor.X, monitor.Y, monitor.Width, monitor.Height);
+            }
             window.ShowDialog();
 
-            _ = _defaultsStore.SaveAsync(
-                new EditorDefaults(vm.OutlineColor, vm.FillColor, vm.StrokeWidth, vm.CurrentTool, vm.CurrentTextStyle,
-                    vm.FreehandSmoothDefault, vm.FreehandEndArrowDefault),
-                CancellationToken.None);
-
-            if (!window.Saved)
+            // Snapshot whatever the user left selected. Done INSIDE the dispatcher tick because
+            // CurrentTool / *Color etc. are DependencyProperty-adjacent and reading them from a
+            // pool thread would race the WPF binding system.
+            snapshot = new EditorDefaults(vm.OutlineColor, vm.FillColor, vm.StrokeWidth, vm.CurrentTool, vm.CurrentTextStyle,
+                vm.FreehandSmoothDefault, vm.FreehandEndArrowDefault);
+            wasSaved = window.Saved;
+            if (wasSaved)
             {
-                resultTcs.SetResult(null);
-                return;
+                var canvasHost = (Grid)window.FindName("CanvasHost")!;
+                (exportW, exportH) = ResolveExportPixels(canvasHost);
+                exportedPng = CanvasPngExporter.Export(canvasHost, exportW, exportH);
             }
-
-            var canvasHost = (Grid)window.FindName("CanvasHost")!;
-            var (exportW, exportH) = ResolveExportPixels(canvasHost);
-            var pngBytes = CanvasPngExporter.Export(canvasHost, exportW, exportH);
-            // EditAsync feeds the pipeline (upload / save-to-file / etc.), so the bytes need to
-            // match the globally-chosen format the same way capture does — otherwise a JPEG
-            // user would see PNGs come out of "Open editor before upload" while every other
-            // capture path produces JPEGs.
-            var edited = EncodeForGlobalFormatAsync(pngBytes, cancellationToken)
-                .GetAwaiter().GetResult();
-            _logger.LogInformation("EditorLauncher.EditAsync: returning {Bytes} edited bytes ({W}×{H})", edited.Length, exportW, exportH);
-            resultTcs.SetResult(edited);
         }).Task.ConfigureAwait(false);
 
-        return await resultTcs.Task.ConfigureAwait(false);
+        // Persist the editor defaults BEFORE returning so a subsequent EditAsync call (or any
+        // other surface that reads via LoadAsync) sees the new value. The previous fire-and-
+        // forget meant a quick re-open could read the old tool while the SQLite write was
+        // still in flight.
+        if (snapshot is not null)
+        {
+            await _defaultsStore.SaveAsync(snapshot, CancellationToken.None).ConfigureAwait(false);
+            _logger.LogInformation("EditorLauncher.EditAsync: persisted tool={Tool} on close", snapshot.Tool);
+        }
+
+        if (!wasSaved || exportedPng is null) return null;
+        // EditAsync feeds the pipeline (upload / save-to-file / etc.), so the bytes need to
+        // match the globally-chosen format the same way capture does — otherwise a JPEG user
+        // would see PNGs come out of "Open editor before upload" while every other capture
+        // path produces JPEGs.
+        var edited = await EncodeForGlobalFormatAsync(exportedPng, cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("EditorLauncher.EditAsync: returning {Bytes} edited bytes ({W}×{H})", edited.Length, exportW, exportH);
+        return edited;
     }
 
     /// <summary>Re-encode the editor's PNG export into the user's globally-configured image

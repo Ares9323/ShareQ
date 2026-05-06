@@ -46,7 +46,16 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
         MovableCategories.Clear();
         foreach (var c in list)
         {
-            var tab = new CategoryTab(c.Name, c.Name, c.Icon, IsActive: c.Name == ActiveCategory);
+            // The default seeded bucket is named "Clipboard" in the DB (Migration001) and that
+            // identity is what the storage layer references. For UI purposes we swap in the
+            // localised label; user-renamed or user-created categories keep their stored name
+            // since those reflect the user's own choice.
+            var display = string.Equals(c.Name, ShareQ.Storage.Items.Category.Default, StringComparison.Ordinal)
+                ? Resources.Strings.ResourceManager.GetString(
+                      "Clipboard_DefaultCategory",
+                      Markup.LocalizedStrings.Instance.Culture ?? System.Globalization.CultureInfo.CurrentUICulture) ?? c.Name
+                : c.Name;
+            var tab = new CategoryTab(c.Name, display, c.Icon, IsActive: c.Name == ActiveCategory);
             Categories.Add(tab);
             MovableCategories.Add(tab);
         }

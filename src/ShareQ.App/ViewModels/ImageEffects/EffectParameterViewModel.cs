@@ -230,7 +230,12 @@ public sealed partial class EffectParameterViewModel : ObservableObject
         return brush;
     }
 
-    public ObservableCollection<string> EnumOptions { get; } = new();
+    /// <summary>Pair of (raw enum name, localised display name) so the ComboBox can show
+    /// translations while the bound SelectedValue stays the English enum name (round-trips
+    /// through .sxie / store unchanged).</summary>
+    public sealed record EnumOption(string Raw, string Display);
+
+    public ObservableCollection<EnumOption> EnumOptions { get; } = new();
 
     public EffectParameterViewModel(ImageEffect effect, PropertyInfo property)
     {
@@ -273,8 +278,11 @@ public sealed partial class EffectParameterViewModel : ObservableObject
                 }
                 break;
             case EffectParameterKind.Enum:
-                foreach (var name in Enum.GetNames(property.PropertyType)) EnumOptions.Add(name);
-                _enumValue = current?.ToString() ?? EnumOptions.FirstOrDefault();
+                foreach (var name in Enum.GetNames(property.PropertyType))
+                    EnumOptions.Add(new EnumOption(
+                        name,
+                        Services.ImageEffectLocalizer.LocalizeEnumValue(name, Humanize(name))));
+                _enumValue = current?.ToString() ?? EnumOptions.FirstOrDefault()?.Raw;
                 break;
             case EffectParameterKind.Text:
             case EffectParameterKind.FilePath:

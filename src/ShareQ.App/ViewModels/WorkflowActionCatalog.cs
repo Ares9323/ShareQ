@@ -39,7 +39,16 @@ public sealed record StringParameter(
     string DefaultValue,
     string? Placeholder = null,
     StringPickerKind Picker = StringPickerKind.None,
-    string? OptionsKey = null);
+    string? OptionsKey = null,
+    /// <summary>When false the editor renders a pure selector (no typing). Defaults to true
+    /// for the legacy "preset_name"-style parameters where the user can name a preset that
+    /// doesn't exist yet. Pure selectors (image format, editor tool) set this to false.</summary>
+    bool IsEditable = true,
+    /// <summary>When true, dropdown labels are pulled from the EnumValue_&lt;raw&gt; resx
+    /// keys via <see cref="Services.ImageEffectLocalizer.LocalizeEnumValue"/>. The Value
+    /// stored in step.Config remains the raw enum name so .sxie / DB round-trip stays
+    /// stable.</summary>
+    bool LocalizeOptionsAsEnum = false);
 
 /// <summary>One entry in the "+ Add step" picker for workflows. Maps a pipeline task id to
 /// human-readable metadata + a default config to apply when the user adds the action.</summary>
@@ -62,7 +71,12 @@ public sealed record WorkflowActionDescriptor(
     /// <summary>Optional list of free-form text inputs rendered on the step row (paths, args,
     /// shell commands). Each entry's <see cref="StringParameter.Key"/> is the JSON property
     /// the text box writes to.</summary>
-    IReadOnlyList<StringParameter>? StringParameters = null);
+    IReadOnlyList<StringParameter>? StringParameters = null,
+    /// <summary>Override key for resx lookups (Title + Description). Use when multiple
+    /// descriptors share the same <see cref="TaskId"/> (e.g. upload-by-category, press-key
+    /// Enter/Tab, record-screen mp4/gif) so each variant can have a distinct translation.
+    /// When null the helper falls back to a sanitised TaskId.</summary>
+    string? LocalizationKey = null);
 
 public static class WorkflowActionCatalog
 {
@@ -104,13 +118,15 @@ public static class WorkflowActionCatalog
             "Start/stop screen recording (mp4)",
             "Toggle FFmpeg-driven screen recording in mp4 format. First invocation starts, second stops and produces the file.",
             "Capture",
-            DefaultConfigJson: "{\"format\":\"mp4\"}"),
+            DefaultConfigJson: "{\"format\":\"mp4\"}",
+            LocalizationKey: "shareq_record_screen_mp4"),
 
         new("shareq.record-screen",
             "Start/stop screen recording (gif)",
             "Toggle FFmpeg-driven screen recording in animated GIF format. First invocation starts, second stops and produces the file.",
             "Capture",
-            DefaultConfigJson: "{\"format\":\"gif\"}"),
+            DefaultConfigJson: "{\"format\":\"gif\"}",
+            LocalizationKey: "shareq_record_screen_gif"),
 
         new("shareq.color-sampler",
             "Color sampler",
@@ -146,7 +162,18 @@ public static class WorkflowActionCatalog
         new("shareq.open-editor-before-upload",
             "Open editor",
             "Pause the pipeline and open the annotation editor on the captured bytes. On save, subsequent steps see the edited image.",
-            "Editor"),
+            "Editor",
+            DefaultConfigJson: "{\"fullscreen\":false,\"default_tool\":\"Crop\"}",
+            BoolParameters: new[]
+            {
+                // Fullscreen on the active monitor (the one currently under the cursor) +
+                // force fit-to-viewport so the image fills the window regardless of size. Off
+                // by default to keep the legacy windowed behaviour for existing presets.
+                new BoolParameter("fullscreen", "Open fullscreen on active monitor (fit to screen)", false),
+            },
+            StringParameters: [new StringParameter("default_tool", "Default tool", "Crop",
+                Placeholder: "(use last)", OptionsKey: "editor_tools",
+                IsEditable: false, LocalizeOptionsAsEnum: true)]),
 
         new("shareq.apply-image-effects-preset",
             "Apply image effects preset",
@@ -164,7 +191,8 @@ public static class WorkflowActionCatalog
             "Write the current bytes to disk under the configured capture folder (Settings → Capture). 'Format' is optional: leave empty to keep whatever's already in the bag (the global capture format), or pick one to force a re-encode for this step.",
             "I/O",
             StringParameters: [new StringParameter("format", "Format", string.Empty,
-                Placeholder: "(use bag format)", OptionsKey: "image_formats")]),
+                Placeholder: "(use bag format)", OptionsKey: "image_formats",
+                IsEditable: false)]),
 
         new("shareq.add-to-history",
             "Add to clipboard history",
@@ -187,13 +215,15 @@ public static class WorkflowActionCatalog
             "Press Enter",
             "Send a single Enter keystroke to the foreground window. Useful as a separator between paste steps when chaining clipboard items onto consecutive lines.",
             "Clipboard",
-            DefaultConfigJson: "{\"key\":\"enter\"}"),
+            DefaultConfigJson: "{\"key\":\"enter\"}",
+            LocalizationKey: "shareq_press_key_enter"),
 
         new("shareq.press-key",
             "Press Tab",
             "Send a single Tab keystroke to the foreground window — handy for moving between fields between paste steps.",
             "Clipboard",
-            DefaultConfigJson: "{\"key\":\"tab\"}"),
+            DefaultConfigJson: "{\"key\":\"tab\"}",
+            LocalizationKey: "shareq_press_key_tab"),
 
         new("shareq.delay",
             "Delay",
@@ -212,31 +242,36 @@ public static class WorkflowActionCatalog
             "Upload to selected image uploaders",
             "Run every uploader the user has selected for the image category (Settings → Plugins → image).",
             "Upload",
-            DefaultConfigJson: "{\"category\":\"image\"}"),
+            DefaultConfigJson: "{\"category\":\"image\"}",
+            LocalizationKey: "shareq_upload_image"),
 
         new("shareq.upload",
             "Upload to selected file uploaders",
             "Run every uploader the user has selected for the file category (Settings → Plugins → file).",
             "Upload",
-            DefaultConfigJson: "{\"category\":\"file\"}"),
+            DefaultConfigJson: "{\"category\":\"file\"}",
+            LocalizationKey: "shareq_upload_file"),
 
         new("shareq.upload",
             "Upload to selected text uploaders",
             "Run every uploader the user has selected for the text category (Settings → Plugins → text). paste.rs, Pastebin, Gist, plus any AnyFile destination.",
             "Upload",
-            DefaultConfigJson: "{\"category\":\"text\"}"),
+            DefaultConfigJson: "{\"category\":\"text\"}",
+            LocalizationKey: "shareq_upload_text"),
 
         new("shareq.upload",
             "Upload to selected video uploaders",
             "Run every uploader the user has selected for the video category (Settings → Plugins → video).",
             "Upload",
-            DefaultConfigJson: "{\"category\":\"video\"}"),
+            DefaultConfigJson: "{\"category\":\"video\"}",
+            LocalizationKey: "shareq_upload_video"),
 
         new("shareq.upload",
             "Shorten URL via selected URL shorteners",
             "Run every URL shortener the user has selected (Settings → Uploaders → URL). is.gd / v.gd are bundled. Input must be a valid absolute URL — the shorteners reject anything else.",
             "Upload",
-            DefaultConfigJson: "{\"category\":\"url\"}"),
+            DefaultConfigJson: "{\"category\":\"url\"}",
+            LocalizationKey: "shareq_upload_url"),
 
         new("shareq.upload-clipboard-text",
             "Read text from clipboard",

@@ -40,7 +40,44 @@ public sealed class OpenEditorBeforeUploadTask : IPipelineTask
         }
         if (bytes.Length == 0) return;
 
-        var edited = await _editor.EditAsync(bytes, cancellationToken).ConfigureAwait(false);
+        // Pipeline knobs:
+        //   - 'fullscreen' → editor maximises on the active monitor + forces fit-to-viewport.
+        //   - 'default_tool' → preselects a specific tool on open. Empty/null → use last-used.
+        // Three-tier fallback for default_tool so the user-visible dropdown ALWAYS reflects the
+        // tool the editor will actually open with, regardless of whether step.Config has the
+        // key persisted yet:
+        //   1. step.Config["default_tool"] (explicit user choice or DefaultConfigJson on add)
+        //   2. catalog descriptor's StringParameter.DefaultValue (covers built-in profiles
+        //      seeded before this parameter existed — the UI dropdown shows DefaultValue, the
+        //      task now reads the same value)
+        //   3. null → EditorLauncher falls through to EditorDefaultsStore (last-used)
+        var fullscreen = config?["fullscreen"]?.GetValue<bool>() ?? false;
+        // Distinguish three states for the default_tool key:
+        //   - key absent      → the workflow predates this parameter; fall back to the catalog
+        //                       descriptor's DefaultValue ("Crop") so legacy presets still get
+        //                       a sensible override.
+        //   - key present, "" → the user explicitly picked "(use last)" from the dropdown; do
+        //                       NOT override — let EditorLauncher fall through to the persisted
+        //                       last-used tool.
+        //   - key present, X  → explicit override; pass X to the launcher.
+        string? defaultTool;
+        var hasKey = config is JsonObject obj && obj.ContainsKey("default_tool");
+        if (hasKey)
+        {
+            try { defaultTool = config!["default_tool"]?.GetValue<string>() ?? string.Empty; }
+            catch { defaultTool = string.Empty; /* legacy non-string */ }
+        }
+        else
+        {
+            var catalogDescriptor = ShareQ.App.ViewModels.WorkflowActionCatalog.All
+                .FirstOrDefault(d => d.TaskId == TaskId);
+            var catalogParam = catalogDescriptor?.StringParameters?
+                .FirstOrDefault(p => string.Equals(p.Key, "default_tool", StringComparison.Ordinal));
+            defaultTool = catalogParam?.DefaultValue;
+        }
+        _logger.LogDebug("OpenEditorBeforeUploadTask: fullscreen={Fullscreen} defaultTool='{DefaultTool}'",
+            fullscreen, defaultTool ?? "(null)");
+        var edited = await _editor.EditAsync(bytes, fullscreen, defaultTool, cancellationToken).ConfigureAwait(false);
         if (edited is null)
         {
             _logger.LogInformation("OpenEditorBeforeUploadTask: user cancelled; keeping original bytes");

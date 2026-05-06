@@ -288,7 +288,7 @@
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0" Style="{StaticResource PanelHeader}"
                                    Margin="0,0,8,0"
-                                   Text="{Binding SelectedEntry.DisplayName, StringFormat='Properties — {0}', FallbackValue='Properties — (no selection)', Mode=OneWay}" />
+                                   Text="{Binding PropertiesHeader, Mode=OneWay}" />
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                             <StackPanel Margin="0,0,12,0">
                             <!-- Compass cluster (Top/Right/Bottom/Left + optional Curved). Built once per
@@ -476,10 +476,14 @@
                                                             ClearButtonEnabled="False" />
                                             </Grid>
 
-                                            <!-- Enum — combobox of available names. -->
+                                            <!-- Enum — combobox of available names. DisplayMemberPath
+                                                 shows the localised label; SelectedValuePath round-
+                                                 trips the raw English enum name through the binding. -->
                                             <ComboBox Grid.Row="1" Margin="0,4,0,0"
                                                       ItemsSource="{Binding EnumOptions}"
-                                                      SelectedItem="{Binding EnumValue, Mode=TwoWay}"
+                                                      DisplayMemberPath="Display"
+                                                      SelectedValuePath="Raw"
+                                                      SelectedValue="{Binding EnumValue, Mode=TwoWay}"
                                                       Visibility="{Binding IsEnum, Converter={StaticResource BoolToVisibility}}" />
 
                                             <!-- String — single-line textbox for watermark text, etc.

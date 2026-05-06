@@ -23,6 +23,10 @@ public partial class EditorWindow : FluentWindow
     private double _minZoom = 0.1;
     private const double MaxZoom = 8.0;
     private bool _initialFitDone;
+    /// <summary>True after <see cref="EnableFullscreen"/> is called by the launcher. Switches
+    /// the initial fit pass to "always fit to viewport" — including upscale beyond 100% — so a
+    /// small image fills the screen instead of sitting tiny in the middle of a maximised window.</summary>
+    private bool _fitToScreenMode;
 
     // Marquee state (Select tool, drag on empty area).
     private bool _isMarqueeing;
@@ -769,13 +773,118 @@ public partial class EditorWindow : FluentWindow
 
         const double margin = 16;
         var fit = Math.Min((vw - margin) / src.PixelWidth, (vh - margin) / src.PixelHeight);
-        // Only fit when the image is bigger than the viewport — never zoom IN automatically.
-        if (fit < 1.0)
+        if (_fitToScreenMode)
         {
+            // Fullscreen launch: always fit the image inside the viewport, including upscale.
+            // Floor the min-zoom at the natural fit so the user can pinch in further but never
+            // shrink the canvas to less than the screen real estate they explicitly chose.
+            _minZoom = Math.Min(fit, 1.0);
+            SetZoom(fit);
+        }
+        else if (fit < 1.0)
+        {
+            // Default behaviour: only fit when the image is bigger than the viewport — never
+            // zoom IN automatically.
             _minZoom = fit;
             SetZoom(fit);
         }
         _initialFitDone = true;
+    }
+
+    /// <summary>Place the window on the monitor whose bounds are <paramref name="x"/>/<paramref name="y"/>/
+    /// <paramref name="width"/>/<paramref name="height"/> and maximise into it. Also flips the
+    /// initial-zoom pass into "fit-to-screen" mode so the image scales up to fill the viewport
+    /// instead of sitting at native pixel size in a giant maximised window.
+    ///
+    /// Call this BEFORE <c>ShowDialog()</c> — WindowStartupLocation has already been honoured
+    /// after Show, so a late call would maximise on whatever monitor the OS picked first.
+    ///
+    /// Implementation note: a FluentWindow has <c>ExtendsContentIntoTitleBar</c>, so a plain
+    /// <c>WindowState=Maximized</c> ends up oversized — the chrome doesn't honour the monitor's
+    /// work area and the borderless WindowChrome bleeds 7-8 px past every edge. We hook
+    /// WM_GETMINMAXINFO via SourceInitialized and clamp ptMaxPosition / ptMaxSize / ptMaxTrackSize
+    /// to the active monitor's work area. Standard WPF borderless-maximised pattern.</summary>
+    public void EnableFullscreen(double x, double y, double width, double height)
+    {
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        // Park inside the target monitor BEFORE the maximise — WPF's Maximized snaps to whatever
+        // monitor the window currently sits on, so the Left/Top hint is what makes it land here
+        // and not on the primary.
+        Left = x;
+        Top = y;
+        Width = Math.Max(640, width / 2);   // fallback restore size when the user un-maximises
+        Height = Math.Max(480, height / 2);
+
+        SourceInitialized += (_, _) =>
+        {
+            var helper = new System.Windows.Interop.WindowInteropHelper(this);
+            var src = System.Windows.Interop.HwndSource.FromHwnd(helper.Handle);
+            src?.AddHook(MinMaxInfoHook);
+            // Maximize NOW, after the hook is in place — the WM_GETMINMAXINFO that fires from
+            // this state change will be intercepted and clamped to the monitor work area.
+            WindowState = WindowState.Maximized;
+        };
+        _fitToScreenMode = true;
+    }
+
+    private const int WM_GETMINMAXINFO = 0x0024;
+    private const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct POINT { public int X, Y; }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct RECT { public int Left, Top, Right, Bottom; }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MINMAXINFO
+    {
+        public POINT ptReserved;
+        public POINT ptMaxSize;
+        public POINT ptMaxPosition;
+        public POINT ptMinTrackSize;
+        public POINT ptMaxTrackSize;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private struct MONITORINFO
+    {
+        public uint cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool GetMonitorInfoW(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+    /// <summary>Clamp the maximised size to the monitor's WORK AREA (not full screen — leaves
+    /// the taskbar visible) and align ptMaxPosition to the monitor origin so a maximize on a
+    /// non-primary screen doesn't drag the window back onto the primary.</summary>
+    private static IntPtr MinMaxInfoHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg != WM_GETMINMAXINFO) return IntPtr.Zero;
+        var monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if (monitor == IntPtr.Zero) return IntPtr.Zero;
+        var info = new MONITORINFO { cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<MONITORINFO>() };
+        if (!GetMonitorInfoW(monitor, ref info)) return IntPtr.Zero;
+        var mmi = System.Runtime.InteropServices.Marshal.PtrToStructure<MINMAXINFO>(lParam);
+        var work = info.rcWork;
+        var screen = info.rcMonitor;
+        // ptMaxPosition is RELATIVE to the monitor origin in MINMAXINFO semantics.
+        mmi.ptMaxPosition.X = Math.Abs(work.Left - screen.Left);
+        mmi.ptMaxPosition.Y = Math.Abs(work.Top - screen.Top);
+        mmi.ptMaxSize.X = Math.Abs(work.Right - work.Left);
+        mmi.ptMaxSize.Y = Math.Abs(work.Bottom - work.Top);
+        mmi.ptMaxTrackSize.X = mmi.ptMaxSize.X;
+        mmi.ptMaxTrackSize.Y = mmi.ptMaxSize.Y;
+        System.Runtime.InteropServices.Marshal.StructureToPtr(mmi, lParam, true);
+        handled = true;
+        return IntPtr.Zero;
     }
 
     private void OnWindowKeyDown(object sender, KeyEventArgs e)

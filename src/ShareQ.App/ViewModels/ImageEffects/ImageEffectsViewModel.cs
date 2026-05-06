@@ -44,9 +44,37 @@ public sealed partial class ImageEffectsViewModel : ObservableObject, IDisposabl
     /// state). Recomputed whenever SelectedEntry flips.</summary>
     public bool HasSideToggles => SelectedEntry?.SideToggles is not null;
 
+    /// <summary>Localised header rendered above the property grid. Builds the
+    /// "Properties — &lt;effect&gt;" or "Properties — (no selection)" string fresh for whatever
+    /// language is active when the header re-evaluates.</summary>
+    /// <summary>Pull a localised resource and substitute positional args. Centralises the
+    /// "ResourceManager + LocalizedStrings.Culture" lookup chain we use everywhere else, so the
+    /// status-line callsites stay terse.</summary>
+    private static string Loc(string key, params object[] args)
+    {
+        var culture = Markup.LocalizedStrings.Instance.Culture ?? System.Globalization.CultureInfo.CurrentUICulture;
+        var template = ShareQ.App.Resources.Strings.ResourceManager.GetString(key, culture) ?? key;
+        return args.Length == 0
+            ? template
+            : string.Format(System.Globalization.CultureInfo.CurrentCulture, template, args);
+    }
+
+    public string PropertiesHeader => SelectedEntry is { } e
+        ? string.Format(System.Globalization.CultureInfo.CurrentCulture,
+            ShareQ.App.Resources.Strings.ResourceManager.GetString(
+                "ImageEffects_PropertiesHeader",
+                Markup.LocalizedStrings.Instance.Culture ?? System.Globalization.CultureInfo.CurrentUICulture)
+                ?? "Properties — {0}",
+            e.DisplayName)
+        : ShareQ.App.Resources.Strings.ResourceManager.GetString(
+              "ImageEffects_PropertiesEmpty",
+              Markup.LocalizedStrings.Instance.Culture ?? System.Globalization.CultureInfo.CurrentUICulture)
+          ?? "Properties — (no selection)";
+
     partial void OnSelectedEntryChanged(EffectEntryViewModel? value)
     {
         OnPropertyChanged(nameof(HasSideToggles));
+        OnPropertyChanged(nameof(PropertiesHeader));
     }
 
     [ObservableProperty]
@@ -113,7 +141,7 @@ public sealed partial class ImageEffectsViewModel : ObservableObject, IDisposabl
             // RequestPersist debounce so a quick rename + slider drag share one round-trip.
             Renamed = () =>
             {
-                StatusText = $"Renamed to '{preset.Name}'.";
+                StatusText = Loc("ImageEffects_StatusRenameOk", preset.Name);
                 RequestPersist();
             },
         };
@@ -143,7 +171,7 @@ public sealed partial class ImageEffectsViewModel : ObservableObject, IDisposabl
         }
         catch (Exception ex)
         {
-            StatusText = $"Failed to load presets: {ex.Message}";
+            StatusText = Loc("ImageEffects_StatusLoadFail", ex.Message);
         }
         finally
         {
@@ -162,7 +190,7 @@ public sealed partial class ImageEffectsViewModel : ObservableObject, IDisposabl
         }
         catch (Exception ex)
         {
-            StatusText = $"Save failed: {ex.Message}";
+            StatusText = Loc("ImageEffects_StatusSaveFail", ex.Message);
         }
     }
 
@@ -355,11 +383,11 @@ public sealed partial class ImageEffectsViewModel : ObservableObject, IDisposabl
             SelectedPreset = item;
             if (_store is not null)
                 await _store.UpsertAsync(preset, sortOrder: Presets.Count - 1, default).ConfigureAwait(true);
-            StatusText = $"Imported {preset.Effects.Count} effect(s) from {Path.GetFileName(path)}";
+            StatusText = Loc("ImageEffects_StatusImported", preset.Effects.Count, Path.GetFileName(path));
         }
         catch (Exception ex)
         {
-            StatusText = $"Import failed: {ex.Message}";
+            StatusText = Loc("ImageEffects_StatusImportFail", ex.Message);
         }
     }
 
@@ -442,11 +470,11 @@ public sealed partial class ImageEffectsViewModel : ObservableObject, IDisposabl
         {
             var json = _serializer.Serialize(SelectedPreset.Preset);
             File.WriteAllText(path, json);
-            StatusText = $"Exported '{SelectedPreset.Preset.Name}' to {Path.GetFileName(path)}";
+            StatusText = Loc("ImageEffects_StatusExported", SelectedPreset.Preset.Name, Path.GetFileName(path));
         }
         catch (Exception ex)
         {
-            StatusText = $"Export failed: {ex.Message}";
+            StatusText = Loc("ImageEffects_StatusExportFail", ex.Message);
         }
     }
 
@@ -507,11 +535,11 @@ public sealed partial class ImageEffectsViewModel : ObservableObject, IDisposabl
                     srcStream.CopyTo(es);
                 }
             }
-            StatusText = $"Exported '{preset.Name}' to {Path.GetFileName(path)}";
+            StatusText = Loc("ImageEffects_StatusExported", preset.Name, Path.GetFileName(path));
         }
         catch (Exception ex)
         {
-            StatusText = $"Export failed: {ex.Message}";
+            StatusText = Loc("ImageEffects_StatusExportFail", ex.Message);
         }
         finally
         {
@@ -591,17 +619,17 @@ public sealed partial class ImageEffectsViewModel : ObservableObject, IDisposabl
             var loaded = SKBitmap.Decode(stream);
             if (loaded is null)
             {
-                StatusText = "Couldn't decode image.";
+                StatusText = Loc("ImageEffects_StatusDecodeFail");
                 return;
             }
             _sampleImage.Dispose();
             _sampleImage = loaded;
-            StatusText = $"Loaded {Path.GetFileName(path)} as preview source.";
+            StatusText = Loc("ImageEffects_StatusLoadedSample", Path.GetFileName(path));
             RequestRender();
         }
         catch (Exception ex)
         {
-            StatusText = $"Load failed: {ex.Message}";
+            StatusText = Loc("ImageEffects_StatusLoadFailSample", ex.Message);
         }
     }
 
@@ -610,7 +638,7 @@ public sealed partial class ImageEffectsViewModel : ObservableObject, IDisposabl
         var fresh = SampleImageGenerator.Build();
         _sampleImage.Dispose();
         _sampleImage = fresh;
-        StatusText = "Sample image reset.";
+        StatusText = Loc("ImageEffects_StatusSampleReset");
         RequestRender();
     }
 
@@ -635,11 +663,14 @@ public sealed partial class ImageEffectsViewModel : ObservableObject, IDisposabl
             }
             using var output = preset.Apply(_sampleImage);
             PreviewImage = SkiaToWpfBitmap.Convert(output);
-            StatusText = $"Rendered preview ({_sampleImage.Width}×{_sampleImage.Height}, {preset.Effects.Count(e => e.Enabled) } effect(s))";
+            StatusText = Loc("ImageEffects_StatusRendered",
+                _sampleImage.Width,
+                _sampleImage.Height,
+                preset.Effects.Count(e => e.Enabled));
         }
         catch (Exception ex)
         {
-            StatusText = $"Render failed: {ex.Message}";
+            StatusText = Loc("ImageEffects_StatusRenderFail", ex.Message);
         }
     }
 

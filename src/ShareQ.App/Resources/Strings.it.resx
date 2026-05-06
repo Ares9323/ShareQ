@@ -80,8 +80,8 @@
   <data name="Tray_ColorPicker" xml:space="preserve"><value>Selettore colore…</value></data>
   <data name="Tray_PinToScreen" xml:space="preserve"><value>Aggancia a schermo…</value></data>
   <data name="Tray_QrGenerator" xml:space="preserve"><value>Generatore QR…</value></data>
-  <data name="Tray_UploadFile" xml:space="preserve"><value>Carica file…</value></data>
-  <data name="Tray_UploadFromClipboard" xml:space="preserve"><value>Carica dagli appunti</value></data>
+  <data name="Tray_UploadFile" xml:space="preserve"><value>Upload file…</value></data>
+  <data name="Tray_UploadFromClipboard" xml:space="preserve"><value>Upload dagli appunti</value></data>
   <data name="Tray_OpenClipboard" xml:space="preserve"><value>Apri appunti</value></data>
   <data name="Tray_OpenLauncher" xml:space="preserve"><value>Apri launcher</value></data>
   <data name="Tray_ToggleIncognito" xml:space="preserve"><value>Attiva/disattiva incognito</value></data>
@@ -93,7 +93,7 @@
   <data name="Tray_Quit" xml:space="preserve"><value>Esci</value></data>
 
   <data name="Sidebar_HotkeysWorkflows" xml:space="preserve"><value>Scorciatoie e workflow</value></data>
-  <data name="Sidebar_Uploaders" xml:space="preserve"><value>Uploader</value></data>
+  <data name="Sidebar_Uploaders" xml:space="preserve"><value>Uploaders</value></data>
   <data name="Sidebar_ClipboardCategories" xml:space="preserve"><value>Categorie appunti</value></data>
   <data name="Sidebar_CaptureSettings" xml:space="preserve"><value>Impostazioni cattura</value></data>
   <data name="Sidebar_AppSettings" xml:space="preserve"><value>Impostazioni app</value></data>
@@ -155,9 +155,9 @@
   <data name="Workflow_ActiveWindowCapture" xml:space="preserve"><value>Cattura finestra attiva</value></data>
   <data name="Workflow_ActiveMonitorCapture" xml:space="preserve"><value>Cattura monitor attivo</value></data>
   <data name="Workflow_WebpageCapture" xml:space="preserve"><value>Cattura pagina web</value></data>
-  <data name="Workflow_ManualUpload" xml:space="preserve"><value>Caricamento manuale</value></data>
-  <data name="Workflow_UploadClipboardText" xml:space="preserve"><value>Carica testo dagli appunti</value></data>
-  <data name="Workflow_UploadSelectedFile" xml:space="preserve"><value>Carica file selezionato</value></data>
+  <data name="Workflow_ManualUpload" xml:space="preserve"><value>Upload manuale</value></data>
+  <data name="Workflow_UploadClipboardText" xml:space="preserve"><value>Upload testo dagli appunti</value></data>
+  <data name="Workflow_UploadSelectedFile" xml:space="preserve"><value>Upload file selezionato</value></data>
   <data name="Workflow_ShortenClipboardUrl" xml:space="preserve"><value>Accorcia URL dagli appunti</value></data>
   <data name="Workflow_ShowPopup" xml:space="preserve"><value>Mostra popup appunti</value></data>
   <data name="Workflow_ToggleIncognito" xml:space="preserve"><value>Attiva/disattiva incognito</value></data>
@@ -172,7 +172,7 @@
   <data name="Workflow_SaveQrToHistory" xml:space="preserve"><value>Salva QR in cronologia</value></data>
 
   <data name="WorkflowCategory_Capture" xml:space="preserve"><value>Cattura</value></data>
-  <data name="WorkflowCategory_Upload" xml:space="preserve"><value>Caricamento</value></data>
+  <data name="WorkflowCategory_Upload" xml:space="preserve"><value>Upload</value></data>
   <data name="WorkflowCategory_Clipboard" xml:space="preserve"><value>Appunti</value></data>
   <data name="WorkflowCategory_Tools" xml:space="preserve"><value>Strumenti</value></data>
   <data name="WorkflowCategory_Other" xml:space="preserve"><value>Altro</value></data>
@@ -239,6 +239,7 @@
 
   <data name="Categories_AddNew" xml:space="preserve"><value>Aggiungi una nuova categoria</value></data>
   <data name="Hotkeys_AddCustomWorkflow" xml:space="preserve"><value>+ Aggiungi workflow personalizzato</value></data>
+  <data name="Hotkeys_AddStep" xml:space="preserve"><value>+ Aggiungi azione</value></data>
   <data name="Hotkeys_NoCustomYet" xml:space="preserve"><value>(nessuno ancora — clicca + Aggiungi workflow personalizzato qui sotto per crearne uno)</value></data>
 
   <data name="ColorPicker_Title" xml:space="preserve"><value>ShareQ - Selettore colore</value></data>
@@ -377,4 +378,233 @@
   <data name="Param_Quality" xml:space="preserve"><value>Qualità</value></data>
   <data name="Param_Vertical" xml:space="preserve"><value>Verticale</value></data>
   <data name="Param_Horizontal" xml:space="preserve"><value>Orizzontale</value></data>
+
+  <data name="Clipboard_ClearAll" xml:space="preserve"><value>Pulisci tutto</value></data>
+  <data name="Clipboard_FilterImageTitle" xml:space="preserve"><value>Filtro immagini</value></data>
+  <data name="Clipboard_FilterTextTitle" xml:space="preserve"><value>Filtro testo</value></data>
+  <data name="Clipboard_FilterIncludes" xml:space="preserve"><value>Quando attivo, la lista include:</value></data>
+  <data name="Clipboard_FilterClickToHide" xml:space="preserve"><value>Click per nasconderli tutti.</value></data>
+  <data name="Clipboard_FilterImageBullet1" xml:space="preserve"><value>• Immagini (PNG, JPEG, BMP, GIF, screenshot)</value></data>
+  <data name="Clipboard_FilterImageBullet2" xml:space="preserve"><value>• Copie di file (Esplora Ctrl+C / drag-drop, .sxie ecc.)</value></data>
+  <data name="Clipboard_FilterImageBullet3" xml:space="preserve"><value>• Registrazioni video / GIF (.mp4, .gif)</value></data>
+  <data name="Clipboard_FilterTextBullet1" xml:space="preserve"><value>• Testo semplice (tutto ciò che copi come testo)</value></data>
+  <data name="Clipboard_FilterTextBullet2" xml:space="preserve"><value>• HTML (Copia link / Copia indirizzo immagine dei browser)</value></data>
+  <data name="Clipboard_FilterTextBullet3" xml:space="preserve"><value>• RTF (testo formattato da Word / Outlook / ecc.)</value></data>
+  <data name="Clipboard_PinnedMode" xml:space="preserve"><value>📌 Modalità persistente</value></data>
+  <data name="Clipboard_PinnedOn" xml:space="preserve"><value>✓ Persistente (attiva)</value></data>
+  <data name="Clipboard_FooterHint" xml:space="preserve"><value>↑↓ naviga · 1-9 focus · Invio incolla · Ctrl+1-9 incolla rapido · ←→ cambia categoria · Ctrl+F cerca · Ctrl+P spilla · Ctrl+Maiusc+Canc pulisci tutto · Esc chiudi</value></data>
+  <data name="Clipboard_DefaultCategory" xml:space="preserve"><value>Appunti</value></data>
+
+  <data name="ImageEffects_PropertiesHeader" xml:space="preserve"><value>Proprietà — {0}</value></data>
+  <data name="ImageEffects_PropertiesEmpty" xml:space="preserve"><value>Proprietà — (nessuna selezione)</value></data>
+  <data name="ImageEffects_StatusRendered" xml:space="preserve"><value>Anteprima renderizzata ({0}×{1}, {2} effetto/i)</value></data>
+  <data name="ImageEffects_StatusRenameOk" xml:space="preserve"><value>Rinominato in '{0}'.</value></data>
+  <data name="ImageEffects_StatusLoadFail" xml:space="preserve"><value>Caricamento preset fallito: {0}</value></data>
+  <data name="ImageEffects_StatusSaveFail" xml:space="preserve"><value>Salvataggio fallito: {0}</value></data>
+  <data name="ImageEffects_StatusImported" xml:space="preserve"><value>Importati {0} effetto/i da {1}</value></data>
+  <data name="ImageEffects_StatusImportFail" xml:space="preserve"><value>Importazione fallita: {0}</value></data>
+  <data name="ImageEffects_StatusExported" xml:space="preserve"><value>Esportato '{0}' in {1}</value></data>
+  <data name="ImageEffects_StatusExportFail" xml:space="preserve"><value>Esportazione fallita: {0}</value></data>
+  <data name="ImageEffects_StatusDecodeFail" xml:space="preserve"><value>Impossibile decodificare l'immagine.</value></data>
+  <data name="ImageEffects_StatusLoadedSample" xml:space="preserve"><value>Caricato {0} come sorgente di anteprima.</value></data>
+  <data name="ImageEffects_StatusLoadFailSample" xml:space="preserve"><value>Caricamento fallito: {0}</value></data>
+  <data name="ImageEffects_StatusSampleReset" xml:space="preserve"><value>Immagine campione ripristinata.</value></data>
+  <data name="ImageEffects_StatusRenderFail" xml:space="preserve"><value>Rendering fallito: {0}</value></data>
+
+  <data name="Param_Type" xml:space="preserve"><value>Tipo</value></data>
+  <data name="Param_DashStyle" xml:space="preserve"><value>Stile tratteggio</value></data>
+  <data name="Param_SizeMode" xml:space="preserve"><value>Modalità dimensione</value></data>
+  <data name="Param_AutoHide" xml:space="preserve"><value>Nascondi automaticamente se fuori bordi</value></data>
+  <data name="Param_RotateFlip" xml:space="preserve"><value>Rotazione/capovolgimento</value></data>
+  <data name="Param_Placement" xml:space="preserve"><value>Posizione</value></data>
+  <data name="Param_CompositingMode" xml:space="preserve"><value>Modalità di composizione</value></data>
+
+  <data name="EnumValue_Horizontal" xml:space="preserve"><value>Orizzontale</value></data>
+  <data name="EnumValue_Vertical" xml:space="preserve"><value>Verticale</value></data>
+  <data name="EnumValue_ForwardDiagonal" xml:space="preserve"><value>Diagonale avanti</value></data>
+  <data name="EnumValue_BackwardDiagonal" xml:space="preserve"><value>Diagonale indietro</value></data>
+  <data name="EnumValue_Outside" xml:space="preserve"><value>Esterno</value></data>
+  <data name="EnumValue_Inside" xml:space="preserve"><value>Interno</value></data>
+  <data name="EnumValue_Solid" xml:space="preserve"><value>Solido</value></data>
+  <data name="EnumValue_Dash" xml:space="preserve"><value>Tratteggio</value></data>
+  <data name="EnumValue_Dot" xml:space="preserve"><value>Punto</value></data>
+  <data name="EnumValue_DashDot" xml:space="preserve"><value>Tratto-punto</value></data>
+  <data name="EnumValue_DashDotDot" xml:space="preserve"><value>Tratto-punto-punto</value></data>
+  <data name="EnumValue_DontResize" xml:space="preserve"><value>Non ridimensionare</value></data>
+  <data name="EnumValue_AbsoluteSize" xml:space="preserve"><value>Dimensione assoluta</value></data>
+  <data name="EnumValue_PercentageOfWatermark" xml:space="preserve"><value>Percentuale della filigrana</value></data>
+  <data name="EnumValue_PercentageOfCanvas" xml:space="preserve"><value>Percentuale della tela</value></data>
+  <data name="EnumValue_SourceOver" xml:space="preserve"><value>Sorgente sopra (alpha blend)</value></data>
+  <data name="EnumValue_SourceCopy" xml:space="preserve"><value>Sorgente sostituisci (sovrascrivi)</value></data>
+  <data name="EnumValue_TopLeft" xml:space="preserve"><value>Alto sinistra</value></data>
+  <data name="EnumValue_TopCenter" xml:space="preserve"><value>Alto centro</value></data>
+  <data name="EnumValue_TopRight" xml:space="preserve"><value>Alto destra</value></data>
+  <data name="EnumValue_MiddleLeft" xml:space="preserve"><value>Centro sinistra</value></data>
+  <data name="EnumValue_MiddleCenter" xml:space="preserve"><value>Centro</value></data>
+  <data name="EnumValue_MiddleRight" xml:space="preserve"><value>Centro destra</value></data>
+  <data name="EnumValue_BottomLeft" xml:space="preserve"><value>Basso sinistra</value></data>
+  <data name="EnumValue_BottomCenter" xml:space="preserve"><value>Basso centro</value></data>
+  <data name="EnumValue_BottomRight" xml:space="preserve"><value>Basso destra</value></data>
+
+  <data name="GradientEditor_Title" xml:space="preserve"><value>Editor gradiente</value></data>
+  <data name="GradientEditor_TitleFull" xml:space="preserve"><value>ShareQ - Editor gradiente</value></data>
+  <data name="GradientEditor_Stops" xml:space="preserve"><value>Stop</value></data>
+  <data name="GradientEditor_TooltipAddStop" xml:space="preserve"><value>Aggiungi stop</value></data>
+  <data name="GradientEditor_TooltipRemoveStop" xml:space="preserve"><value>Rimuovi stop selezionato</value></data>
+  <data name="GradientEditor_TooltipChangeColor" xml:space="preserve"><value>Click per cambiare colore</value></data>
+  <data name="GradientEditor_Distribute" xml:space="preserve"><value>Distribuisci</value></data>
+  <data name="GradientEditor_TooltipDistribute" xml:space="preserve"><value>Distribuisci uniformemente gli stop su 0..100%</value></data>
+  <data name="GradientEditor_Reverse" xml:space="preserve"><value>Inverti</value></data>
+  <data name="GradientEditor_TooltipReverse" xml:space="preserve"><value>Specchia le posizioni degli stop 0↔100</value></data>
+  <data name="GradientEditor_PickColor" xml:space="preserve"><value>Scegli colore per lo stop selezionato…</value></data>
+  <data name="GradientEditor_Preview" xml:space="preserve"><value>Anteprima</value></data>
+  <data name="GradientEditor_Direction" xml:space="preserve"><value>Direzione</value></data>
+  <data name="GradientEditor_Presets" xml:space="preserve"><value>Preset</value></data>
+
+  <data name="CustomUploaders_Blurb" xml:space="preserve"><value>Uploader dichiarativi compatibili con ShareX. Ogni file .sxcu diventa una destinazione separata — abilitali/disabilitali nelle tab di categoria dopo un riavvio.</value></data>
+  <data name="CustomUploaders_NoneYet" xml:space="preserve"><value>Nessun uploader personalizzato caricato.</value></data>
+  <data name="CustomUploaders_SxcuAssociation" xml:space="preserve"><value>Imposta ShareQ come app predefinita per i file .sxcu</value></data>
+  <data name="CustomUploaders_SxcuAssociationHint" xml:space="preserve"><value>Quando attivo, il doppio click su un file .sxcu in Esplora apre ShareQ e chiede di installarlo. Solo per utente — non modifica impostazioni di sistema né richiede permessi di amministratore.</value></data>
+  <data name="CustomUploaders_ExplorerVerb" xml:space="preserve"><value>Mostra 'Carica con ShareQ' nel menu contestuale di Esplora</value></data>
+  <data name="CustomUploaders_ExplorerVerbHint" xml:space="preserve"><value>Aggiunge una voce 'Carica con ShareQ' al menu contestuale di ogni file. Su Windows 11 si trova sotto 'Mostra altre opzioni'. La voce è sempre visibile — il click inoltra il file a un'istanza ShareQ in esecuzione, o ne avvia una in modalità solo tray se non è attiva.</value></data>
+  <data name="CustomUploaders_RunWorkflow" xml:space="preserve"><value>Esegui workflow:</value></data>
+
+  <data name="WorkflowActionCategory_Capture" xml:space="preserve"><value>Cattura</value></data>
+  <data name="WorkflowActionCategory_Recording" xml:space="preserve"><value>Registrazione</value></data>
+  <data name="WorkflowActionCategory_Color" xml:space="preserve"><value>Colore</value></data>
+  <data name="WorkflowActionCategory_Editor" xml:space="preserve"><value>Editor</value></data>
+  <data name="WorkflowActionCategory_File" xml:space="preserve"><value>File</value></data>
+  <data name="WorkflowActionCategory_Pipeline" xml:space="preserve"><value>Pipeline</value></data>
+  <data name="WorkflowActionCategory_Upload" xml:space="preserve"><value>Upload</value></data>
+  <data name="WorkflowActionCategory_Clipboard" xml:space="preserve"><value>Appunti</value></data>
+  <data name="WorkflowActionCategory_Tools" xml:space="preserve"><value>Strumenti</value></data>
+  <data name="WorkflowActionCategory_QR" xml:space="preserve"><value>QR</value></data>
+  <data name="WorkflowActionCategory_System" xml:space="preserve"><value>Sistema</value></data>
+  <data name="WorkflowActionCategory_Launcher" xml:space="preserve"><value>Launcher</value></data>
+
+  <data name="WorkflowAction_shareq_capture_region" xml:space="preserve"><value>Cattura regione</value></data>
+  <data name="WorkflowAction_shareq_capture_active_window" xml:space="preserve"><value>Cattura finestra attiva</value></data>
+  <data name="WorkflowAction_shareq_capture_active_monitor" xml:space="preserve"><value>Cattura monitor attivo</value></data>
+  <data name="WorkflowAction_shareq_capture_webpage" xml:space="preserve"><value>Cattura pagina web</value></data>
+  <data name="WorkflowAction_shareq_record_screen" xml:space="preserve"><value>Registrazione schermo</value></data>
+  <data name="WorkflowAction_shareq_record_screen_mp4" xml:space="preserve"><value>Avvia/ferma registrazione schermo (mp4)</value></data>
+  <data name="WorkflowAction_shareq_record_screen_gif" xml:space="preserve"><value>Avvia/ferma registrazione schermo (gif)</value></data>
+  <data name="WorkflowAction_shareq_press_key_enter" xml:space="preserve"><value>Premi Invio</value></data>
+  <data name="WorkflowAction_shareq_press_key_tab" xml:space="preserve"><value>Premi Tab</value></data>
+  <data name="WorkflowAction_shareq_upload_image" xml:space="preserve"><value>Carica su uploader immagine</value></data>
+  <data name="WorkflowAction_shareq_upload_file" xml:space="preserve"><value>Carica su uploader file</value></data>
+  <data name="WorkflowAction_shareq_upload_text" xml:space="preserve"><value>Carica su uploader testo</value></data>
+  <data name="WorkflowAction_shareq_upload_video" xml:space="preserve"><value>Carica su uploader video</value></data>
+  <data name="WorkflowAction_shareq_upload_url" xml:space="preserve"><value>Accorcia URL con shortener</value></data>
+  <data name="WorkflowActionDesc_shareq_record_screen_mp4" xml:space="preserve"><value>Avvia/ferma la registrazione schermo via FFmpeg in formato mp4. La prima invocazione avvia, la seconda ferma e produce il file.</value></data>
+  <data name="WorkflowActionDesc_shareq_record_screen_gif" xml:space="preserve"><value>Avvia/ferma la registrazione schermo via FFmpeg in formato GIF animato. La prima invocazione avvia, la seconda ferma e produce il file.</value></data>
+  <data name="WorkflowActionDesc_shareq_press_key_enter" xml:space="preserve"><value>Invia un singolo Invio alla finestra in primo piano. Utile come separatore tra passi di incolla.</value></data>
+  <data name="WorkflowActionDesc_shareq_press_key_tab" xml:space="preserve"><value>Invia un singolo Tab alla finestra in primo piano — comodo per spostarsi tra campi tra passi di incolla.</value></data>
+  <data name="WorkflowActionDesc_shareq_upload_image" xml:space="preserve"><value>Esegue ogni uploader selezionato per la categoria immagine (Impostazioni → Plugin → immagine).</value></data>
+  <data name="WorkflowActionDesc_shareq_upload_file" xml:space="preserve"><value>Esegue ogni uploader selezionato per la categoria file (Impostazioni → Plugin → file).</value></data>
+  <data name="WorkflowActionDesc_shareq_upload_text" xml:space="preserve"><value>Esegue ogni uploader selezionato per la categoria testo (Impostazioni → Plugin → testo).</value></data>
+  <data name="WorkflowActionDesc_shareq_upload_video" xml:space="preserve"><value>Esegue ogni uploader selezionato per la categoria video (Impostazioni → Plugin → video).</value></data>
+  <data name="WorkflowActionDesc_shareq_upload_url" xml:space="preserve"><value>Esegue ogni shortener URL selezionato. L'input deve essere un URL assoluto valido.</value></data>
+  <data name="WorkflowAction_shareq_color_sampler" xml:space="preserve"><value>Campionatore colore</value></data>
+  <data name="WorkflowAction_shareq_color_picker" xml:space="preserve"><value>Selettore colore</value></data>
+  <data name="WorkflowAction_shareq_copy_color_hex" xml:space="preserve"><value>Copia colore come hex</value></data>
+  <data name="WorkflowAction_shareq_copy_color_rgb" xml:space="preserve"><value>Copia colore come RGB</value></data>
+  <data name="WorkflowAction_shareq_copy_color_rgba" xml:space="preserve"><value>Copia colore come RGBA</value></data>
+  <data name="WorkflowAction_shareq_copy_color_hsb" xml:space="preserve"><value>Copia colore come HSB</value></data>
+  <data name="WorkflowAction_shareq_copy_color_cmyk" xml:space="preserve"><value>Copia colore come CMYK</value></data>
+  <data name="WorkflowAction_shareq_copy_color_decimal" xml:space="preserve"><value>Copia colore come decimale</value></data>
+  <data name="WorkflowAction_shareq_copy_color_linear" xml:space="preserve"><value>Copia colore come Linear</value></data>
+  <data name="WorkflowAction_shareq_copy_color_bgra" xml:space="preserve"><value>Copia colore come BGRA</value></data>
+  <data name="WorkflowAction_shareq_open_editor_before_upload" xml:space="preserve"><value>Apri editor</value></data>
+  <data name="WorkflowAction_shareq_apply_image_effects_preset" xml:space="preserve"><value>Applica preset effetti immagine</value></data>
+  <data name="WorkflowAction_shareq_save_to_file" xml:space="preserve"><value>Salva su file</value></data>
+  <data name="WorkflowAction_shareq_add_to_history" xml:space="preserve"><value>Aggiungi alla cronologia appunti</value></data>
+  <data name="WorkflowAction_shareq_copy_image_to_clipboard" xml:space="preserve"><value>Copia immagine negli appunti</value></data>
+  <data name="WorkflowAction_shareq_paste_history_item" xml:space="preserve"><value>Incolla elemento dalla cronologia</value></data>
+  <data name="WorkflowAction_shareq_press_key" xml:space="preserve"><value>Premi tasto</value></data>
+  <data name="WorkflowAction_shareq_delay" xml:space="preserve"><value>Ritardo</value></data>
+  <data name="WorkflowAction_shareq_copy_text_to_clipboard" xml:space="preserve"><value>Copia testo negli appunti</value></data>
+  <data name="WorkflowAction_shareq_upload" xml:space="preserve"><value>Upload</value></data>
+  <data name="WorkflowAction_shareq_upload_clipboard_text" xml:space="preserve"><value>Leggi testo dagli appunti</value></data>
+  <data name="WorkflowAction_shareq_capture_selected_explorer_file" xml:space="preserve"><value>Cattura file selezionato in Esplora</value></data>
+  <data name="WorkflowAction_shareq_qr_read" xml:space="preserve"><value>Leggi QR dall'immagine</value></data>
+  <data name="WorkflowAction_shareq_notify_toast" xml:space="preserve"><value>Mostra notifica toast</value></data>
+  <data name="WorkflowAction_shareq_open_popup" xml:space="preserve"><value>Apri popup appunti</value></data>
+  <data name="WorkflowAction_shareq_toggle_incognito" xml:space="preserve"><value>Attiva/disattiva incognito</value></data>
+  <data name="WorkflowAction_shareq_open_screenshot_folder" xml:space="preserve"><value>Apri cartella screenshot</value></data>
+  <data name="WorkflowAction_shareq_show_in_explorer" xml:space="preserve"><value>Mostra in Esplora</value></data>
+  <data name="WorkflowAction_shareq_save_as" xml:space="preserve"><value>Salva con nome…</value></data>
+  <data name="WorkflowAction_shareq_open_url" xml:space="preserve"><value>Apri URL nel browser</value></data>
+  <data name="WorkflowAction_shareq_show_qr_code" xml:space="preserve"><value>Mostra finestra codice QR</value></data>
+  <data name="WorkflowAction_shareq_save_qr_as_image" xml:space="preserve"><value>Salva QR come immagine</value></data>
+  <data name="WorkflowAction_shareq_save_qr_as_svg" xml:space="preserve"><value>Salva QR come SVG</value></data>
+  <data name="WorkflowAction_shareq_copy_qr_to_clipboard" xml:space="preserve"><value>Copia QR negli appunti</value></data>
+  <data name="WorkflowAction_shareq_pin_to_screen" xml:space="preserve"><value>Aggancia a schermo</value></data>
+  <data name="WorkflowAction_shareq_launch_app" xml:space="preserve"><value>Avvia applicazione</value></data>
+  <data name="WorkflowAction_shareq_open_file" xml:space="preserve"><value>Apri file</value></data>
+  <data name="WorkflowAction_shareq_run_command" xml:space="preserve"><value>Esegui comando shell</value></data>
+  <data name="WorkflowAction_shareq_open_launcher_menu" xml:space="preserve"><value>Apri launcher</value></data>
+  <data name="WorkflowAction_shareq_open_settings" xml:space="preserve"><value>Apri impostazioni</value></data>
+  <data name="WorkflowAction_shareq_open_launcher_drag_mode" xml:space="preserve"><value>Apri launcher (modalità drag)</value></data>
+
+  <data name="WorkflowActionParam_shareq_open_editor_before_upload_fullscreen" xml:space="preserve"><value>Apri a schermo intero sul monitor attivo (fit to screen)</value></data>
+  <data name="WorkflowActionParam_shareq_open_editor_before_upload_default_tool" xml:space="preserve"><value>Strumento predefinito</value></data>
+  <data name="WorkflowActionParam_shareq_save_to_file_format" xml:space="preserve"><value>Formato</value></data>
+  <data name="WorkflowActionParam_shareq_apply_image_effects_preset_keep_original" xml:space="preserve"><value>Mantieni l'originale nella cronologia appunti</value></data>
+  <data name="WorkflowActionParam_shareq_apply_image_effects_preset_preset_name" xml:space="preserve"><value>Preset</value></data>
+  <data name="WorkflowActionParam_shareq_copy_color_hex_alpha" xml:space="preserve"><value>Includi alpha (RRGGBBAA)</value></data>
+  <data name="WorkflowActionParam_shareq_copy_color_hex_hash" xml:space="preserve"><value>Prefisso #</value></data>
+
+  <data name="WorkflowActionCategory_I_O" xml:space="preserve"><value>I/O</value></data>
+  <data name="WorkflowActionCategory_Flow" xml:space="preserve"><value>Flusso</value></data>
+  <data name="WorkflowActionCategory_Notify" xml:space="preserve"><value>Notifica</value></data>
+  <data name="WorkflowActionCategory_Launch" xml:space="preserve"><value>Avvio</value></data>
+
+  <data name="WorkflowActionDesc_shareq_capture_region" xml:space="preserve"><value>Mostra l'overlay di selezione regione e cattura il rettangolo scelto. Saltato automaticamente se un payload è già nel bag.</value></data>
+  <data name="WorkflowActionDesc_shareq_capture_active_window" xml:space="preserve"><value>Cattura la finestra attualmente in primo piano usando i bordi estesi DWM (senza padding del bordo di ridimensionamento). Rispetta il ritardo globale di cattura; le finestre dell'app stessa vengono saltate.</value></data>
+  <data name="WorkflowActionDesc_shareq_capture_active_monitor" xml:space="preserve"><value>Cattura il monitor attualmente sotto il cursore — utile come scorciatoia su setup multi-monitor. Su singolo monitor cattura tutto lo schermo.</value></data>
+  <data name="WorkflowActionDesc_shareq_capture_webpage" xml:space="preserve"><value>Renderizza un URL in un WebView2 nascosto e cattura un PNG full-page. Lascia URL vuoto per essere richiesto a runtime; impostalo per workflow automatici 'snapshot example.com'.</value></data>
+  <data name="WorkflowActionDesc_shareq_record_screen" xml:space="preserve"><value>Avvia/ferma la registrazione schermo via FFmpeg. La prima invocazione avvia, la seconda ferma e produce il file.</value></data>
+  <data name="WorkflowActionDesc_shareq_color_sampler" xml:space="preserve"><value>Apre il campionatore stile lente d'ingrandimento al cursore — preleva un pixel da qualunque punto dello schermo. Il colore campionato viene copiato negli appunti.</value></data>
+  <data name="WorkflowActionDesc_shareq_color_picker" xml:space="preserve"><value>Apre il selettore colore HSB/RGB/CMYK in finestra (ruota + input numerici). Abbinalo a un passo Copia colore come… per scrivere il risultato negli appunti.</value></data>
+  <data name="WorkflowActionDesc_shareq_copy_color_hex" xml:space="preserve"><value>Emette il colore del bag come RRGGBB (o RRGGBBAA con alpha). I toggle scelgono se includere alpha e se anteporre #.</value></data>
+  <data name="WorkflowActionDesc_shareq_copy_color_rgb" xml:space="preserve"><value>Emette il colore del bag come rgb(R, G, B) negli appunti.</value></data>
+  <data name="WorkflowActionDesc_shareq_copy_color_rgba" xml:space="preserve"><value>Emette il colore del bag come rgba(R, G, B, A) con alpha 0–1 negli appunti.</value></data>
+  <data name="WorkflowActionDesc_shareq_copy_color_hsb" xml:space="preserve"><value>Emette il colore del bag come hsb(H°, S%, B%) negli appunti.</value></data>
+  <data name="WorkflowActionDesc_shareq_copy_color_cmyk" xml:space="preserve"><value>Emette il colore del bag come cmyk(C%, M%, Y%, K%) negli appunti.</value></data>
+  <data name="WorkflowActionDesc_shareq_copy_color_decimal" xml:space="preserve"><value>Emette il colore del bag come intero AARRGGBB negli appunti.</value></data>
+  <data name="WorkflowActionDesc_shareq_copy_color_linear" xml:space="preserve"><value>Emette (R=…,G=…,B=…,A=…) — formato Unreal Engine FLinearColor — negli appunti.</value></data>
+  <data name="WorkflowActionDesc_shareq_copy_color_bgra" xml:space="preserve"><value>Emette (B=…,G=…,R=…,A=…) — formato Unreal Engine FColor — negli appunti.</value></data>
+  <data name="WorkflowActionDesc_shareq_open_editor_before_upload" xml:space="preserve"><value>Sospende la pipeline e apre l'editor di annotazione sui byte catturati. Al salvataggio, i passi successivi vedono l'immagine modificata.</value></data>
+  <data name="WorkflowActionDesc_shareq_apply_image_effects_preset" xml:space="preserve"><value>Esegue una catena salvata di regolazioni / filtri sull'immagine (bordo, filigrana, vignettatura …). Configura i preset in Impostazioni → Effetti immagine.</value></data>
+  <data name="WorkflowActionDesc_shareq_save_to_file" xml:space="preserve"><value>Scrive i byte correnti su disco nella cartella di cattura configurata (Impostazioni → Cattura). 'Formato' è opzionale: lascia vuoto per il formato corrente del bag.</value></data>
+  <data name="WorkflowActionDesc_shareq_add_to_history" xml:space="preserve"><value>Indicizza l'elemento nella cronologia ShareQ in modo che appaia in Win+V.</value></data>
+  <data name="WorkflowActionDesc_shareq_copy_image_to_clipboard" xml:space="preserve"><value>Mette la bitmap sugli appunti di Windows (Ctrl+V in altre app la incolla). Distinto da 'Aggiungi alla cronologia appunti'.</value></data>
+  <data name="WorkflowActionDesc_shareq_paste_history_item" xml:space="preserve"><value>Incolla automaticamente l'N-esimo elemento più recente della cronologia appunti nella finestra in primo piano. 1 = più recente.</value></data>
+  <data name="WorkflowActionDesc_shareq_press_key" xml:space="preserve"><value>Invia un singolo tasto alla finestra in primo piano. Utile tra passi di incolla quando si concatenano elementi appunti su righe consecutive.</value></data>
+  <data name="WorkflowActionDesc_shareq_delay" xml:space="preserve"><value>Mette in pausa il workflow per il numero di millisecondi configurato. Utile tra passi incolla/premi-tasto quando la finestra di destinazione è lenta a processare i tasti.</value></data>
+  <data name="WorkflowActionDesc_shareq_copy_text_to_clipboard" xml:space="preserve"><value>Sostituisce il contenuto degli appunti di Windows con gli URL di upload restituiti dal passo di caricamento.</value></data>
+  <data name="WorkflowActionDesc_shareq_upload" xml:space="preserve"><value>Esegue ogni uploader selezionato dall'utente per la categoria scelta (Impostazioni → Plugin).</value></data>
+  <data name="WorkflowActionDesc_shareq_upload_clipboard_text" xml:space="preserve"><value>Preleva il testo corrente dagli appunti di sistema e lo prepara come payload del workflow (UTF-8). Abbinalo a un passo Carica (categoria testo) per pubblicarlo.</value></data>
+  <data name="WorkflowActionDesc_shareq_capture_selected_explorer_file" xml:space="preserve"><value>Legge il file attualmente selezionato nella finestra Esplora in primo piano e prepara i suoi byte come payload del workflow. Si interrompe in silenzio se non è selezionato nulla.</value></data>
+  <data name="WorkflowActionDesc_shareq_qr_read" xml:space="preserve"><value>Decodifica il primo codice QR trovato nell'immagine corrente. Sostituisce il payload con il testo UTF-8 decodificato. Interrompe il workflow se nessun QR viene trovato.</value></data>
+  <data name="WorkflowActionDesc_shareq_update_item_url" xml:space="preserve"><value>Salva l'URL di upload sull'elemento di cronologia in modo che il popup lo mostri.</value></data>
+  <data name="WorkflowActionDesc_shareq_notify_toast" xml:space="preserve"><value>Mostra un toast Windows che conferma l'operazione. Il click apre l'URL quando presente.</value></data>
+  <data name="WorkflowActionDesc_shareq_open_popup" xml:space="preserve"><value>Apre la finestra appunti di ShareQ (sostituto di Win+V). Premere la stessa scorciatoia mentre è aperta la chiude.</value></data>
+  <data name="WorkflowActionDesc_shareq_toggle_incognito" xml:space="preserve"><value>Attiva/disattiva la modalità incognito — quando attiva, gli elementi degli appunti non vengono catturati nella cronologia.</value></data>
+  <data name="WorkflowActionDesc_shareq_open_screenshot_folder" xml:space="preserve"><value>Apre la cartella di cattura configurata (Impostazioni → Cattura) in Esplora risorse.</value></data>
+  <data name="WorkflowActionDesc_shareq_show_in_explorer" xml:space="preserve"><value>Apre Esplora risorse con il file appena salvato preselezionato. Richiede un passo Salva su file precedente.</value></data>
+  <data name="WorkflowActionDesc_shareq_save_as" xml:space="preserve"><value>Apre una finestra Salva file in cui l'utente sceglie destinazione e nome. Il percorso scelto diventa il nuovo local_path per i passi successivi.</value></data>
+  <data name="WorkflowActionDesc_shareq_open_url" xml:space="preserve"><value>Avvia il browser predefinito sull'URL di upload (o un URL esplicito via config). Utile subito dopo un passo Carica.</value></data>
+  <data name="WorkflowActionDesc_shareq_show_qr_code" xml:space="preserve"><value>Genera un codice QR dall'URL di upload (o testo esplicito) e mostra una piccola finestra. Comodo per scansionare il link su un telefono.</value></data>
+  <data name="WorkflowActionDesc_shareq_save_qr_as_image" xml:space="preserve"><value>Genera un PNG QR e lo scrive su disco. Salva automaticamente in config.path se impostato, altrimenti chiede con una finestra Salva.</value></data>
+  <data name="WorkflowActionDesc_shareq_save_qr_as_svg" xml:space="preserve"><value>Come Salva QR come immagine ma produce un documento SVG scalabile — nitido a qualsiasi dimensione, ideale per stampa o slide.</value></data>
+  <data name="WorkflowActionDesc_shareq_copy_qr_to_clipboard" xml:space="preserve"><value>Genera un PNG QR e lo mette negli appunti di Windows. Pronto da incollare in qualsiasi app che accetta immagini.</value></data>
+  <data name="WorkflowActionDesc_shareq_pin_to_screen" xml:space="preserve"><value>Mostra l'immagine catturata in una finestra sempre in primo piano. Trascina per spostare, rotella per zoom, click destro o Esc per chiudere.</value></data>
+  <data name="WorkflowActionDesc_shareq_launch_app" xml:space="preserve"><value>Avvia un eseguibile, collegamento o file batch. Il percorso supporta l'espansione %ENV%. Gli argomenti vengono passati alla destinazione.</value></data>
+  <data name="WorkflowActionDesc_shareq_open_file" xml:space="preserve"><value>Apre un file o cartella con il gestore predefinito registrato nell'OS — come un doppio click in Esplora.</value></data>
+  <data name="WorkflowActionDesc_shareq_run_command" xml:space="preserve"><value>Esegue una riga di comando shell via cmd /c — supporta PATH, pipe, redirect, comandi concatenati. Fire-and-forget.</value></data>
+  <data name="WorkflowActionDesc_shareq_open_launcher_menu" xml:space="preserve"><value>Mostra l'overlay launcher — una griglia tastiera 3×10 in cui ogni tasto stampabile lancia un percorso / collegamento / target shell.</value></data>
+  <data name="WorkflowActionDesc_shareq_open_settings" xml:space="preserve"><value>Mostra e attiva la finestra Impostazioni principale di ShareQ.</value></data>
+  <data name="WorkflowActionDesc_shareq_open_launcher_drag_mode" xml:space="preserve"><value>Mostra l'overlay launcher già in modalità drag-and-drop: trascina file / cartelle / collegamenti sulle celle per associarli.</value></data>
 </root>

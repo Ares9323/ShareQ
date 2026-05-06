@@ -80,10 +80,10 @@
                                    ToolTip="{Markup:Loc Clipboard_TooltipPinned}">
                             <ui:Button.Style>
                                 <Style TargetType="{x:Type ui:Button}" BasedOn="{StaticResource {x:Type ui:Button}}">
-                                    <Setter Property="Content" Value="📌 Pinned mode" />
+                                    <Setter Property="Content" Value="{Markup:Loc Clipboard_PinnedMode}" />
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsPinned}" Value="True">
-                                            <Setter Property="Content" Value="✓ Pinned (on)" />
+                                            <Setter Property="Content" Value="{Markup:Loc Clipboard_PinnedOn}" />
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -166,12 +166,12 @@
                             <ToggleButton.ToolTip>
                                 <ToolTip>
                                     <StackPanel>
-                                        <TextBlock Text="Image filter" FontWeight="SemiBold" />
-                                        <TextBlock Text="When on, the list includes:" Margin="0,4,0,2" />
-                                        <TextBlock Text="• Images (PNG, JPEG, BMP, GIF, screenshots)" />
-                                        <TextBlock Text="• File copies (Explorer Ctrl+C / drag-drop, .sxie etc.)" />
-                                        <TextBlock Text="• Video / GIF recordings (.mp4, .gif)" />
-                                        <TextBlock Text="Click to hide all of these." Margin="0,4,0,0" FontStyle="Italic" />
+                                        <TextBlock Text="{Markup:Loc Clipboard_FilterImageTitle}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Markup:Loc Clipboard_FilterIncludes}" Margin="0,4,0,2" />
+                                        <TextBlock Text="{Markup:Loc Clipboard_FilterImageBullet1}" />
+                                        <TextBlock Text="{Markup:Loc Clipboard_FilterImageBullet2}" />
+                                        <TextBlock Text="{Markup:Loc Clipboard_FilterImageBullet3}" />
+                                        <TextBlock Text="{Markup:Loc Clipboard_FilterClickToHide}" Margin="0,4,0,0" FontStyle="Italic" />
                                     </StackPanel>
                                 </ToolTip>
                             </ToggleButton.ToolTip>
@@ -181,12 +181,12 @@
                             <ToggleButton.ToolTip>
                                 <ToolTip>
                                     <StackPanel>
-                                        <TextBlock Text="Text filter" FontWeight="SemiBold" />
-                                        <TextBlock Text="When on, the list includes:" Margin="0,4,0,2" />
-                                        <TextBlock Text="• Plain text (everything you copy as text)" />
-                                        <TextBlock Text="• HTML (browsers' Copy link / Copy image address)" />
-                                        <TextBlock Text="• RTF (formatted text from Word / Outlook / etc.)" />
-                                        <TextBlock Text="Click to hide all of these." Margin="0,4,0,0" FontStyle="Italic" />
+                                        <TextBlock Text="{Markup:Loc Clipboard_FilterTextTitle}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Markup:Loc Clipboard_FilterIncludes}" Margin="0,4,0,2" />
+                                        <TextBlock Text="{Markup:Loc Clipboard_FilterTextBullet1}" />
+                                        <TextBlock Text="{Markup:Loc Clipboard_FilterTextBullet2}" />
+                                        <TextBlock Text="{Markup:Loc Clipboard_FilterTextBullet3}" />
+                                        <TextBlock Text="{Markup:Loc Clipboard_FilterClickToHide}" Margin="0,4,0,0" FontStyle="Italic" />
                                     </StackPanel>
                                 </ToolTip>
                             </ToggleButton.ToolTip>
@@ -227,7 +227,7 @@
                     </ItemsControl>
 
                     <ui:Button Grid.Column="2"
-                               Content="Clear all"
+                               Content="{Markup:Loc Clipboard_ClearAll}"
                                Appearance="Danger"
                                Margin="8,0,0,0"
                                Cursor="Arrow"
@@ -595,7 +595,7 @@
                            Margin="0,10,0,0"
                            HorizontalAlignment="Center"
                            Foreground="#666" FontSize="11"
-                           Text="↑↓ navigate · 1-9 focus · Enter paste · Ctrl+1-9 quick paste · ←→ switch category · Ctrl+F search · Ctrl+P pin · Ctrl+Shift+Del clear all · Esc close" />
+                           Text="{Markup:Loc Clipboard_FooterHint}" />
             </Grid>
         </Grid>
     </Border>

@@ -313,13 +313,16 @@ public partial class MainWindow : FluentWindow
         };
         foreach (var group in vm.Workflows.Editor.AddableActions)
         {
-            var groupItem = new MenuItem { Header = group.Category };
+            var groupItem = new MenuItem
+            {
+                Header = Services.WorkflowActionLocalizer.LocalizeCategory(group.Category, group.Category),
+            };
             foreach (var action in group.Actions)
             {
                 var leaf = new MenuItem
                 {
-                    Header = action.DisplayName,
-                    ToolTip = action.Description,
+                    Header = Services.WorkflowActionLocalizer.LocalizeTitle(action.TaskId, action.DisplayName, action.LocalizationKey),
+                    ToolTip = Services.WorkflowActionLocalizer.LocalizeDescription(action.TaskId, action.Description, action.LocalizationKey),
                 };
                 var capturedDescriptor = action;
                 leaf.Click += (_, _) => vm.Workflows.Editor.AddStepCommand.Execute(capturedDescriptor);

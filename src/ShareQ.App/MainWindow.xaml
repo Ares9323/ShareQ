@@ -370,7 +370,7 @@
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel Margin="0,12,0,0">
                                 <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
-                                           Text="ShareX-compatible declarative uploaders. Each .sxcu file becomes its own destination — toggle them on/off in the category tabs after a restart." />
+                                           Text="{Markup:Loc CustomUploaders_Blurb}" />
 
                                 <ItemsControl ItemsSource="{Binding Uploaders.CustomUploaders}">
                                     <ItemsControl.ItemTemplate>
@@ -397,7 +397,7 @@
                                 </ItemsControl>
 
                                 <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" Margin="0,8,0,12"
-                                           Text="No custom uploaders loaded yet."
+                                           Text="{Markup:Loc CustomUploaders_NoneYet}"
                                            Visibility="{Binding Uploaders.HasNoCustomUploaders, Converter={StaticResource BoolToVisibility}}" />
 
                                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
@@ -413,12 +413,12 @@
                                 <Border Background="{DynamicResource Surface3Brush}" CornerRadius="4" Padding="12" Margin="0,16,0,0">
                                     <StackPanel>
                                         <CheckBox x:Name="SxcuAssociationCheckBox"
-                                                  Content="Set ShareQ as the default app for .sxcu files"
+                                                  Content="{Markup:Loc CustomUploaders_SxcuAssociation}"
                                                   Loaded="OnSxcuAssociationCheckBoxLoaded"
                                                   Click="OnSxcuAssociationToggled" />
                                         <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}"
                                                    FontSize="11" TextWrapping="Wrap" Margin="22,4,0,0"
-                                                   Text="When on, double-clicking a .sxcu file in Explorer opens ShareQ and prompts you to install it. Per-user only — doesn't touch system-wide settings or need admin rights." />
+                                                   Text="{Markup:Loc CustomUploaders_SxcuAssociationHint}" />
                                     </StackPanel>
                                 </Border>
 
@@ -429,12 +429,12 @@
                                 <Border Background="{DynamicResource Surface3Brush}" CornerRadius="4" Padding="12" Margin="0,8,0,0">
                                     <StackPanel>
                                         <CheckBox x:Name="ExplorerContextMenuCheckBox"
-                                                  Content="Show 'Upload with ShareQ' in the Explorer right-click menu"
+                                                  Content="{Markup:Loc CustomUploaders_ExplorerVerb}"
                                                   Loaded="OnExplorerContextMenuCheckBoxLoaded"
                                                   Click="OnExplorerContextMenuToggled" />
                                         <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}"
                                                    FontSize="11" TextWrapping="Wrap" Margin="22,4,0,0"
-                                                   Text="Adds an 'Upload with ShareQ' entry to the right-click menu on every file. On Windows 11 you'll find it under 'Show more options'. The entry is always visible — clicking it forwards the file to a running ShareQ, or starts one in tray-only mode if not running." />
+                                                   Text="{Markup:Loc CustomUploaders_ExplorerVerbHint}" />
 
                                         <!-- Workflow selector: which pipeline profile the verb runs.
                                              Default 'Manual upload' uploads to first compatible
@@ -446,7 +446,7 @@
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="Run workflow:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <TextBlock Grid.Column="0" Text="{Markup:Loc CustomUploaders_RunWorkflow}" VerticalAlignment="Center" Margin="0,0,8,0" />
                                             <ComboBox Grid.Column="1" x:Name="ExplorerContextMenuWorkflowCombo"
                                                       Loaded="OnExplorerContextMenuWorkflowComboLoaded"
                                                       SelectionChanged="OnExplorerContextMenuWorkflowChanged"
@@ -696,17 +696,24 @@
                                                                 Visibility="{Binding HasParameter, Converter={StaticResource BoolToVisibility}}">
                                                         <TextBlock Text="{Binding ParameterLabel}" Foreground="#AAA" FontSize="11"
                                                                    VerticalAlignment="Center" Margin="0,0,8,0" />
-                                                        <ui:Button Content="−" MinWidth="32" Padding="6,0"
+                                                        <!-- All three controls (- / value / +) share the same Height so the row reads
+                                                             as one composed stepper instead of two short buttons hugging a tall input.
+                                                             32 is the WPF-UI TextBox baseline that's already used elsewhere in the app. -->
+                                                        <ui:Button Content="−" Width="32" Height="32" Padding="0"
                                                                    VerticalAlignment="Center"
+                                                                   HorizontalContentAlignment="Center"
+                                                                   VerticalContentAlignment="Center"
                                                                    Command="{Binding DecrementParameterCommand}"
                                                                    ToolTip="Decrease" />
                                                         <ui:TextBox Text="{Binding ParameterValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                                    Width="64" Margin="4,0"
+                                                                    Width="64" Height="32" Margin="4,0"
                                                                     TextAlignment="Center"
                                                                     VerticalAlignment="Center"
                                                                     VerticalContentAlignment="Center" />
-                                                        <ui:Button Content="+" MinWidth="32" Padding="6,0"
+                                                        <ui:Button Content="+" Width="32" Height="32" Padding="0"
                                                                    VerticalAlignment="Center"
+                                                                   HorizontalContentAlignment="Center"
+                                                                   VerticalContentAlignment="Center"
                                                                    Command="{Binding IncrementParameterCommand}"
                                                                    ToolTip="Increase" />
                                                     </StackPanel>
@@ -739,23 +746,69 @@
                                                             <DataTemplate>
                                                                 <Grid Margin="0,0,0,4">
                                                                     <Grid.ColumnDefinitions>
-                                                                        <ColumnDefinition Width="100" />
+                                                                        <!-- Auto + MinWidth so a longer translated label ("Strumento predefinito",
+                                                                             "Modalità di composizione" …) doesn't get clipped, while short labels
+                                                                             still align across rows visually. -->
+                                                                        <ColumnDefinition Width="Auto" MinWidth="100" />
                                                                         <ColumnDefinition Width="*" />
                                                                         <ColumnDefinition Width="Auto" />
                                                                         <ColumnDefinition Width="Auto" />
                                                                     </Grid.ColumnDefinitions>
                                                                     <TextBlock Grid.Column="0" Text="{Binding Label}"
                                                                                Foreground="#DDD" FontSize="11"
-                                                                               VerticalAlignment="Center" />
+                                                                               VerticalAlignment="Center"
+                                                                               Margin="0,0,8,0" />
                                                                     <!-- Editable ComboBox when the parameter declares an OptionsKey (e.g. preset
                                                                          picker). IsEditable=True so the user can still type a name not yet in
                                                                          the list — match-by-name at runtime tolerates fresh presets. -->
+                                                                    <!-- Pure selector when StringParameter.IsEditable=false (e.g. image format,
+                                                                         editor tool): SelectedValue round-trips the raw enum / format name into
+                                                                         step.Config, DisplayMemberPath shows the localised label. -->
                                                                     <ComboBox Grid.Column="1"
-                                                                              ItemsSource="{Binding Options}"
-                                                                              Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                                              ItemsSource="{Binding OptionEntries}"
+                                                                              SelectedValue="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                              SelectedValuePath="Raw"
+                                                                              DisplayMemberPath="Display"
+                                                                              FontSize="11">
+                                                                        <ComboBox.Style>
+                                                                            <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+                                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                                <Style.Triggers>
+                                                                                    <MultiDataTrigger>
+                                                                                        <MultiDataTrigger.Conditions>
+                                                                                            <Condition Binding="{Binding HasOptions}" Value="True" />
+                                                                                            <Condition Binding="{Binding IsEditable}" Value="False" />
+                                                                                        </MultiDataTrigger.Conditions>
+                                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                                    </MultiDataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </ComboBox.Style>
+                                                                    </ComboBox>
+                                                                    <!-- Editable ComboBox for free-form options (preset names): user can type a
+                                                                         name not in the list. Text binding round-trips the typed value. -->
+                                                                    <ComboBox Grid.Column="1"
+                                                                              ItemsSource="{Binding OptionEntries}"
+                                                                              DisplayMemberPath="Display"
+                                                                              SelectedValuePath="Raw"
+                                                                              Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                                               IsEditable="True"
-                                                                              FontSize="11"
-                                                                              Visibility="{Binding HasOptions, Converter={StaticResource BoolToVisibility}}" />
+                                                                              FontSize="11">
+                                                                        <ComboBox.Style>
+                                                                            <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+                                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                                <Style.Triggers>
+                                                                                    <MultiDataTrigger>
+                                                                                        <MultiDataTrigger.Conditions>
+                                                                                            <Condition Binding="{Binding HasOptions}" Value="True" />
+                                                                                            <Condition Binding="{Binding IsEditable}" Value="True" />
+                                                                                        </MultiDataTrigger.Conditions>
+                                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                                    </MultiDataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </ComboBox.Style>
+                                                                    </ComboBox>
                                                                     <ui:TextBox Grid.Column="1"
                                                                                 Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                                                 PlaceholderText="{Binding Placeholder}"
@@ -828,7 +881,7 @@
                                     Visibility="{Binding Hotkeys.Workflows.Editor.IsDropTargetAtEnd, Converter={StaticResource BoolToVisibility}}" />
                         </Border>
                         <ui:Button x:Name="AddStepButton" Margin="0,4,0,0" HorizontalAlignment="Left"
-                                   Content="+ Add step"
+                                   Content="{Markup:Loc Hotkeys_AddStep}"
                                    Click="OnAddStepButtonClick" />
                     </StackPanel>
                 </ScrollViewer>
