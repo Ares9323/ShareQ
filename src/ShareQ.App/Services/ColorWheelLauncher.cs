@@ -59,7 +59,30 @@ public sealed class ColorWheelLauncher
             ["CopyDec"]    = ShareQ.App.Resources.Strings.ColorPicker_CopyDec,
             ["Ok"]         = ShareQ.App.Resources.Strings.Common_Ok,
             ["Cancel"]     = ShareQ.App.Resources.Strings.Common_Cancel,
+            // Tooltip keys — same naming scheme as Content keys, prefixed "Tooltip" on the
+            // dialog side. Resolved at launcher time so the editor never reaches into our resx.
+            ["TooltipCopyAll"]    = Loc("ColorPicker_TooltipCopyAll"),
+            ["TooltipCopyRgb"]    = Loc("ColorPicker_TooltipCopyRgb"),
+            ["TooltipCopyCmyk"]   = Loc("ColorPicker_TooltipCopyCmyk"),
+            ["TooltipCopyHsb"]    = Loc("ColorPicker_TooltipCopyHsb"),
+            ["TooltipCopyLinear"] = Loc("ColorPicker_TooltipCopyLinear"),
+            ["TooltipCopyBgra"]   = Loc("ColorPicker_TooltipCopyBgra"),
+            ["TooltipCopyHex"]    = Loc("ColorPicker_TooltipCopyHex"),
+            ["TooltipCopyDec"]    = Loc("ColorPicker_TooltipCopyDec"),
+            ["TooltipSampler"]    = Loc("ColorPicker_TooltipSampler"),
+            ["TooltipSrgb"]       = Loc("ColorPicker_TooltipSrgb"),
+            ["TooltipWheel"]      = Loc("ColorPicker_TooltipWheel"),
+            ["TooltipSquare"]     = Loc("ColorPicker_TooltipSquare"),
         });
+
+        // Local helper: resx lookup honouring the singleton's pinned culture. Lives here so
+        // the dictionary literal stays terse instead of repeating the lookup chain N times.
+        static string Loc(string key)
+        {
+            var culture = ShareQ.App.Markup.LocalizedStrings.Instance.Culture
+                          ?? System.Globalization.CultureInfo.CurrentUICulture;
+            return ShareQ.App.Resources.Strings.ResourceManager.GetString(key, culture) ?? key;
+        }
 
         // Wire the eyedropper button so clicking 🔍 actually opens the screen sampler. The
         // picker itself has no DI access, hence the bridge here. The hex returned by the

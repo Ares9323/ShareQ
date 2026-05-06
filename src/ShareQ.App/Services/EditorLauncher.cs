@@ -141,15 +141,18 @@ public sealed class EditorLauncher
         _logger.LogInformation("EditorLauncher.EditAsync: opening with tool={Tool} (lastUsed={LastUsed}, override='{Override}')",
             resolvedTool, defaults.Tool, defaultTool ?? "(none)");
 
-        // Editor is WPF — must be created and shown on the UI thread. The pipeline runs on a
-        // background thread, so we marshal the show + the post-show snapshot of editor state
-        // through the dispatcher; the persistence call afterwards happens off the dispatcher
-        // thread (it's just SQLite IO via SettingsStore).
+        // Editor is WPF — must be created on the UI thread. We use Show() (modeless) instead
+        // of ShowDialog() so the user can keep multiple editors open in parallel: rapid-fire
+        // PrintScreen / region-capture invocations each produce their own independent window.
+        // ShowDialog used to disable every other window in the app (modal stack), which made
+        // only the topmost editor usable.
+        //
+        // The TaskCompletionSource is what restores the "EditAsync returns when the user
+        // saves or cancels" semantics: hooked off the Closed event, completed with the
+        // editor's snapshot at that point.
         var dispatcher = System.Windows.Application.Current.Dispatcher;
-        EditorDefaults? snapshot = null;
-        bool wasSaved = false;
-        byte[]? exportedPng = null;
-        int exportW = 0, exportH = 0;
+        var snapshotTcs = new TaskCompletionSource<(EditorDefaults Snapshot, bool Saved, byte[]? Png, int W, int H)>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
 
         await dispatcher.InvokeAsync(() =>
         {
@@ -175,31 +178,31 @@ public sealed class EditorLauncher
                 if (monitor is not null)
                     window.EnableFullscreen(monitor.X, monitor.Y, monitor.Width, monitor.Height);
             }
-            window.ShowDialog();
-
-            // Snapshot whatever the user left selected. Done INSIDE the dispatcher tick because
-            // CurrentTool / *Color etc. are DependencyProperty-adjacent and reading them from a
-            // pool thread would race the WPF binding system.
-            snapshot = new EditorDefaults(vm.OutlineColor, vm.FillColor, vm.StrokeWidth, vm.CurrentTool, vm.CurrentTextStyle,
-                vm.FreehandSmoothDefault, vm.FreehandEndArrowDefault);
-            wasSaved = window.Saved;
-            if (wasSaved)
+            window.Closed += (_, _) =>
             {
-                var canvasHost = (Grid)window.FindName("CanvasHost")!;
-                (exportW, exportH) = ResolveExportPixels(canvasHost);
-                exportedPng = CanvasPngExporter.Export(canvasHost, exportW, exportH);
-            }
+                // Snapshot whatever the user left selected, BEFORE the window unloads — reading
+                // CurrentTool / *Color from a pool thread later would race the WPF binding system.
+                var snap = new EditorDefaults(vm.OutlineColor, vm.FillColor, vm.StrokeWidth, vm.CurrentTool, vm.CurrentTextStyle,
+                    vm.FreehandSmoothDefault, vm.FreehandEndArrowDefault);
+                byte[]? png = null;
+                int w = 0, h = 0;
+                if (window.Saved)
+                {
+                    var canvasHost = (Grid)window.FindName("CanvasHost")!;
+                    (w, h) = ResolveExportPixels(canvasHost);
+                    png = CanvasPngExporter.Export(canvasHost, w, h);
+                }
+                snapshotTcs.TrySetResult((snap, window.Saved, png, w, h));
+            };
+            window.Show();
         }).Task.ConfigureAwait(false);
 
+        var (snapshot, wasSaved, exportedPng, exportW, exportH) = await snapshotTcs.Task.ConfigureAwait(false);
+
         // Persist the editor defaults BEFORE returning so a subsequent EditAsync call (or any
-        // other surface that reads via LoadAsync) sees the new value. The previous fire-and-
-        // forget meant a quick re-open could read the old tool while the SQLite write was
-        // still in flight.
-        if (snapshot is not null)
-        {
-            await _defaultsStore.SaveAsync(snapshot, CancellationToken.None).ConfigureAwait(false);
-            _logger.LogInformation("EditorLauncher.EditAsync: persisted tool={Tool} on close", snapshot.Tool);
-        }
+        // other surface that reads via LoadAsync) sees the new value.
+        await _defaultsStore.SaveAsync(snapshot, CancellationToken.None).ConfigureAwait(false);
+        _logger.LogInformation("EditorLauncher.EditAsync: persisted tool={Tool} on close", snapshot.Tool);
 
         if (!wasSaved || exportedPng is null) return null;
         // EditAsync feeds the pipeline (upload / save-to-file / etc.), so the bytes need to

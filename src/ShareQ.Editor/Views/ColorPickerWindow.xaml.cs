@@ -758,5 +758,21 @@ public partial class ColorPickerWindow : Wpf.Ui.Controls.FluentWindow
         if (labels.TryGetValue("CopyDec", out var copyDec)) CopyDecBtn.Content = copyDec;
         if (labels.TryGetValue("Ok", out var ok)) OkButton.Content = ok;
         if (labels.TryGetValue("Cancel", out var cancel)) CancelButton.Content = cancel;
+
+        // Tooltip translations — keys with "Tooltip" prefix flow into ToolTip on the matching
+        // control. Notation-only tooltips (rgb(R,G,B) etc.) are resx-managed too so the
+        // translator can shorten them or swap the locale's decimal separator if needed.
+        if (labels.TryGetValue("TooltipCopyAll", out var t1)) CopyAllBtn.ToolTip = t1;
+        if (labels.TryGetValue("TooltipCopyRgb", out var t2)) CopyRgbBtn.ToolTip = t2;
+        if (labels.TryGetValue("TooltipCopyCmyk", out var t3)) CopyCmykBtn.ToolTip = t3;
+        if (labels.TryGetValue("TooltipCopyHsb", out var t4)) CopyHsbBtn.ToolTip = t4;
+        if (labels.TryGetValue("TooltipCopyLinear", out var t5)) CopyLinearBtn.ToolTip = t5;
+        if (labels.TryGetValue("TooltipCopyBgra", out var t6)) CopyBgraBtn.ToolTip = t6;
+        if (labels.TryGetValue("TooltipCopyHex", out var t7)) CopyHexBtn.ToolTip = t7;
+        if (labels.TryGetValue("TooltipCopyDec", out var t8)) CopyDecBtn.ToolTip = t8;
+        if (labels.TryGetValue("TooltipSampler", out var t9)) SamplerBtn.ToolTip = t9;
+        if (labels.TryGetValue("TooltipSrgb", out var t10)) SrgbToggle.ToolTip = t10;
+        if (labels.TryGetValue("TooltipWheel", out var t11)) WheelShape.ToolTip = t11;
+        if (labels.TryGetValue("TooltipSquare", out var t12)) SquareShape.ToolTip = t12;
     }
 }

@@ -51,8 +51,11 @@ public static class WorkflowDisplayNameLocalizer
     /// <summary>Cultura di lookup. Same precedence the LocExtension indexer uses:
     /// the static override pinned by LocalizationService.ApplyToThread wins; CurrentUICulture
     /// is the fallback for early callsites running before the service has loaded.</summary>
+    // Read culture from the LocalizedStrings singleton (instance field, survives the WPF /
+    // Hosting reset of static culture state we discovered during the i18n bring-up). Strings.
+    // Culture is unreliable as a primary source here.
     private static System.Globalization.CultureInfo Culture =>
-        Strings.Culture ?? System.Globalization.CultureInfo.CurrentUICulture;
+        Markup.LocalizedStrings.Instance.Culture ?? System.Globalization.CultureInfo.CurrentUICulture;
 
     public static string Localize(string profileId, string fallback)
     {

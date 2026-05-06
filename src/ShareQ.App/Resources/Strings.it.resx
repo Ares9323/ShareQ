@@ -226,15 +226,32 @@
   <data name="Theme_Surface2" xml:space="preserve"><value>Superficie 2 (media)</value></data>
   <data name="Theme_Surface3" xml:space="preserve"><value>Superficie 3 (più chiara)</value></data>
   <data name="Theme_SurfacesHint" xml:space="preserve"><value>Superficie 1 → campi di input e righe di lista. Superficie 2 → corpo della finestra principale. Superficie 3 → pannelli in primo piano e maniglie di drag.</value></data>
+  <data name="Theme_TooltipSwatch" xml:space="preserve"><value>Click per aprire il selettore colore</value></data>
+  <data name="Theme_ForegroundLightHint" xml:space="preserve"><value>Colore di testo / icone disegnato sopra lo sfondo accento — scegli un valore con contrasto sufficiente (es. bianco su accento scuro, quasi-nero su accento chiaro).</value></data>
+  <data name="Theme_ForegroundDarkHint" xml:space="preserve"><value>Colore del sottotesto — didascalie, età / tipo / sorgente nelle righe degli appunti, descrizioni in questa pagina. Modificalo per ammorbidire o intensificare il testo secondario in tutta l'app.</value></data>
+  <data name="Theme_AccentBackgroundDarkHint" xml:space="preserve"><value>Usato dall'overlay launcher (sfondo celle, header tab inattive). Scegli una tonalità a bassa luminosità così l'accento principale risalta sopra di essa.</value></data>
+  <data name="Theme_AccentDangerHint" xml:space="preserve"><value>Colora i pulsanti di cestino / eliminazione in tutta l'app (toolbar appunti, rimozione categorie, 'Pulisci tutto'). Scegli una tonalità che contrasti bene col tuo colore accento.</value></data>
+
+  <data name="Debug_CopyAll" xml:space="preserve"><value>Copia tutto</value></data>
+  <data name="Debug_CopyAllTooltip" xml:space="preserve"><value>Copia il log visibile negli appunti per incollarlo in una segnalazione bug</value></data>
+  <data name="Debug_Clear" xml:space="preserve"><value>Pulisci</value></data>
+  <data name="Debug_ClearTooltip" xml:space="preserve"><value>Rimuovi ogni voce nel buffer</value></data>
+  <data name="Debug_AutoScroll" xml:space="preserve"><value>Scroll automatico all'ultima voce</value></data>
+  <data name="Debug_AutoScrollTooltip" xml:space="preserve"><value>Blocca la vista sull'ultima voce. Deselezionalo mentre scorri verso l'alto per leggere le righe precedenti.</value></data>
+
+  <data name="About_Tagline" xml:space="preserve"><value>Gestore appunti · strumento screenshot e condivisione</value></data>
+  <data name="About_Version" xml:space="preserve"><value>Versione </value></data>
+  <data name="About_InspiredBy" xml:space="preserve"><value>Ispirato da</value></data>
+  <data name="About_CheckForUpdates" xml:space="preserve"><value>Cerca aggiornamenti</value></data>
 
   <data name="ThemePreset_Custom" xml:space="preserve"><value>Personalizzato (valori attuali)</value></data>
-  <data name="ThemePreset_Default" xml:space="preserve"><value>ShareQ predefinito</value></data>
-  <data name="ThemePreset_WizardBlue" xml:space="preserve"><value>Mago blu</value></data>
-  <data name="ThemePreset_SorcererPurple" xml:space="preserve"><value>Stregone viola</value></data>
-  <data name="ThemePreset_DruidGreen" xml:space="preserve"><value>Druido verde</value></data>
-  <data name="ThemePreset_WarlockRed" xml:space="preserve"><value>Warlock rosso</value></data>
-  <data name="ThemePreset_ClericGold" xml:space="preserve"><value>Chierico oro</value></data>
-  <data name="ThemePreset_BardRouge" xml:space="preserve"><value>Bardo rosa</value></data>
+  <data name="ThemePreset_Default" xml:space="preserve"><value>Predefinito ShareQ</value></data>
+  <data name="ThemePreset_WizardBlue" xml:space="preserve"><value>Blu Mago</value></data>
+  <data name="ThemePreset_SorcererPurple" xml:space="preserve"><value>Viola Stregone</value></data>
+  <data name="ThemePreset_DruidGreen" xml:space="preserve"><value>Verde Druido</value></data>
+  <data name="ThemePreset_WarlockRed" xml:space="preserve"><value>Rosso Warlock</value></data>
+  <data name="ThemePreset_ClericGold" xml:space="preserve"><value>Oro Chierico</value></data>
+  <data name="ThemePreset_BardRouge" xml:space="preserve"><value>Rosa Bardo</value></data>
   <data name="ThemePreset_BurnMyEyes" xml:space="preserve"><value>Accecami</value></data>
 
   <data name="Categories_AddNew" xml:space="preserve"><value>Aggiungi una nuova categoria</value></data>
@@ -256,7 +273,7 @@
   <data name="ColorPicker_CopyHex" xml:space="preserve"><value>📋 HEX</value></data>
   <data name="ColorPicker_CopyDec" xml:space="preserve"><value>📋 DEC</value></data>
 
-  <data name="ImageEffects_Title" xml:space="preserve"><value>ShareQ - Effetti immagine</value></data>
+  <data name="ImageEffects_Title" xml:space="preserve"><value>ShareQ - Effetti Immagine</value></data>
   <data name="ImageEffects_Presets" xml:space="preserve"><value>Preset</value></data>
   <data name="ImageEffects_TooltipNewPreset" xml:space="preserve"><value>Nuovo preset</value></data>
   <data name="ImageEffects_TooltipDeletePreset" xml:space="preserve"><value>Elimina preset</value></data>
@@ -391,7 +408,7 @@
   <data name="Clipboard_FilterTextBullet2" xml:space="preserve"><value>• HTML (Copia link / Copia indirizzo immagine dei browser)</value></data>
   <data name="Clipboard_FilterTextBullet3" xml:space="preserve"><value>• RTF (testo formattato da Word / Outlook / ecc.)</value></data>
   <data name="Clipboard_PinnedMode" xml:space="preserve"><value>📌 Modalità persistente</value></data>
-  <data name="Clipboard_PinnedOn" xml:space="preserve"><value>✓ Persistente (attiva)</value></data>
+  <data name="Clipboard_PinnedOn" xml:space="preserve"><value>✓ Modalità persistente attiva</value></data>
   <data name="Clipboard_FooterHint" xml:space="preserve"><value>↑↓ naviga · 1-9 focus · Invio incolla · Ctrl+1-9 incolla rapido · ←→ cambia categoria · Ctrl+F cerca · Ctrl+P spilla · Ctrl+Maiusc+Canc pulisci tutto · Esc chiudi</value></data>
   <data name="Clipboard_DefaultCategory" xml:space="preserve"><value>Appunti</value></data>
 
@@ -465,8 +482,8 @@
   <data name="CustomUploaders_NoneYet" xml:space="preserve"><value>Nessun uploader personalizzato caricato.</value></data>
   <data name="CustomUploaders_SxcuAssociation" xml:space="preserve"><value>Imposta ShareQ come app predefinita per i file .sxcu</value></data>
   <data name="CustomUploaders_SxcuAssociationHint" xml:space="preserve"><value>Quando attivo, il doppio click su un file .sxcu in Esplora apre ShareQ e chiede di installarlo. Solo per utente — non modifica impostazioni di sistema né richiede permessi di amministratore.</value></data>
-  <data name="CustomUploaders_ExplorerVerb" xml:space="preserve"><value>Mostra 'Carica con ShareQ' nel menu contestuale di Esplora</value></data>
-  <data name="CustomUploaders_ExplorerVerbHint" xml:space="preserve"><value>Aggiunge una voce 'Carica con ShareQ' al menu contestuale di ogni file. Su Windows 11 si trova sotto 'Mostra altre opzioni'. La voce è sempre visibile — il click inoltra il file a un'istanza ShareQ in esecuzione, o ne avvia una in modalità solo tray se non è attiva.</value></data>
+  <data name="CustomUploaders_ExplorerVerb" xml:space="preserve"><value>Mostra 'Upload con ShareQ' nel menu contestuale di Esplora</value></data>
+  <data name="CustomUploaders_ExplorerVerbHint" xml:space="preserve"><value>Aggiunge una voce 'Upload con ShareQ' al menu contestuale di ogni file. Su Windows 11 si trova sotto 'Mostra altre opzioni'. La voce è sempre visibile — il click inoltra il file a un'istanza ShareQ in esecuzione, o ne avvia una in modalità solo tray se non è attiva.</value></data>
   <data name="CustomUploaders_RunWorkflow" xml:space="preserve"><value>Esegui workflow:</value></data>
 
   <data name="WorkflowActionCategory_Capture" xml:space="preserve"><value>Cattura</value></data>

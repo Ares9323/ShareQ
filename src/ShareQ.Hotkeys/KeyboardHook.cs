@@ -80,14 +80,23 @@ public sealed class KeyboardHook : IDisposable
         // Without this, auto-repeat (Windows fires WM_KEYDOWN repeatedly while the user holds
         // the combo) would invoke the callback once per repeat — e.g. holding Ctrl+Alt+R would
         // stack endless region-capture overlays.
-        if (wParam == (IntPtr)WM_KEYUP || wParam == (IntPtr)WM_SYSKEYUP)
+        var isKeyDown = wParam == (IntPtr)WM_KEYDOWN || wParam == (IntPtr)WM_SYSKEYDOWN;
+        var isKeyUp = wParam == (IntPtr)WM_KEYUP || wParam == (IntPtr)WM_SYSKEYUP;
+        if (isKeyUp)
         {
             lock (_heldKeysLock) _heldKeys.Remove(data.vkCode);
+            // Special-case: Windows consumes WM_KEYDOWN before the low-level hook gets it for a
+            // handful of system keys — only the KEYUP reaches us. PrintScreen and Pause/Break
+            // are the two we care about for hotkey binding; the rest are unbindable by design
+            // (Ctrl+Alt+Del, Ctrl+Shift+Esc → SAS, Win+L → secure-desktop transition — gated at
+            // the kernel level by winlogon and unreachable from any usermode hook).
+            if (data.vkCode != VK_SNAPSHOT && data.vkCode != VK_PAUSE)
+                return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+        }
+        else if (!isKeyDown)
+        {
             return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
         }
-
-        if (wParam != (IntPtr)WM_KEYDOWN && wParam != (IntPtr)WM_SYSKEYDOWN)
-            return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 
         var modifiers = ReadModifiers();
 
@@ -181,6 +190,8 @@ public sealed class KeyboardHook : IDisposable
     private const int VK_SHIFT = 0x10;
     private const int VK_CONTROL = 0x11;
     private const int VK_MENU = 0x12; // Alt
+    private const uint VK_SNAPSHOT = 0x2C; // PrintScreen
+    private const uint VK_PAUSE = 0x13;    // Pause / Break
     private const int VK_LWIN = 0x5B;
     private const int VK_RWIN = 0x5C;
 

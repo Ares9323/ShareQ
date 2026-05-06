@@ -1043,7 +1043,7 @@
                             Background="{Binding Theme.AccentForegroundPreview}"
                             BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
-                            ToolTip="Click to open the color picker"
+                            ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnAccentFgSwatchClick" />
                     <ui:TextBox Grid.Column="1"
                                 Text="{Binding Theme.AccentForegroundLightHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -1052,7 +1052,7 @@
                 </Grid>
 
                 <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
-                           Text="Text / icon colour drawn on top of the accent background — pick one with enough contrast (e.g. white on a dark accent, near-black on a light one)." />
+                           Text="{Markup:Loc Theme_ForegroundLightHint}" />
 
                 <TextBlock Text="{Markup:Loc Theme_ForegroundDark}" FontWeight="SemiBold" Margin="0,4,0,4" />
                 <Grid Margin="0,0,0,8">
@@ -1064,7 +1064,7 @@
                             Background="{Binding Theme.AccentForegroundDarkPreview}"
                             BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
-                            ToolTip="Click to open the color picker"
+                            ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnAccentForegroundDarkSwatchClick" />
                     <ui:TextBox Grid.Column="1"
                                 Text="{Binding Theme.AccentForegroundDarkHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -1073,7 +1073,7 @@
                 </Grid>
 
                 <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
-                           Text="Subtext colour — captions, age / kind / source on clipboard rows, descriptions on this page. Tweak it to soften or sharpen secondary text across the whole app." />
+                           Text="{Markup:Loc Theme_ForegroundDarkHint}" />
 
                 <!-- Background row — renamed "light" so it pairs visually with "Accent background
                      dark" below. Both tint surfaces inside the app: light is the bright primary
@@ -1088,7 +1088,7 @@
                             Background="{Binding Theme.AccentBackgroundPreview}"
                             BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
-                            ToolTip="Click to open the color picker"
+                            ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnAccentBgSwatchClick" />
                     <ui:TextBox Grid.Column="1"
                                 Text="{Binding Theme.AccentBackgroundLightHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -1109,7 +1109,7 @@
                             Background="{Binding Theme.AccentBackgroundDarkPreview}"
                             BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
-                            ToolTip="Click to open the color picker"
+                            ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnAccentDarkSwatchClick" />
                     <ui:TextBox Grid.Column="1"
                                 Text="{Binding Theme.AccentBackgroundDarkHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -1118,7 +1118,7 @@
                 </Grid>
 
                 <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
-                           Text="Used by the launcher overlay (cell backgrounds, inactive tab headers). Pick a low-luminance shade so the main accent reads on top of it." />
+                           Text="{Markup:Loc Theme_AccentBackgroundDarkHint}" />
 
                 <!-- Destructive-action accent: Delete buttons, trash icons, "this is irreversible"
                      cues. Separate from the main accent so a green/blue theme doesn't get stuck
@@ -1133,7 +1133,7 @@
                             Background="{Binding Theme.AccentDeletePreview}"
                             BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
-                            ToolTip="Click to open the color picker"
+                            ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnAccentDeleteSwatchClick" />
                     <ui:TextBox Grid.Column="1"
                                 Text="{Binding Theme.AccentDangerHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -1142,7 +1142,7 @@
                 </Grid>
 
                 <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
-                           Text="Tints the trash / delete buttons across the app (clipboard toolbar, category remove, ‘Clear all’). Tweak it to a shade that contrasts cleanly with your accent colour." />
+                           Text="{Markup:Loc Theme_AccentDangerHint}" />
 
                 <!-- Three neutral surface tones — darkest → lightest. The XAML across the app
                      consumes these via DynamicResource so changes propagate everywhere live. -->
@@ -1156,7 +1156,7 @@
                             Background="{Binding Theme.Surface1Preview}"
                             BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
-                            ToolTip="Click to open the color picker"
+                            ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnSurface1SwatchClick" />
                     <ui:TextBox Grid.Column="1"
                                 Text="{Binding Theme.Surface1Hex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -1174,7 +1174,7 @@
                             Background="{Binding Theme.Surface2Preview}"
                             BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
-                            ToolTip="Click to open the color picker"
+                            ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnSurface2SwatchClick" />
                     <ui:TextBox Grid.Column="1"
                                 Text="{Binding Theme.Surface2Hex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -1192,7 +1192,7 @@
                             Background="{Binding Theme.Surface3Preview}"
                             BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
-                            ToolTip="Click to open the color picker"
+                            ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnSurface3SwatchClick" />
                     <ui:TextBox Grid.Column="1"
                                 Text="{Binding Theme.Surface3Hex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -1574,17 +1574,17 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" Text="{Markup:Loc Sidebar_DebugConsole}" FontSize="20" FontWeight="SemiBold"
                                VerticalAlignment="Center" />
-                    <ui:Button Grid.Column="1" Content="Copy all" Margin="0,0,4,0"
+                    <ui:Button Grid.Column="1" Content="{Markup:Loc Debug_CopyAll}" Margin="0,0,4,0"
                                Command="{Binding Debug.CopyAllCommand}"
-                               ToolTip="Copy the visible log to the clipboard for pasting into a bug report" />
-                    <ui:Button Grid.Column="2" Content="Clear"
+                               ToolTip="{Markup:Loc Debug_CopyAllTooltip}" />
+                    <ui:Button Grid.Column="2" Content="{Markup:Loc Debug_Clear}"
                                Command="{Binding Debug.ClearCommand}"
-                               ToolTip="Drop every entry in the buffer" />
+                               ToolTip="{Markup:Loc Debug_ClearTooltip}" />
                 </Grid>
-                <CheckBox Grid.Row="1" Content="Auto-scroll to latest"
+                <CheckBox Grid.Row="1" Content="{Markup:Loc Debug_AutoScroll}"
                           IsChecked="{Binding Debug.AutoScroll, Mode=TwoWay}"
                           Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" Margin="0,8,0,8"
-                          ToolTip="Locks the view to the most recent entry. Uncheck while scrolling up to read older lines." />
+                          ToolTip="{Markup:Loc Debug_AutoScrollTooltip}" />
                 <Border Grid.Row="2" Background="#0F0F0F" BorderBrush="#333" BorderThickness="1" CornerRadius="4">
                     <ListBox x:Name="DebugLogList"
                              ItemsSource="{Binding Debug.Entries}"
@@ -1654,10 +1654,10 @@
                 </Viewbox>
                 <TextBlock Text="ShareQ" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" />
                 <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0">
-                    <Run Text="Version " /><Run Text="{Binding AppVersion, Mode=OneWay}" />
+                    <Run Text="{Markup:Loc About_Version}" /><Run Text="{Binding AppVersion, Mode=OneWay}" />
                 </TextBlock>
                 <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" HorizontalAlignment="Center" Margin="0,16,0,0"
-                           Text="Clipboard manager · screenshot &amp; share tool" />
+                           Text="{Markup:Loc About_Tagline}" />
 
                 <!-- Source code link. Hyperlink.RequestNavigate fires OnHyperlinkClicked in
                      code-behind which shells out to the user's default browser. Foreground is
@@ -1675,7 +1675,7 @@
                      popup model; MaxLauncher inspired the launcher grid. -->
                 <TextBlock HorizontalAlignment="Center" Margin="0,20,0,4"
                            Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11"
-                           Text="Inspired by" />
+                           Text="{Markup:Loc About_InspiredBy}" />
                 <TextBlock HorizontalAlignment="Center" FontSize="12">
                     <Hyperlink NavigateUri="https://github.com/ShareX/ShareX" RequestNavigate="OnHyperlinkClicked"
                                Foreground="{DynamicResource AccentForegroundBrush}">ShareX</Hyperlink>
@@ -1689,7 +1689,7 @@
 
                 <!-- Manual update check. Disabled when running outside a Velopack-managed install
                      (e.g. dev build / hand-extracted zip) — there's nothing to atomically swap. -->
-                <ui:Button x:Name="CheckForUpdatesButton" Content="Check for updates"
+                <ui:Button x:Name="CheckForUpdatesButton" Content="{Markup:Loc About_CheckForUpdates}"
                            Margin="0,28,0,0" HorizontalAlignment="Center"
                            Padding="16,6"
                            Click="OnCheckForUpdatesClicked" />

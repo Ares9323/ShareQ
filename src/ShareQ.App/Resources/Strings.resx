@@ -245,6 +245,25 @@
   <data name="Theme_Surface2" xml:space="preserve"><value>Surface 2 (medium)</value></data>
   <data name="Theme_Surface3" xml:space="preserve"><value>Surface 3 (lightest)</value></data>
   <data name="Theme_SurfacesHint" xml:space="preserve"><value>Surface 1 → input fields and list rows. Surface 2 → main window body. Surface 3 → elevated panels and drag handles.</value></data>
+  <data name="Theme_TooltipSwatch" xml:space="preserve"><value>Click to open the color picker</value></data>
+  <data name="Theme_ForegroundLightHint" xml:space="preserve"><value>Text / icon colour drawn on top of the accent background — pick one with enough contrast (e.g. white on a dark accent, near-black on a light one).</value></data>
+  <data name="Theme_ForegroundDarkHint" xml:space="preserve"><value>Subtext colour — captions, age / kind / source on clipboard rows, descriptions on this page. Tweak it to soften or sharpen secondary text across the whole app.</value></data>
+  <data name="Theme_AccentBackgroundDarkHint" xml:space="preserve"><value>Used by the launcher overlay (cell backgrounds, inactive tab headers). Pick a low-luminance shade so the main accent reads on top of it.</value></data>
+  <data name="Theme_AccentDangerHint" xml:space="preserve"><value>Tints the trash / delete buttons across the app (clipboard toolbar, category remove, 'Clear all'). Tweak it to a shade that contrasts cleanly with your accent colour.</value></data>
+
+  <!-- Debug console toolbar. -->
+  <data name="Debug_CopyAll" xml:space="preserve"><value>Copy all</value></data>
+  <data name="Debug_CopyAllTooltip" xml:space="preserve"><value>Copy the visible log to the clipboard for pasting into a bug report</value></data>
+  <data name="Debug_Clear" xml:space="preserve"><value>Clear</value></data>
+  <data name="Debug_ClearTooltip" xml:space="preserve"><value>Drop every entry in the buffer</value></data>
+  <data name="Debug_AutoScroll" xml:space="preserve"><value>Auto-scroll to latest</value></data>
+  <data name="Debug_AutoScrollTooltip" xml:space="preserve"><value>Locks the view to the most recent entry. Uncheck while scrolling up to read older lines.</value></data>
+
+  <!-- About tab. -->
+  <data name="About_Tagline" xml:space="preserve"><value>Clipboard manager · screenshot &amp; share tool</value></data>
+  <data name="About_Version" xml:space="preserve"><value>Version </value></data>
+  <data name="About_InspiredBy" xml:space="preserve"><value>Inspired by</value></data>
+  <data name="About_CheckForUpdates" xml:space="preserve"><value>Check for updates</value></data>
 
   <!-- Theme presets (curated palettes). -->
   <data name="ThemePreset_Custom" xml:space="preserve"><value>Custom (current values)</value></data>
@@ -277,6 +296,18 @@
   <data name="ColorPicker_CopyBgra" xml:space="preserve"><value>Copy BGRA</value></data>
   <data name="ColorPicker_CopyHex" xml:space="preserve"><value>📋 HEX</value></data>
   <data name="ColorPicker_CopyDec" xml:space="preserve"><value>📋 DEC</value></data>
+  <data name="ColorPicker_TooltipCopyAll" xml:space="preserve"><value>Copy every format on separate lines.</value></data>
+  <data name="ColorPicker_TooltipCopyRgb" xml:space="preserve"><value>rgb(R, G, B)</value></data>
+  <data name="ColorPicker_TooltipCopyCmyk" xml:space="preserve"><value>cmyk(C%, M%, Y%, K%)</value></data>
+  <data name="ColorPicker_TooltipCopyHsb" xml:space="preserve"><value>hsb(H°, S%, B%)</value></data>
+  <data name="ColorPicker_TooltipCopyLinear" xml:space="preserve"><value>Unreal FLinearColor (R=…,G=…,B=…,A=…)</value></data>
+  <data name="ColorPicker_TooltipCopyBgra" xml:space="preserve"><value>Unreal FColor (B=…,G=…,R=…,A=…)</value></data>
+  <data name="ColorPicker_TooltipCopyHex" xml:space="preserve"><value>Copy hex value</value></data>
+  <data name="ColorPicker_TooltipCopyDec" xml:space="preserve"><value>Copy decimal value</value></data>
+  <data name="ColorPicker_TooltipSampler" xml:space="preserve"><value>Sample a pixel from anywhere on screen</value></data>
+  <data name="ColorPicker_TooltipSrgb" xml:space="preserve"><value>Apply sRGB gamma to the preview swatches / sliders / wheel. Disable to see colors interpreted as linear (closer to how renderers like Unreal treat texture pixels).</value></data>
+  <data name="ColorPicker_TooltipWheel" xml:space="preserve"><value>HSV wheel — Hue around the rim, Saturation centre→edge. V on the slider.</value></data>
+  <data name="ColorPicker_TooltipSquare" xml:space="preserve"><value>SV square at fixed Hue — every pixel a distinct colour, all of S×V on a single drag.</value></data>
 
   <!-- Image effects window. -->
   <data name="ImageEffects_Title" xml:space="preserve"><value>ShareQ - Image effects</value></data>
