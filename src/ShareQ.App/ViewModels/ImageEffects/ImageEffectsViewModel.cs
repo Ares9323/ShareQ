@@ -179,9 +179,20 @@ public sealed partial class ImageEffectsViewModel : ObservableObject, IDisposabl
         }
     }
 
+    /// <summary>Suppress automatic preset persistence — used by the editor handoff so the
+    /// user's slider / param tweaks during a "pick effects for THIS screenshot" session don't
+    /// silently overwrite the saved preset they're previewing. The editor's "Apply to editor"
+    /// button still works (renders the in-memory state), and an explicit "Override preset"
+    /// button is shown in that mode for users who DO want to save the changes back.
+    /// Setting this is one-way (the host turns it on once when launching the effects window
+    /// in editor mode); flipping it off mid-session would re-enable the auto-save which is
+    /// confusing UX.</summary>
+    public bool SuppressAutoPersist { get; set; }
+
     private async Task PersistSelectedAsync()
     {
         if (_store is null || SelectedPreset is null) return;
+        if (SuppressAutoPersist) return;
         try
         {
             // sortOrder = null → keep current ordering. Reorder is a separate explicit op once
@@ -194,9 +205,26 @@ public sealed partial class ImageEffectsViewModel : ObservableObject, IDisposabl
         }
     }
 
+    /// <summary>Force a save of the current preset state — bypasses <see cref="SuppressAutoPersist"/>.
+    /// Wired to the "Override preset" button visible only in editor mode; it's the user's
+    /// explicit "yes I really do want my edits to overwrite the saved preset" gesture.</summary>
+    public async Task PersistSelectedExplicitlyAsync()
+    {
+        if (_store is null || SelectedPreset is null) return;
+        try
+        {
+            await _store.UpsertAsync(SelectedPreset.Preset, sortOrder: null, default).ConfigureAwait(true);
+            StatusText = Loc("ImageEffects_StatusOverrideSaved", SelectedPreset.Preset.Name);
+        }
+        catch (Exception ex)
+        {
+            StatusText = Loc("ImageEffects_StatusSaveFail", ex.Message);
+        }
+    }
+
     private void RequestPersist()
     {
-        if (_store is null || _loadingFromStore) return;
+        if (_store is null || _loadingFromStore || SuppressAutoPersist) return;
         _persistDebounce.Stop();
         _persistDebounce.Start();
     }
@@ -630,6 +658,54 @@ public sealed partial class ImageEffectsViewModel : ObservableObject, IDisposabl
         catch (Exception ex)
         {
             StatusText = Loc("ImageEffects_StatusLoadFailSample", ex.Message);
+        }
+    }
+
+    /// <summary>Replace the in-memory source bitmap with raw PNG bytes — used by the editor's
+    /// "Effects" tool to feed the actual screenshot into this VM instead of the placeholder
+    /// sample image. Failures fall through to the existing sample (status text logged) so the
+    /// window stays usable rather than rendering blank.</summary>
+    public void LoadSourceFromBytes(byte[] pngBytes)
+    {
+        if (pngBytes is null || pngBytes.Length == 0) return;
+        try
+        {
+            using var stream = new MemoryStream(pngBytes);
+            var loaded = SKBitmap.Decode(stream);
+            if (loaded is null)
+            {
+                StatusText = Loc("ImageEffects_StatusDecodeFail");
+                return;
+            }
+            _sampleImage.Dispose();
+            _sampleImage = loaded;
+            RequestRender();
+        }
+        catch (Exception ex)
+        {
+            StatusText = Loc("ImageEffects_StatusLoadFailSample", ex.Message);
+        }
+    }
+
+    /// <summary>Apply the currently-selected preset to the source bitmap and return the result
+    /// as PNG bytes. Used by the editor handoff: the user picks effects in the live preview,
+    /// clicks "Apply", we encode the rendered output and the editor swaps it in as its new
+    /// source via an undoable command. Returns null when there's no selected preset (caller
+    /// should fall back to the original input bytes).</summary>
+    public byte[]? RenderCurrentToPng()
+    {
+        try
+        {
+            var preset = SelectedPreset?.Preset;
+            using var output = preset is null ? _sampleImage.Copy() : preset.Apply(_sampleImage);
+            using var image = SkiaSharp.SKImage.FromBitmap(output);
+            using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+            return data?.ToArray();
+        }
+        catch (Exception ex)
+        {
+            StatusText = Loc("ImageEffects_StatusRenderFail", ex.Message);
+            return null;
         }
     }
 

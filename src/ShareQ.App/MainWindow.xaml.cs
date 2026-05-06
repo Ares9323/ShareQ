@@ -861,12 +861,31 @@ public partial class MainWindow : FluentWindow
             var outcome = await updater.CheckInteractivelyAsync(System.Threading.CancellationToken.None);
             UpdateStatusText.Text = outcome.Kind switch
             {
-                ShareQ.Updater.CheckOutcomeKind.NotInstalled => "Updates only work from an installed copy (current build is dev / portable-extracted).",
-                ShareQ.Updater.CheckOutcomeKind.AlreadyLatest => "You're on the latest version.",
-                ShareQ.Updater.CheckOutcomeKind.UpdateFound => $"Version {outcome.Version} available — opening confirmation…",
-                ShareQ.Updater.CheckOutcomeKind.Failed => $"Check failed: {outcome.ErrorMessage}",
-                _ => "Unknown result.",
+                ShareQ.Updater.CheckOutcomeKind.NotInstalled => Loc("Update_StatusNotInstalled"),
+                ShareQ.Updater.CheckOutcomeKind.AlreadyLatest => Loc("Update_StatusLatest"),
+                ShareQ.Updater.CheckOutcomeKind.UpdateFound => LocFormat("Update_StatusFoundFormat", outcome.Version ?? string.Empty),
+                ShareQ.Updater.CheckOutcomeKind.Failed => LocFormat("Update_StatusFailedFormat", outcome.ErrorMessage ?? string.Empty),
+                _ => Loc("Update_StatusUnknown"),
             };
+
+            static string Loc(string key)
+            {
+                var culture = ShareQ.App.Markup.LocalizedStrings.Instance.Culture
+                              ?? System.Globalization.CultureInfo.CurrentUICulture;
+                return ShareQ.App.Resources.Strings.ResourceManager.GetString(key, culture) ?? key;
+            }
+
+            static string LocFormat(string key, params object[] args)
+            {
+                var culture = ShareQ.App.Markup.LocalizedStrings.Instance.Culture
+                              ?? System.Globalization.CultureInfo.CurrentUICulture;
+                var template = ShareQ.App.Resources.Strings.ResourceManager.GetString(key, culture) ?? key;
+                // CA1863 wants a cached CompositeFormat — fires once per update-check click on
+                // a runtime-loaded template; caching per (key, culture) costs more than it saves.
+#pragma warning disable CA1863
+                return string.Format(culture, template, args);
+#pragma warning restore CA1863
+            }
             // The UpdateAvailable event already fired and queued the toast; surface the install
             // dialog here too so the user who just clicked "Check" doesn't have to chase the toast.
             if (outcome.Kind == ShareQ.Updater.CheckOutcomeKind.UpdateFound && outcome.Info is not null)

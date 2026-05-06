@@ -248,6 +248,16 @@ public sealed partial class EditorViewModel : ObservableObject
         _commands.Execute(new ResizeCommand(this, newWidth, newHeight), Shapes);
     }
 
+    /// <summary>Swap the source PNG bytes — used by the Effects tool after the user picks a
+    /// preset in the image-effects editor. Goes through the command stack so the swap is
+    /// undoable / redoable like crops and resizes. Shapes layer is preserved; only the
+    /// underlying bitmap changes.</summary>
+    public void ApplyReplaceSource(byte[] newPng)
+    {
+        if (newPng is null || newPng.Length == 0) return;
+        _commands.Execute(new ReplaceSourceCommand(this, newPng), Shapes);
+    }
+
     public void ApplyShapeEdit(Shape oldShape, Shape newShape)
     {
         if (ReferenceEquals(oldShape, newShape)) return;

@@ -431,6 +431,17 @@
   <data name="ImageEffects_TooltipLoadImage" xml:space="preserve"><value>Replace the sample image</value></data>
   <data name="ImageEffects_ResetSample" xml:space="preserve"><value>Reset sample</value></data>
   <data name="ImageEffects_ExportPreset" xml:space="preserve"><value>Export preset…</value></data>
+  <data name="ImageEffects_ApplyToEditor" xml:space="preserve"><value>Apply to editor</value></data>
+  <data name="ImageEffects_TooltipApplyToEditor" xml:space="preserve"><value>Render the current preset against the editor's source image and send the result back as the new editor canvas (undoable).</value></data>
+  <data name="ImageEffects_OverridePreset" xml:space="preserve"><value>Override preset</value></data>
+  <data name="ImageEffects_TooltipOverridePreset" xml:space="preserve"><value>Save the current slider / parameter changes back to the preset. By default editor-mode tweaks are one-shot — they affect this screenshot only without modifying the saved preset.</value></data>
+  <data name="ImageEffects_StatusOverrideSaved" xml:space="preserve"><value>Preset "{0}" saved.</value></data>
+  <data name="Update_StatusNotInstalled" xml:space="preserve"><value>Updates only work from an installed copy (current build is dev / portable-extracted).</value></data>
+  <data name="Update_StatusLatest" xml:space="preserve"><value>You're on the latest version.</value></data>
+  <data name="Update_StatusFoundFormat" xml:space="preserve"><value>Version {0} available — opening confirmation…</value></data>
+  <data name="Update_StatusFailedFormat" xml:space="preserve"><value>Check failed: {0}</value></data>
+  <data name="Update_StatusUnknown" xml:space="preserve"><value>Unknown result.</value></data>
+  <data name="ImageEffects_TooltipApplyToEditor" xml:space="preserve"><value>Render the current preset against the editor's source image and send the result back as the new editor canvas (undoable).</value></data>
 
   <!-- Image effect categories. -->
   <data name="EffectCategory_Adjustments" xml:space="preserve"><value>Adjustments</value></data>

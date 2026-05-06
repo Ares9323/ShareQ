@@ -163,7 +163,10 @@ public static class WorkflowActionCatalog
             "Open editor",
             "Pause the pipeline and open the annotation editor on the captured bytes. On save, subsequent steps see the edited image.",
             "Editor",
-            DefaultConfigJson: "{\"fullscreen\":false,\"default_tool\":\"Crop\"}",
+            // No default tool — empty string = "use last-used", which is what the user expects
+            // for an "open editor" step that doesn't dictate a starting mode. Specific presets
+            // (e.g. a quick-crop pipeline) can pin "Crop" / "Rectangle" / etc. via DefaultConfigJson.
+            DefaultConfigJson: "{\"fullscreen\":false,\"default_tool\":\"\"}",
             BoolParameters: new[]
             {
                 // Fullscreen on the active monitor (the one currently under the cursor) +
@@ -171,20 +174,21 @@ public static class WorkflowActionCatalog
                 // by default to keep the legacy windowed behaviour for existing presets.
                 new BoolParameter("fullscreen", "Open fullscreen on active monitor (fit to screen)", false),
             },
-            StringParameters: [new StringParameter("default_tool", "Default tool", "Crop",
+            StringParameters: [new StringParameter("default_tool", "Default tool", string.Empty,
                 Placeholder: "(use last)", OptionsKey: "editor_tools",
                 IsEditable: false, LocalizeOptionsAsEnum: true)]),
 
         new("shareq.apply-image-effects-preset",
             "Apply image effects preset",
-            "Run a saved chain of adjustments / filters on the captured image (e.g. add a border, watermark, vignette). Configure presets in Settings → Image effects. Pick the preset from the dropdown (or type a name); leave empty to skip. Toggle 'Keep original in history' to save both pre- and post-effect entries with a single Add-to-history step downstream.",
+            "Run a saved chain of adjustments / filters on the captured image (e.g. add a border, watermark, vignette). Configure presets in Settings → Image effects. Pick the preset from the dropdown; leave empty to skip. Toggle 'Keep original in history' to save both pre- and post-effect entries with a single Add-to-history step downstream.",
             "Editor",
             BoolParameters: new[]
             {
                 new BoolParameter("keep_original", "Keep original in clipboard history", false),
             },
             StringParameters: [new StringParameter("preset_name", "Preset", string.Empty,
-                Placeholder: "(none)", OptionsKey: "image_effect_presets")]),
+                Placeholder: "(none)", OptionsKey: "image_effect_presets",
+                IsEditable: false)]),
 
         new("shareq.save-to-file",
             "Save to file",

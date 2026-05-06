@@ -641,9 +641,37 @@
                             </ScrollViewer>
                         </Border>
                         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
-                            <ui:Button Content="{Markup:Loc ImageEffects_LoadImage}" Margin="0,0,4,0" Click="OnLoadImageClicked" ToolTip="{Markup:Loc ImageEffects_TooltipLoadImage}" />
-                            <ui:Button Content="{Markup:Loc ImageEffects_ResetSample}" Click="OnResetSampleClicked" />
+                            <!-- Load image / Reset sample only make sense for the standalone
+                                 "design a preset" flow — when the window is launched from the
+                                 editor (EnableEditorMode), the source IS the editor's screenshot
+                                 so loading another image / reverting to the placeholder would
+                                 break the user's workflow. EnableEditorMode collapses both. -->
+                            <ui:Button x:Name="LoadImageBtn" Content="{Markup:Loc ImageEffects_LoadImage}" Margin="0,0,4,0" Click="OnLoadImageClicked" ToolTip="{Markup:Loc ImageEffects_TooltipLoadImage}" />
+                            <ui:Button x:Name="ResetSampleBtn" Content="{Markup:Loc ImageEffects_ResetSample}" Click="OnResetSampleClicked" />
                             <ui:Button Content="{Markup:Loc ImageEffects_ExportPreset}" Margin="8,0,0,0" Click="OnExportPresetClicked" />
+                            <!-- "Override preset" — editor-mode only. Slider tweaks during the
+                                 editor session are NOT auto-saved (SuppressAutoPersist on the
+                                 VM); this button is the user's explicit "yes, save these changes
+                                 back to the preset" gesture. Sits where Load/Reset used to live
+                                 since those collapse out in editor mode. -->
+                            <ui:Button x:Name="OverridePresetBtn"
+                                       Content="{Markup:Loc ImageEffects_OverridePreset}"
+                                       Margin="8,0,0,0"
+                                       Visibility="Collapsed"
+                                       Click="OnOverridePresetClicked"
+                                       ToolTip="{Markup:Loc ImageEffects_TooltipOverridePreset}" />
+                            <!-- "Apply to editor" — only visible when this window was launched as
+                                 an editor effects-picker (EnableEditorMode set the visibility).
+                                 Renders the current preset to PNG and closes the window; the
+                                 editor's awaiting handler picks the bytes off ResultBytes and
+                                 swaps them into the source image via an undoable command. -->
+                            <ui:Button x:Name="ApplyToEditorBtn"
+                                       Content="{Markup:Loc ImageEffects_ApplyToEditor}"
+                                       Margin="8,0,0,0"
+                                       Appearance="Primary"
+                                       Visibility="Collapsed"
+                                       Click="OnApplyToEditorClicked"
+                                       ToolTip="{Markup:Loc ImageEffects_TooltipApplyToEditor}" />
                         </StackPanel>
                     </Grid>
                 </Border>

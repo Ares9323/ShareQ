@@ -121,6 +121,15 @@
         </DrawingImage.Drawing>
     </DrawingImage>
 
+    <DrawingImage x:Key="ToolIconEffects">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="White" Geometry="M32.2,27.46c.97-.17,4.8,3.24,3.77,4.53L5.29,61.6c-1.65-.33-2.97-1.28-2.73-3.14l29.63-31Z" />
+                <GeometryDrawing Brush="White" Geometry="M57.81,6.05L51.26,18.91 61.47,29.11 47.21,26.86 40.66,39.71 38.4,25.46 24.15,23.2 37.01,16.65 34.75,2.4 44.95,12.6Z" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
     <DrawingImage x:Key="ToolIconResize">
         <DrawingImage.Drawing>
             <DrawingGroup>

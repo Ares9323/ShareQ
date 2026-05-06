@@ -17,6 +17,34 @@ public partial class ImageEffectsWindow : Wpf.Ui.Controls.FluentWindow
     private readonly ISettingsStore? _settings;
     private bool _placementLoaded;
 
+    /// <summary>PNG bytes of the user's "Apply to editor" pick — populated only when the
+    /// window was launched in editor mode AND the user clicked Apply. Caller awaits the
+    /// Closed event, reads this back, and swaps the editor's source. null = user dismissed
+    /// the window without applying (close button / Esc / "X").</summary>
+    public byte[]? ResultBytes { get; private set; }
+
+    /// <summary>Flip the window into editor-callback mode:
+    /// <list type="bullet">
+    /// <item>"Apply to editor" button becomes visible (closes window with rendered PNG in
+    /// <see cref="ResultBytes"/>).</item>
+    /// <item>VM stops auto-persisting preset changes (<c>SuppressAutoPersist=true</c>) — slider
+    /// tweaks during the session don't silently overwrite the saved preset.</item>
+    /// <item>"Override preset" button becomes visible — the user's explicit save gesture if
+    /// they DO want their tweaks persisted back.</item>
+    /// <item>"Load image" + "Reset sample" buttons collapse — the source IS the editor's
+    /// screenshot, those buttons would replace it in surprising ways.</item>
+    /// </list>
+    /// Called by <c>EditorLauncher</c> right after constructing the window with the editor's
+    /// source image preloaded via <see cref="ImageEffectsViewModel.LoadSourceFromBytes"/>.</summary>
+    public void EnableEditorMode()
+    {
+        ApplyToEditorBtn.Visibility = Visibility.Visible;
+        OverridePresetBtn.Visibility = Visibility.Visible;
+        LoadImageBtn.Visibility = Visibility.Collapsed;
+        ResetSampleBtn.Visibility = Visibility.Collapsed;
+        _viewModel.SuppressAutoPersist = true;
+    }
+
     private const string KeyX = "imageeffects.x";
     private const string KeyY = "imageeffects.y";
     private const string KeyWidth = "imageeffects.width";
@@ -304,6 +332,28 @@ public partial class ImageEffectsWindow : Wpf.Ui.Controls.FluentWindow
         // re-rendering. We don't recreate the VM (would lose store wiring + drop the persist
         // debounce); instead we expose a helper that swaps the sample bitmap in place.
         _viewModel.RebuildSampleImage();
+    }
+
+    /// <summary>Editor-mode "Apply" handler — renders the currently-selected preset against
+    /// the editor's source bitmap (preloaded via LoadSourceFromBytes), stows the encoded PNG
+    /// in <see cref="ResultBytes"/>, and closes the window. The caller (EditorLauncher) hooks
+    /// the Closed event and pushes the bytes back into the editor's <c>SourcePngBytes</c> via
+    /// an undoable command.</summary>
+    private void OnApplyToEditorClicked(object sender, RoutedEventArgs e)
+    {
+        var bytes = _viewModel.RenderCurrentToPng();
+        if (bytes is null) return;
+        ResultBytes = bytes;
+        Close();
+    }
+
+    /// <summary>Editor-mode "Override preset" handler — explicitly saves the current preset
+    /// state to the store, bypassing <see cref="ImageEffectsViewModel.SuppressAutoPersist"/>.
+    /// The user clicks this when they DO want their slider tweaks persisted back instead of
+    /// being treated as a one-shot for the current screenshot.</summary>
+    private async void OnOverridePresetClicked(object sender, RoutedEventArgs e)
+    {
+        await _viewModel.PersistSelectedExplicitlyAsync();
     }
 
     /// <summary>Click in an unfocused TextBox: take focus immediately and swallow the click

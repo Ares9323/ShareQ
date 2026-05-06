@@ -41,6 +41,55 @@ public sealed class EditorLauncher
         _settings = settings;
         _encoder = encoder;
         _logger = logger;
+
+        // Cross-assembly handoff: ShareQ.Editor doesn't reference ShareQ.App / ImageEffects,
+        // so the Effects toolbar button delegates to a static Func set here. The handler
+        // opens our ImageEffectsWindow preloaded with the editor's source image, awaits the
+        // user's "Apply to editor" click (or cancel), and returns the rendered PNG bytes.
+        // The editor swaps them in via an undoable ReplaceSourceCommand.
+        ShareQ.Editor.Views.EditorWindow.OpenEffectsHandler = OpenEffectsAsync;
+    }
+
+    /// <summary>Open <see cref="ImageEffectsWindow"/> with the editor's current source bytes
+    /// preloaded, await the user's interaction, return the rendered PNG (or null on cancel).
+    /// Modeless Show + TaskCompletionSource on Closed mirrors the same async pattern used by
+    /// EditAsync — keeps other app windows interactive while the user picks effects.</summary>
+    private Task<byte[]?> OpenEffectsAsync(byte[] sourceBytes, System.Windows.Window? owner)
+    {
+        var dispatcher = System.Windows.Application.Current.Dispatcher;
+        var tcs = new TaskCompletionSource<byte[]?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        dispatcher.InvokeAsync(() =>
+        {
+            try
+            {
+                var presetStore = _services.GetRequiredService<ShareQ.Storage.ImageEffects.IImageEffectPresetStore>();
+                var settingsStore = _services.GetRequiredService<ShareQ.Storage.Settings.ISettingsStore>();
+                var vm = new ShareQ.App.ViewModels.ImageEffects.ImageEffectsViewModel(
+                    ShareQ.ImageEffects.ImageEffectRegistry.Default, presetStore);
+                vm.LoadSourceFromBytes(sourceBytes);
+
+                var window = new ShareQ.App.Views.ImageEffectsWindow(vm, settingsStore)
+                {
+                    Owner = owner
+                };
+                window.EnableEditorMode();
+                window.Closed += (_, _) =>
+                {
+                    // ResultBytes is non-null only when the user clicked "Apply to editor";
+                    // closing via X / Esc leaves it null, which the caller treats as cancel.
+                    tcs.TrySetResult(window.ResultBytes);
+                };
+                window.Show();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "EditorLauncher: opening effects editor failed");
+                tcs.TrySetResult(null);
+            }
+        });
+
+        return tcs.Task;
     }
 
     public async Task OpenAsync(long itemId, CancellationToken cancellationToken)
@@ -127,11 +176,10 @@ public sealed class EditorLauncher
                 byte[]? png = null;
                 if (window.Saved)
                 {
-                    // Use the editor's own ExportCanvasPng so the selection adorner (dashed bbox
-                    // + grip handles, all tagged "adorner") is hidden for the render — without
-                    // this, confirming with a shape selected would bake the bright-blue rect
-                    // into the saved image.
-                    png = window.ExportCanvasPng();
+                    // SavedPng is captured inside OnSaveClicked BEFORE Close runs — exporting
+                    // here (post-Close) hits a detached visual tree and produces blank bytes.
+                    // Adorners are already hidden for the capture (ExportCanvasPng path).
+                    png = window.SavedPng;
                 }
                 doneTcs.TrySetResult((snap, window.Saved, png));
             };
@@ -234,13 +282,13 @@ public sealed class EditorLauncher
                 int w = 0, h = 0;
                 if (window.Saved)
                 {
-                    // ExportCanvasPng hides the selection adorners during render so the saved
-                    // image doesn't include the bright-blue selection bbox / grip handles.
-                    // W/H are still resolved off the canvas for downstream encoders that need
-                    // pixel dims.
+                    // SavedPng is captured inside OnSaveClicked BEFORE Close runs — see
+                    // OpenAsync's matching note. W/H still resolved off CanvasHost (those
+                    // are read from the source bitmap's PixelWidth/Height which survive the
+                    // close because the BitmapSource is the same .png the user opened with).
                     var canvasHost = (Grid)window.FindName("CanvasHost")!;
                     (w, h) = ResolveExportPixels(canvasHost);
-                    png = window.ExportCanvasPng();
+                    png = window.SavedPng;
                 }
                 snapshotTcs.TrySetResult((snap, window.Saved, png, w, h));
             };

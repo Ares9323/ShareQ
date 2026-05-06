@@ -394,6 +394,17 @@
   <data name="ImageEffects_TooltipLoadImage" xml:space="preserve"><value>Sostituisci l'immagine campione</value></data>
   <data name="ImageEffects_ResetSample" xml:space="preserve"><value>Ripristina campione</value></data>
   <data name="ImageEffects_ExportPreset" xml:space="preserve"><value>Esporta preset…</value></data>
+  <data name="ImageEffects_ApplyToEditor" xml:space="preserve"><value>Applica all'editor</value></data>
+  <data name="ImageEffects_TooltipApplyToEditor" xml:space="preserve"><value>Renderizza il preset corrente sull'immagine dell'editor e la invia come nuova canvas (annullabile).</value></data>
+  <data name="ImageEffects_OverridePreset" xml:space="preserve"><value>Sovrascrivi preset</value></data>
+  <data name="ImageEffects_TooltipOverridePreset" xml:space="preserve"><value>Salva le modifiche correnti di slider / parametri nel preset. Di default in modalità editor le modifiche sono one-shot — toccano solo questo screenshot senza modificare il preset salvato.</value></data>
+  <data name="ImageEffects_StatusOverrideSaved" xml:space="preserve"><value>Preset "{0}" salvato.</value></data>
+  <data name="Update_StatusNotInstalled" xml:space="preserve"><value>Gli aggiornamenti funzionano solo da una copia installata (build corrente è dev / portable estratta).</value></data>
+  <data name="Update_StatusLatest" xml:space="preserve"><value>Sei già all'ultima versione.</value></data>
+  <data name="Update_StatusFoundFormat" xml:space="preserve"><value>Versione {0} disponibile — apro la conferma…</value></data>
+  <data name="Update_StatusFailedFormat" xml:space="preserve"><value>Controllo fallito: {0}</value></data>
+  <data name="Update_StatusUnknown" xml:space="preserve"><value>Risultato sconosciuto.</value></data>
+  <data name="ImageEffects_TooltipApplyToEditor" xml:space="preserve"><value>Renderizza il preset corrente sull'immagine dell'editor e la invia come nuova canvas (annullabile).</value></data>
 
   <data name="EffectCategory_Adjustments" xml:space="preserve"><value>Regolazioni</value></data>
   <data name="EffectCategory_Filters" xml:space="preserve"><value>Filtri</value></data>

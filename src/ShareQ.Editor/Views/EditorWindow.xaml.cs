@@ -207,6 +207,40 @@ public partial class EditorWindow : FluentWindow
 
     public bool Saved { get; private set; }
 
+    /// <summary>PNG bytes captured at Save-click time, BEFORE <see cref="System.Windows.Window.Close"/>
+    /// runs. Hosts (EditorLauncher) read this from the <c>Closed</c> event handler instead of
+    /// calling <see cref="ExportCanvasPng"/> there directly — by the time the visual tree gets
+    /// the Closed event, the window has been disconnected from its PresentationSource and the
+    /// RenderTargetBitmap of CanvasHost ends up blank (the user's "the workflow's clipboard
+    /// copy is empty" bug). Capturing inside <c>OnSaveClicked</c> while the canvas is still
+    /// attached produces the real bytes.</summary>
+    public byte[]? SavedPng { get; private set; }
+
+    /// <summary>Cross-assembly handoff for the Effects tool. The host (ShareQ.App.EditorLauncher)
+    /// wires this once at startup with a function that opens its <c>ImageEffectsWindow</c>
+    /// preloaded with the editor's source bytes; on Apply, the function returns the rendered
+    /// PNG, which the editor swaps in via an undoable <c>ReplaceSourceCommand</c>. Returns
+    /// null when the user cancels (closes the window without applying). Same pattern as
+    /// <see cref="ColorSwatchButton.EyedropperHandler"/>.</summary>
+    public static Func<byte[], System.Windows.Window?, Task<byte[]?>>? OpenEffectsHandler { get; set; }
+
+    private async void OnEffectsClicked(object sender, RoutedEventArgs e)
+    {
+        var handler = OpenEffectsHandler;
+        if (handler is null || _vm.SourcePngBytes.Length == 0) return;
+        try
+        {
+            var result = await handler(_vm.SourcePngBytes, this);
+            if (result is null || result.Length == 0) return;
+            _vm.ApplyReplaceSource(result);
+        }
+        catch
+        {
+            // Effects flow is opportunistic — a failure (decode error, missing preset store)
+            // shouldn't crash the editor. The host's handler also logs internally.
+        }
+    }
+
     /// <summary>Render the canvas (image + shapes) to PNG bytes. Hosts (EditorLauncher) call
     /// this from the <c>Closed</c> handler when <see cref="Saved"/> is true; the in-window
     /// "Save as…" button calls it inline. Hides selection adorners (dashed bbox + grip handles)
@@ -682,6 +716,12 @@ public partial class EditorWindow : FluentWindow
     private void OnSaveClicked(object sender, RoutedEventArgs e)
     {
         Saved = true;
+        // Capture the canvas BEFORE Close — RenderTargetBitmap on a closed window's visual tree
+        // produces a blank bitmap (window detached from its PresentationSource), which surfaced
+        // as "Region capture → editor save → empty image on clipboard". With the bytes cached
+        // here, the EditorLauncher's Closed handler just reads SavedPng off the window.
+        try { SavedPng = ExportCanvasPng(); }
+        catch { /* defensive: degraded path = no bytes, caller treats as cancel */ }
         _vm.MarkSaved(); // belt-and-braces: the Closing handler also bypasses the prompt when Saved=true
         Close();
     }
