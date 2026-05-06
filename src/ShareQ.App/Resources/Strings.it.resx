@@ -179,6 +179,8 @@
 
   <data name="Settings_StartWithWindows" xml:space="preserve"><value>Avvia ShareQ all'accensione di Windows</value></data>
   <data name="Settings_StartWithWindowsTooltip" xml:space="preserve"><value>Aggiunge (o rimuove) ShareQ dalla lista di avvio utente di Windows. Non servono permessi di amministratore.</value></data>
+  <data name="Settings_StartMinimized" xml:space="preserve"><value>Avvia minimizzato</value></data>
+  <data name="Settings_StartMinimizedTooltip" xml:space="preserve"><value>All'avvio salta la finestra principale e resta nella tray. Clicca l'icona tray per aprire le Impostazioni quando serve.</value></data>
   <data name="Settings_TrayClicksTitle" xml:space="preserve"><value>Click sull'icona tray</value></data>
   <data name="Settings_TrayClicksHint" xml:space="preserve"><value>Scegli cosa deve fare ogni click sull'icona tray. Il click destro apre sempre il menu.</value></data>
   <data name="Settings_TrayLeftClick" xml:space="preserve"><value>Click sinistro</value></data>
@@ -624,4 +626,70 @@
   <data name="WorkflowActionDesc_shareq_open_launcher_menu" xml:space="preserve"><value>Mostra l'overlay launcher — una griglia tastiera 3×10 in cui ogni tasto stampabile lancia un percorso / collegamento / target shell.</value></data>
   <data name="WorkflowActionDesc_shareq_open_settings" xml:space="preserve"><value>Mostra e attiva la finestra Impostazioni principale di ShareQ.</value></data>
   <data name="WorkflowActionDesc_shareq_open_launcher_drag_mode" xml:space="preserve"><value>Mostra l'overlay launcher già in modalità drag-and-drop: trascina file / cartelle / collegamenti sulle celle per associarli.</value></data>
+
+  <!-- Editor (annotation surface) -->
+  <data name="Editor_TitleBar" xml:space="preserve"><value>ShareQ - Editor</value></data>
+  <data name="Editor_PropertiesTitleFormat" xml:space="preserve"><value>Proprietà {0}</value></data>
+  <data name="Editor_SharedProperties" xml:space="preserve"><value>Proprietà condivise</value></data>
+  <data name="Editor_Properties" xml:space="preserve"><value>Proprietà</value></data>
+  <data name="Editor_NoSelection" xml:space="preserve"><value>Seleziona una forma per modificarne le proprietà (strumento V, poi clic).</value></data>
+  <data name="Editor_DefaultProperties" xml:space="preserve"><value>Proprietà predefinite</value></data>
+  <data name="Editor_Save" xml:space="preserve"><value>Salva</value></data>
+  <data name="Editor_SaveAs" xml:space="preserve"><value>Salva con nome…</value></data>
+  <data name="Editor_TooltipSave" xml:space="preserve"><value>Salva l'immagine modificata nella cronologia (usa il formato globale da Impostazioni → Cattura)</value></data>
+  <data name="Editor_TooltipSaveAs" xml:space="preserve"><value>Esporta su un file scelto da te. Il formato dipende dal filtro del dialogo (PNG / JPEG / BMP / GIF). Non tocca la cronologia.</value></data>
+  <data name="Editor_Outline" xml:space="preserve"><value>Contorno</value></data>
+  <data name="Editor_Fill" xml:space="preserve"><value>Riempimento</value></data>
+  <data name="Editor_Text" xml:space="preserve"><value>Testo</value></data>
+  <data name="Editor_Stroke" xml:space="preserve"><value>Spessore</value></data>
+  <data name="Editor_TextColor" xml:space="preserve"><value>Colore testo</value></data>
+  <data name="Editor_Font" xml:space="preserve"><value>Carattere</value></data>
+  <data name="Editor_Size" xml:space="preserve"><value>Dimensione</value></data>
+  <data name="Editor_Bold" xml:space="preserve"><value>Grassetto</value></data>
+  <data name="Editor_Italic" xml:space="preserve"><value>Corsivo</value></data>
+  <data name="Editor_Alignment" xml:space="preserve"><value>Allineamento</value></data>
+  <data name="Editor_Rotation" xml:space="preserve"><value>Rotazione</value></data>
+  <data name="Editor_Effect" xml:space="preserve"><value>Effetto</value></data>
+  <data name="Editor_BlurRadius" xml:space="preserve"><value>Raggio sfocatura (px)</value></data>
+  <data name="Editor_PixelBlockSize" xml:space="preserve"><value>Dimensione blocco pixel</value></data>
+  <data name="Editor_SpotlightDim" xml:space="preserve"><value>Oscuramento riflettore (%)</value></data>
+  <data name="Editor_SpotlightBlur" xml:space="preserve"><value>Sfocatura riflettore (px)</value></data>
+  <data name="Editor_EdgeBlur" xml:space="preserve"><value>Sfocatura bordi (px)</value></data>
+  <data name="Editor_SmoothStroke" xml:space="preserve"><value>Tratto fluido</value></data>
+  <data name="Editor_EndArrow" xml:space="preserve"><value>Punta freccia</value></data>
+  <data name="Editor_TooltipSmoothStroke" xml:space="preserve"><value>Applica il taglio degli angoli Chaikin + il rendering Catmull-Rom per rimuovere il tremolio della mano da questo tratto.</value></data>
+  <data name="Editor_TooltipEndArrow" xml:space="preserve"><value>Termina il tratto con una punta di freccia tangente all'ultimo segmento (mano libera stile ShareX).</value></data>
+  <data name="Editor_ApplyToSelected" xml:space="preserve"><value>Applica a selezione</value></data>
+  <data name="Editor_TooltipApplyToSelected" xml:space="preserve"><value>Applica i contorno / riempimento / spessore predefiniti qui sopra alla selezione</value></data>
+  <data name="Editor_SetAsDefault" xml:space="preserve"><value>Imposta come predefinito</value></data>
+  <data name="Editor_TooltipSetAsDefault" xml:space="preserve"><value>Usa contorno/riempimento/spessore della forma selezionata come valori correnti della toolbar</value></data>
+  <data name="Editor_Undo" xml:space="preserve"><value>Annulla</value></data>
+  <data name="Editor_Redo" xml:space="preserve"><value>Ripeti</value></data>
+  <data name="Editor_Tool_Select" xml:space="preserve"><value>V Seleziona</value></data>
+  <data name="Editor_Tool_Rectangle" xml:space="preserve"><value>R Rettangolo</value></data>
+  <data name="Editor_Tool_Ellipse" xml:space="preserve"><value>E Ellisse</value></data>
+  <data name="Editor_Tool_Line" xml:space="preserve"><value>L Linea</value></data>
+  <data name="Editor_Tool_Arrow" xml:space="preserve"><value>A Freccia</value></data>
+  <data name="Editor_Tool_Freehand" xml:space="preserve"><value>F Mano libera</value></data>
+  <data name="Editor_Tool_Text" xml:space="preserve"><value>T Testo</value></data>
+  <data name="Editor_Tool_Step" xml:space="preserve"><value>N Contatore</value></data>
+  <data name="Editor_Tool_Image" xml:space="preserve"><value>I Immagine</value></data>
+  <data name="Editor_Tool_Blur" xml:space="preserve"><value>B Sfocatura</value></data>
+  <data name="Editor_Tool_Pixelate" xml:space="preserve"><value>X Pixel</value></data>
+  <data name="Editor_Tool_Spotlight" xml:space="preserve"><value>O Riflettore</value></data>
+  <data name="Editor_Tool_SmartEraser" xml:space="preserve"><value>K Gomma intelligente — riempie il riquadro con un gradiente bilineare dei 4 colori d'angolo</value></data>
+  <data name="Editor_Tool_Crop" xml:space="preserve"><value>C Ritaglia</value></data>
+  <data name="Editor_Tool_Resize" xml:space="preserve"><value>Ridimensiona…</value></data>
+  <data name="Editor_Shape_Rectangle" xml:space="preserve"><value>Rettangolo</value></data>
+  <data name="Editor_Shape_Ellipse" xml:space="preserve"><value>Ellisse</value></data>
+  <data name="Editor_Shape_Arrow" xml:space="preserve"><value>Freccia</value></data>
+  <data name="Editor_Shape_Line" xml:space="preserve"><value>Linea</value></data>
+  <data name="Editor_Shape_Freehand" xml:space="preserve"><value>Mano libera</value></data>
+  <data name="Editor_Shape_Text" xml:space="preserve"><value>Testo</value></data>
+  <data name="Editor_Shape_StepCounter" xml:space="preserve"><value>Contatore</value></data>
+  <data name="Editor_Shape_Image" xml:space="preserve"><value>Immagine</value></data>
+  <data name="Editor_Shape_Blur" xml:space="preserve"><value>Sfocatura</value></data>
+  <data name="Editor_Shape_Pixelate" xml:space="preserve"><value>Pixel</value></data>
+  <data name="Editor_Shape_Spotlight" xml:space="preserve"><value>Riflettore</value></data>
+  <data name="Editor_Shape_SmartEraser" xml:space="preserve"><value>Gomma intelligente</value></data>
 </root>

@@ -3,16 +3,20 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShareQ.App.Services;
 using ShareQ.App.Services.Plugins;
+using ShareQ.Storage.Settings;
 
 namespace ShareQ.App.ViewModels;
 
 public sealed partial class SettingsViewModel : ObservableObject
 {
+    private const string StartMinimizedKey = "app.start_minimized";
     private readonly AutostartService _autostart;
+    private readonly ISettingsStore _settingsStore;
 
     public SettingsViewModel(
         PluginRegistry registry,
         AutostartService autostart,
+        ISettingsStore settingsStore,
         UploadersViewModel uploaders,
         HotkeysViewModel hotkeys,
         CaptureDefaultsViewModel capture,
@@ -22,6 +26,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         DebugViewModel debug)
     {
         _autostart = autostart;
+        _settingsStore = settingsStore;
         Theme = theme;
         Categories = categories;
         Debug = debug;
@@ -29,6 +34,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         _suppressAutostartPersist = true;
         StartWithWindows = autostart.IsEnabled;
         _suppressAutostartPersist = false;
+
+        // StartMinimized hydrates async from the SQLite settings store. The fire-and-forget is
+        // intentional: SettingsViewModel is constructed eagerly during DI, before the user has
+        // navigated to the Settings tab, so we don't block startup waiting for a value most
+        // users will never look at on this launch. Suppress persists during the load so the
+        // initial assignment doesn't round-trip back to disk with the same value.
+        _ = LoadStartMinimizedAsync();
         Uploaders = uploaders;
         // Hotkeys "Add custom workflow" button → run the Add flow (no modal — auto-default name)
         // then drop straight into the edit view with the inline name field focused + selected
@@ -79,6 +91,31 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         if (_suppressAutostartPersist) return;
         _autostart.SetEnabled(value);
+    }
+
+    /// <summary>Bound to the Settings-tab "Start minimized" checkbox. Persisted in the SQLite
+    /// settings store under <see cref="StartMinimizedKey"/>; <see cref="App.OnStartup"/> reads
+    /// it before deciding whether to call <c>window.Show()</c> on launch.</summary>
+    [ObservableProperty]
+    private bool _startMinimized;
+
+    private bool _suppressStartMinimizedPersist;
+
+    private async Task LoadStartMinimizedAsync()
+    {
+        var raw = await _settingsStore.GetAsync(StartMinimizedKey, CancellationToken.None).ConfigureAwait(true);
+        _suppressStartMinimizedPersist = true;
+        try { StartMinimized = string.Equals(raw, "true", StringComparison.OrdinalIgnoreCase); }
+        finally { _suppressStartMinimizedPersist = false; }
+    }
+
+    partial void OnStartMinimizedChanged(bool value)
+    {
+        if (_suppressStartMinimizedPersist) return;
+        _ = _settingsStore.SetAsync(StartMinimizedKey,
+            value ? "true" : "false",
+            sensitive: false,
+            CancellationToken.None);
     }
 
     public bool IsUploadersSelected => SelectedTab == SettingsTab.Uploaders;

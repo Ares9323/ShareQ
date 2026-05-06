@@ -486,6 +486,17 @@ public partial class App : Application
         // Cold-start from the context menu (--upload) is silent: tray-only, no Settings popup.
         // Sxcu / sxie still want the main window because their import dialogs need an Owner.
         var startSilent = uploadPath is not null && sxcuPath is null && sxiePath is null;
+        // User-controlled "Start minimized" (Settings → Settings tab): same effect as
+        // --upload's silent start — tray-only on launch, the user pops the window via the
+        // tray icon. Sxcu / sxie cold-starts override because their import dialogs need a
+        // visible Owner. Read directly here (not via a VM) since OnStartup runs before the
+        // Settings VM is materialised.
+        if (!startSilent && sxcuPath is null && sxiePath is null)
+        {
+            var settingsStoreEarly = _host.Services.GetRequiredService<ShareQ.Storage.Settings.ISettingsStore>();
+            var startMinRaw = await settingsStoreEarly.GetAsync("app.start_minimized", CancellationToken.None).ConfigureAwait(true);
+            if (string.Equals(startMinRaw, "true", StringComparison.OrdinalIgnoreCase)) startSilent = true;
+        }
         if (!startSilent) window.Show();
         window.Closing += (sender, args) =>
         {

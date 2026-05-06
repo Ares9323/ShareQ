@@ -207,6 +207,101 @@ public partial class EditorWindow : FluentWindow
 
     public bool Saved { get; private set; }
 
+    /// <summary>Localised label dictionary pushed by the host (ShareQ.App.EditorLauncher) just
+    /// before <see cref="System.Windows.Window.ShowDialog"/>. Same handoff pattern as
+    /// <see cref="ColorPickerWindow.ApplyLocalization"/> — this assembly can't reach the App's
+    /// resx, so the host resolves every key against its own ResourceManager and pushes the
+    /// strings here. Missing keys leave the XAML defaults intact.</summary>
+    private IReadOnlyDictionary<string, string> _labels = new Dictionary<string, string>();
+
+    private string Loc(string key, string fallback) =>
+        _labels.TryGetValue(key, out var v) && !string.IsNullOrEmpty(v) ? v : fallback;
+
+    public void ApplyLocalization(IReadOnlyDictionary<string, string> labels)
+    {
+        _labels = labels ?? new Dictionary<string, string>();
+
+        if (_labels.TryGetValue("TitleBar", out var titleBar)) TitleBarText.Text = titleBar;
+
+        // Tool palette tooltips. The icon is the visual; tooltip carries the localised name +
+        // (where present) the keyboard hint as a single string per resx entry.
+        if (_labels.TryGetValue("Tool_Select", out var s)) SelectToolBtn.ToolTip = s;
+        if (_labels.TryGetValue("Tool_Rectangle", out var r)) RectangleToolBtn.ToolTip = r;
+        if (_labels.TryGetValue("Tool_Ellipse", out var el)) EllipseToolBtn.ToolTip = el;
+        if (_labels.TryGetValue("Tool_Line", out var ln)) LineToolBtn.ToolTip = ln;
+        if (_labels.TryGetValue("Tool_Arrow", out var ar)) ArrowToolBtn.ToolTip = ar;
+        if (_labels.TryGetValue("Tool_Freehand", out var fh)) FreehandToolBtn.ToolTip = fh;
+        if (_labels.TryGetValue("Tool_Text", out var tx)) TextToolBtn.ToolTip = tx;
+        if (_labels.TryGetValue("Tool_Step", out var st)) StepToolBtn.ToolTip = st;
+        if (_labels.TryGetValue("Tool_Image", out var im)) ImageBtn.ToolTip = im;
+        if (_labels.TryGetValue("Tool_Blur", out var bl)) BlurToolBtn.ToolTip = bl;
+        if (_labels.TryGetValue("Tool_Pixelate", out var px)) PixelateToolBtn.ToolTip = px;
+        if (_labels.TryGetValue("Tool_Spotlight", out var sp)) SpotlightToolBtn.ToolTip = sp;
+        if (_labels.TryGetValue("Tool_SmartEraser", out var se)) SmartEraserToolBtn.ToolTip = se;
+        if (_labels.TryGetValue("Tool_Crop", out var cr)) CropToolBtn.ToolTip = cr;
+        if (_labels.TryGetValue("Tool_Resize", out var rz)) ResizeBtn.ToolTip = rz;
+
+        // Action triplet (top of right column).
+        if (_labels.TryGetValue("Save", out var save)) SaveButton.Content = save;
+        if (_labels.TryGetValue("SaveAs", out var saveAs)) SaveAsButton.Content = saveAs;
+        if (_labels.TryGetValue("Cancel", out var cancel)) CancelButton.Content = cancel;
+        if (_labels.TryGetValue("TooltipSave", out var tSave)) SaveButton.ToolTip = tSave;
+        if (_labels.TryGetValue("TooltipSaveAs", out var tSaveAs)) SaveAsButton.ToolTip = tSaveAs;
+
+        // Default properties block.
+        if (_labels.TryGetValue("DefaultProperties", out var dp)) DefaultPropertiesTitle.Text = dp;
+        if (_labels.TryGetValue("Outline", out var outl)) OutlineLabel.Text = outl;
+        if (_labels.TryGetValue("Fill", out var fl)) FillLabel.Text = fl;
+        if (_labels.TryGetValue("Text", out var txtLbl)) TextLabel.Text = txtLbl;
+        if (_labels.TryGetValue("Stroke", out var strk)) StrokeLabel.Text = strk;
+        if (_labels.TryGetValue("ApplyToSelected", out var aps)) ApplyToSelectedBtn.Content = aps;
+        if (_labels.TryGetValue("TooltipApplyToSelected", out var tAps)) ApplyToSelectedBtn.ToolTip = tAps;
+
+        // No-selection placeholder + dynamic title (live default, refreshed in RefreshPropertyPanel).
+        if (_labels.TryGetValue("NoSelection", out var ns)) NoSelectionText.Text = ns;
+        if (_labels.TryGetValue("Properties", out var props)) PanelTitleText.Text = props;
+
+        // Selected-shape labels.
+        if (_labels.TryGetValue("Outline", out var sOutl)) SelOutlineLabel.Text = sOutl;
+        if (_labels.TryGetValue("Fill", out var sFl)) SelFillLabel.Text = sFl;
+        if (_labels.TryGetValue("Stroke", out var sStrk)) SelStrokeLabel.Text = sStrk;
+        if (_labels.TryGetValue("Rotation", out var rot)) SelRotationLabel.Text = rot;
+        if (_labels.TryGetValue("TextColor", out var tc)) SelTextColorLabel.Text = tc;
+        if (_labels.TryGetValue("Font", out var fnt))
+        {
+            SelFontLabel.Text = fnt;
+            SelStepFontLabel.Text = fnt;
+        }
+        if (_labels.TryGetValue("Size", out var sz)) SelSizeLabel.Text = sz;
+        if (_labels.TryGetValue("Alignment", out var al)) SelAlignmentLabel.Text = al;
+        if (_labels.TryGetValue("Bold", out var bold))
+        {
+            SelBoldCheck.Content = bold;
+            SelStepBoldCheck.Content = bold;
+        }
+        if (_labels.TryGetValue("Italic", out var ital))
+        {
+            SelItalicCheck.Content = ital;
+            SelStepItalicCheck.Content = ital;
+        }
+        if (_labels.TryGetValue("SmoothStroke", out var ss)) SelFreehandSmoothCheck.Content = ss;
+        if (_labels.TryGetValue("EndArrow", out var ea)) SelFreehandEndArrowCheck.Content = ea;
+        if (_labels.TryGetValue("TooltipSmoothStroke", out var tSs)) SelFreehandSmoothCheck.ToolTip = tSs;
+        if (_labels.TryGetValue("TooltipEndArrow", out var tEa)) SelFreehandEndArrowCheck.ToolTip = tEa;
+
+        // "Set as default" button + tooltip.
+        if (_labels.TryGetValue("SetAsDefault", out var sad)) SetAsDefaultBtn.Content = sad;
+        if (_labels.TryGetValue("TooltipSetAsDefault", out var tSad)) SetAsDefaultBtn.ToolTip = tSad;
+
+        // Footer.
+        if (_labels.TryGetValue("Undo", out var undo)) UndoButton.Content = undo;
+        if (_labels.TryGetValue("Redo", out var redo)) RedoButton.Content = redo;
+
+        // Re-run RefreshPropertyPanel so dynamic strings (panel title, effect labels) pick up
+        // the new dictionary on the next paint — the populate path reads through Loc() now.
+        RefreshPropertyPanel();
+    }
+
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         // Cleanup that runs whichever path closes the window.
@@ -814,19 +909,19 @@ public partial class EditorWindow : FluentWindow
 
         const double margin = 16;
         var fit = Math.Min((vw - margin) / src.PixelWidth, (vh - margin) / src.PixelHeight);
+        // Keep the initial-floor min-zoom (0.1 from the field initialiser). The previous impl
+        // raised _minZoom to `fit` for big images, which capped zoom-out at the auto-fit level
+        // and felt like a bug. Now the auto-fit only chooses the *initial* zoom; the user can
+        // still zoom out further with the slider / Ctrl+wheel.
         if (_fitToScreenMode)
         {
             // Fullscreen launch: always fit the image inside the viewport, including upscale.
-            // Floor the min-zoom at the natural fit so the user can pinch in further but never
-            // shrink the canvas to less than the screen real estate they explicitly chose.
-            _minZoom = Math.Min(fit, 1.0);
             SetZoom(fit);
         }
         else if (fit < 1.0)
         {
             // Default behaviour: only fit when the image is bigger than the viewport — never
             // zoom IN automatically.
-            _minZoom = fit;
             SetZoom(fit);
         }
         _initialFitDone = true;
@@ -2196,21 +2291,39 @@ public partial class EditorWindow : FluentWindow
         _ => null,
     };
 
-    private static string ShapeKindName(Shape s) => s switch
+    private string ShapeKindName(Shape s) => s switch
     {
-        RectangleShape    => "Rectangle",
-        EllipseShape      => "Ellipse",
-        ArrowShape        => "Arrow",
-        LineShape         => "Line",
-        FreehandShape     => "Freehand",
-        TextShape         => "Text",
-        StepCounterShape  => "Step counter",
-        BlurShape         => "Blur",
-        PixelateShape     => "Pixelate",
-        SpotlightShape    => "Spotlight",
-        ImageShape        => "Image",
-        SmartEraserShape  => "Smart eraser",
+        RectangleShape    => Loc("Shape_Rectangle",   "Rectangle"),
+        EllipseShape      => Loc("Shape_Ellipse",     "Ellipse"),
+        ArrowShape        => Loc("Shape_Arrow",       "Arrow"),
+        LineShape         => Loc("Shape_Line",        "Line"),
+        FreehandShape     => Loc("Shape_Freehand",    "Freehand"),
+        TextShape         => Loc("Shape_Text",        "Text"),
+        StepCounterShape  => Loc("Shape_StepCounter", "Step counter"),
+        BlurShape         => Loc("Shape_Blur",        "Blur"),
+        PixelateShape     => Loc("Shape_Pixelate",    "Pixelate"),
+        SpotlightShape    => Loc("Shape_Spotlight",   "Spotlight"),
+        ImageShape        => Loc("Shape_Image",       "Image"),
+        SmartEraserShape  => Loc("Shape_SmartEraser", "Smart eraser"),
         _ => s.GetType().Name.Replace("Shape", string.Empty),
+    };
+
+    /// <summary>Map a <see cref="ShapeCategory.Name"/> (the literal English fallback stored in
+    /// <see cref="ToolCategory"/>) onto its localised display string. Lets the static category
+    /// table stay static while still flowing through Loc().</summary>
+    private string LocalizedCategoryName(string fallback) => fallback switch
+    {
+        "Rectangle"    => Loc("Shape_Rectangle",   fallback),
+        "Ellipse"      => Loc("Shape_Ellipse",     fallback),
+        "Arrow"        => Loc("Shape_Arrow",       fallback),
+        "Line"         => Loc("Shape_Line",        fallback),
+        "Freehand"     => Loc("Shape_Freehand",    fallback),
+        "Text"         => Loc("Shape_Text",        fallback),
+        "Step counter" => Loc("Shape_StepCounter", fallback),
+        "Blur"         => Loc("Shape_Blur",        fallback),
+        "Pixelate"     => Loc("Shape_Pixelate",    fallback),
+        "Spotlight"    => Loc("Shape_Spotlight",   fallback),
+        _ => fallback,
     };
 
     /// <summary>Show the sections relevant to <paramref name="category"/> and pre-fill them
@@ -2252,20 +2365,20 @@ public partial class EditorWindow : FluentWindow
             switch (category.Effect)
             {
                 case ShapeCategory.EffectKind.Blur:
-                    SelEffectLabel.Text = "Blur radius (px)";
+                    SelEffectLabel.Text = Loc("BlurRadius", "Blur radius (px)");
                     SelEffectSlider.Minimum = 0; SelEffectSlider.Maximum = 60;
                     SelEffectSecondarySection.Visibility = Visibility.Collapsed;
                     break;
                 case ShapeCategory.EffectKind.Pixelate:
-                    SelEffectLabel.Text = "Pixel block size";
+                    SelEffectLabel.Text = Loc("PixelBlockSize", "Pixel block size");
                     SelEffectSlider.Minimum = 2; SelEffectSlider.Maximum = 60;
                     SelEffectSecondarySection.Visibility = Visibility.Collapsed;
                     break;
                 case ShapeCategory.EffectKind.Spotlight:
-                    SelEffectLabel.Text = "Spotlight dim (%)";
+                    SelEffectLabel.Text = Loc("SpotlightDim", "Spotlight dim (%)");
                     SelEffectSlider.Minimum = 0; SelEffectSlider.Maximum = 100;
                     SelEffectSecondarySection.Visibility = Visibility.Visible;
-                    SelEffectSecondaryLabel.Text = "Edge blur (px)";
+                    SelEffectSecondaryLabel.Text = Loc("EdgeBlur", "Edge blur (px)");
                     SelEffectSecondarySlider.Minimum = 0; SelEffectSecondarySlider.Maximum = 60;
                     break;
             }
@@ -3381,15 +3494,18 @@ public partial class EditorWindow : FluentWindow
             var category = ToolCategory(_vm.CurrentTool);
             if (category is null)
             {
-                PanelTitleText.Text = "Properties";
+                PanelTitleText.Text = Loc("Properties", "Properties");
                 NoSelectionText.Visibility = Visibility.Visible;
-                NoSelectionText.Text = "Select a shape to edit its properties (V tool, then click).";
+                NoSelectionText.Text = Loc("NoSelection", "Select a shape to edit its properties (V tool, then click).");
                 SelectedShapeStack.Visibility = Visibility.Collapsed;
                 RefreshSelectionAdorner();
                 return;
             }
 
-            PanelTitleText.Text = $"{category.Name} Properties";
+            PanelTitleText.Text = string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                Loc("PropertiesTitleFormat", "{0} Properties"),
+                LocalizedCategoryName(category.Name));
             NoSelectionText.Visibility = Visibility.Collapsed;
             SelectedShapeStack.Visibility = Visibility.Visible;
             ApplyToolDefaultsToPanel(category);
@@ -3401,8 +3517,11 @@ public partial class EditorWindow : FluentWindow
         // multi-selection collapses to a generic "Shared Properties" since per-shape sections
         // (rotation / freehand toggles / effect sliders) are hidden anyway in that case.
         PanelTitleText.Text = sels.Count == 1
-            ? $"{ShapeKindName(sels[0])} Properties"
-            : "Shared Properties";
+            ? string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                Loc("PropertiesTitleFormat", "{0} Properties"),
+                ShapeKindName(sels[0]))
+            : Loc("SharedProperties", "Shared Properties");
         NoSelectionText.Visibility = Visibility.Collapsed;
         SelectedShapeStack.Visibility = Visibility.Visible;
 
@@ -3488,23 +3607,23 @@ public partial class EditorWindow : FluentWindow
                 switch (sels[0])
                 {
                     case BlurShape b:
-                        SelEffectLabel.Text = "Blur radius (px)";
+                        SelEffectLabel.Text = Loc("BlurRadius", "Blur radius (px)");
                         SelEffectSlider.Minimum = 0; SelEffectSlider.Maximum = 60;
                         SelEffectSlider.Value = Math.Clamp(b.Radius, 0, 60);
                         SelEffectBox.Text = ((int)Math.Round(b.Radius)).ToString(System.Globalization.CultureInfo.InvariantCulture);
                         break;
                     case PixelateShape p:
-                        SelEffectLabel.Text = "Pixel block size";
+                        SelEffectLabel.Text = Loc("PixelBlockSize", "Pixel block size");
                         SelEffectSlider.Minimum = 2; SelEffectSlider.Maximum = 60;
                         SelEffectSlider.Value = Math.Clamp(p.BlockSize, 2, 60);
                         SelEffectBox.Text = p.BlockSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
                         break;
                     case SpotlightShape sp:
-                        SelEffectLabel.Text = "Spotlight dim (%)";
+                        SelEffectLabel.Text = Loc("SpotlightDim", "Spotlight dim (%)");
                         SelEffectSlider.Minimum = 0; SelEffectSlider.Maximum = 100;
                         SelEffectSlider.Value = Math.Round(sp.DimAmount * 100);
                         SelEffectBox.Text = ((int)Math.Round(sp.DimAmount * 100)).ToString(System.Globalization.CultureInfo.InvariantCulture);
-                        SelEffectSecondaryLabel.Text = "Spotlight blur (px)";
+                        SelEffectSecondaryLabel.Text = Loc("SpotlightBlur", "Spotlight blur (px)");
                         SelEffectSecondarySlider.Minimum = 0; SelEffectSecondarySlider.Maximum = 60;
                         SelEffectSecondarySlider.Value = Math.Clamp(sp.BlurRadius, 0, 60);
                         SelEffectSecondaryBox.Text = ((int)Math.Round(sp.BlurRadius)).ToString(System.Globalization.CultureInfo.InvariantCulture);

@@ -1443,8 +1443,14 @@
                     <CheckBox IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
                               Content="{Markup:Loc Settings_StartWithWindows}"
                               Foreground="#DDD" FontSize="12"
-                              HorizontalAlignment="Left" Margin="0,0,0,16"
+                              HorizontalAlignment="Left" Margin="0,0,0,8"
                               ToolTip="{Markup:Loc Settings_StartWithWindowsTooltip}" />
+
+                    <CheckBox IsChecked="{Binding StartMinimized, Mode=TwoWay}"
+                              Content="{Markup:Loc Settings_StartMinimized}"
+                              Foreground="#DDD" FontSize="12"
+                              HorizontalAlignment="Left" Margin="0,0,0,16"
+                              ToolTip="{Markup:Loc Settings_StartMinimizedTooltip}" />
 
                     <!-- UI language picker. Writes the selected culture tag to ui.language; the
                          picker itself stays in English so a wrong choice is recoverable without

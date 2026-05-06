@@ -86,6 +86,7 @@ public sealed class EditorLauncher
         vm.FreehandSmoothDefault = defaults.FreehandSmooth;
         vm.FreehandEndArrowDefault = defaults.FreehandEndArrow;
         vm.ResetStepCounter();
+        window.ApplyLocalization(BuildEditorLabels());
         window.Owner = System.Windows.Application.Current.MainWindow;
         window.ShowDialog();
 
@@ -168,6 +169,7 @@ public sealed class EditorLauncher
             vm.FreehandSmoothDefault = defaults.FreehandSmooth;
             vm.FreehandEndArrowDefault = defaults.FreehandEndArrow;
             vm.ResetStepCounter();
+            window.ApplyLocalization(BuildEditorLabels());
             window.Owner = System.Windows.Application.Current.MainWindow;
             if (fullscreen)
             {
@@ -237,6 +239,88 @@ public sealed class EditorLauncher
             _logger.LogWarning(ex, "EditorLauncher: re-encode to {Format} failed — keeping PNG", format);
             return pngBytes;
         }
+    }
+
+    /// <summary>Resolve every translatable string used by <see cref="EditorWindow"/> and stuff
+    /// it into a dictionary the editor can apply via <c>ApplyLocalization</c>. The editor
+    /// assembly can't reach our resx, so the host is the bridge — same handoff pattern used
+    /// for <c>ColorPickerWindow</c>. Resolution honours the singleton's pinned culture so
+    /// language switches at runtime take effect on the next editor open without a restart.</summary>
+    private static Dictionary<string, string> BuildEditorLabels()
+    {
+        var culture = ShareQ.App.Markup.LocalizedStrings.Instance.Culture
+                      ?? System.Globalization.CultureInfo.CurrentUICulture;
+        string Loc(string key) =>
+            ShareQ.App.Resources.Strings.ResourceManager.GetString(key, culture) ?? key;
+
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["TitleBar"]                = Loc("Editor_TitleBar"),
+            ["PropertiesTitleFormat"]   = Loc("Editor_PropertiesTitleFormat"),
+            ["SharedProperties"]        = Loc("Editor_SharedProperties"),
+            ["Properties"]              = Loc("Editor_Properties"),
+            ["NoSelection"]             = Loc("Editor_NoSelection"),
+            ["DefaultProperties"]       = Loc("Editor_DefaultProperties"),
+            ["Save"]                    = Loc("Editor_Save"),
+            ["SaveAs"]                  = Loc("Editor_SaveAs"),
+            ["Cancel"]                  = Loc("Common_Cancel"),
+            ["TooltipSave"]             = Loc("Editor_TooltipSave"),
+            ["TooltipSaveAs"]           = Loc("Editor_TooltipSaveAs"),
+            ["Outline"]                 = Loc("Editor_Outline"),
+            ["Fill"]                    = Loc("Editor_Fill"),
+            ["Text"]                    = Loc("Editor_Text"),
+            ["Stroke"]                  = Loc("Editor_Stroke"),
+            ["TextColor"]               = Loc("Editor_TextColor"),
+            ["Font"]                    = Loc("Editor_Font"),
+            ["Size"]                    = Loc("Editor_Size"),
+            ["Bold"]                    = Loc("Editor_Bold"),
+            ["Italic"]                  = Loc("Editor_Italic"),
+            ["Alignment"]               = Loc("Editor_Alignment"),
+            ["Rotation"]                = Loc("Editor_Rotation"),
+            ["Effect"]                  = Loc("Editor_Effect"),
+            ["BlurRadius"]              = Loc("Editor_BlurRadius"),
+            ["PixelBlockSize"]          = Loc("Editor_PixelBlockSize"),
+            ["SpotlightDim"]            = Loc("Editor_SpotlightDim"),
+            ["SpotlightBlur"]           = Loc("Editor_SpotlightBlur"),
+            ["EdgeBlur"]                = Loc("Editor_EdgeBlur"),
+            ["SmoothStroke"]            = Loc("Editor_SmoothStroke"),
+            ["EndArrow"]                = Loc("Editor_EndArrow"),
+            ["TooltipSmoothStroke"]     = Loc("Editor_TooltipSmoothStroke"),
+            ["TooltipEndArrow"]         = Loc("Editor_TooltipEndArrow"),
+            ["ApplyToSelected"]         = Loc("Editor_ApplyToSelected"),
+            ["TooltipApplyToSelected"]  = Loc("Editor_TooltipApplyToSelected"),
+            ["SetAsDefault"]            = Loc("Editor_SetAsDefault"),
+            ["TooltipSetAsDefault"]     = Loc("Editor_TooltipSetAsDefault"),
+            ["Undo"]                    = Loc("Editor_Undo"),
+            ["Redo"]                    = Loc("Editor_Redo"),
+            ["Tool_Select"]             = Loc("Editor_Tool_Select"),
+            ["Tool_Rectangle"]          = Loc("Editor_Tool_Rectangle"),
+            ["Tool_Ellipse"]            = Loc("Editor_Tool_Ellipse"),
+            ["Tool_Line"]               = Loc("Editor_Tool_Line"),
+            ["Tool_Arrow"]              = Loc("Editor_Tool_Arrow"),
+            ["Tool_Freehand"]           = Loc("Editor_Tool_Freehand"),
+            ["Tool_Text"]               = Loc("Editor_Tool_Text"),
+            ["Tool_Step"]               = Loc("Editor_Tool_Step"),
+            ["Tool_Image"]              = Loc("Editor_Tool_Image"),
+            ["Tool_Blur"]               = Loc("Editor_Tool_Blur"),
+            ["Tool_Pixelate"]           = Loc("Editor_Tool_Pixelate"),
+            ["Tool_Spotlight"]          = Loc("Editor_Tool_Spotlight"),
+            ["Tool_SmartEraser"]        = Loc("Editor_Tool_SmartEraser"),
+            ["Tool_Crop"]               = Loc("Editor_Tool_Crop"),
+            ["Tool_Resize"]             = Loc("Editor_Tool_Resize"),
+            ["Shape_Rectangle"]         = Loc("Editor_Shape_Rectangle"),
+            ["Shape_Ellipse"]           = Loc("Editor_Shape_Ellipse"),
+            ["Shape_Arrow"]             = Loc("Editor_Shape_Arrow"),
+            ["Shape_Line"]              = Loc("Editor_Shape_Line"),
+            ["Shape_Freehand"]          = Loc("Editor_Shape_Freehand"),
+            ["Shape_Text"]              = Loc("Editor_Shape_Text"),
+            ["Shape_StepCounter"]       = Loc("Editor_Shape_StepCounter"),
+            ["Shape_Image"]             = Loc("Editor_Shape_Image"),
+            ["Shape_Blur"]              = Loc("Editor_Shape_Blur"),
+            ["Shape_Pixelate"]          = Loc("Editor_Shape_Pixelate"),
+            ["Shape_Spotlight"]         = Loc("Editor_Shape_Spotlight"),
+            ["Shape_SmartEraser"]       = Loc("Editor_Shape_SmartEraser"),
+        };
     }
 
     /// <summary>Find the source bitmap inside the editor's <c>CanvasHost</c> Grid and return its

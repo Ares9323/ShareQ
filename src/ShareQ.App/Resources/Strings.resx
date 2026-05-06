@@ -194,6 +194,8 @@
   <!-- Settings → App settings sub-panels. -->
   <data name="Settings_StartWithWindows" xml:space="preserve"><value>Run ShareQ when Windows starts</value></data>
   <data name="Settings_StartWithWindowsTooltip" xml:space="preserve"><value>Adds (or removes) ShareQ to the per-user Windows startup list. No admin rights needed.</value></data>
+  <data name="Settings_StartMinimized" xml:space="preserve"><value>Start minimized</value></data>
+  <data name="Settings_StartMinimizedTooltip" xml:space="preserve"><value>Skip the main window on launch and stay in the tray. Click the tray icon to open the Settings window when needed.</value></data>
   <data name="Settings_TrayClicksTitle" xml:space="preserve"><value>Tray icon clicks</value></data>
   <data name="Settings_TrayClicksHint" xml:space="preserve"><value>Pick what each click on the tray icon should do. Right-click always opens the menu.</value></data>
   <data name="Settings_TrayLeftClick" xml:space="preserve"><value>Left click</value></data>
@@ -681,4 +683,76 @@
   <data name="WorkflowActionDesc_shareq_open_launcher_menu" xml:space="preserve"><value>Show the launcher overlay — a 3×10 keyboard grid where every printable key fires a path / shortcut / shell target.</value></data>
   <data name="WorkflowActionDesc_shareq_open_settings" xml:space="preserve"><value>Show + activate the main ShareQ Settings window.</value></data>
   <data name="WorkflowActionDesc_shareq_open_launcher_drag_mode" xml:space="preserve"><value>Show the launcher overlay already in drag-and-drop mode: drag files / folders / shortcuts onto cells to map them.</value></data>
+
+  <!-- Editor (annotation surface) — labels, tooltips, button text, dynamic titles. Resolved
+       at launcher time and pushed into ShareQ.Editor's EditorWindow via ApplyLocalization,
+       same handoff pattern used for the colour picker. -->
+  <data name="Editor_TitleBar" xml:space="preserve"><value>ShareQ - Editor</value></data>
+  <data name="Editor_PropertiesTitleFormat" xml:space="preserve"><value>{0} Properties</value></data>
+  <data name="Editor_SharedProperties" xml:space="preserve"><value>Shared Properties</value></data>
+  <data name="Editor_Properties" xml:space="preserve"><value>Properties</value></data>
+  <data name="Editor_NoSelection" xml:space="preserve"><value>Select a shape to edit its properties (V tool, then click).</value></data>
+  <data name="Editor_DefaultProperties" xml:space="preserve"><value>Default properties</value></data>
+  <data name="Editor_Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Editor_SaveAs" xml:space="preserve"><value>Save as…</value></data>
+  <data name="Editor_TooltipSave" xml:space="preserve"><value>Save the edited image into history (uses the global image format from Settings → Capture)</value></data>
+  <data name="Editor_TooltipSaveAs" xml:space="preserve"><value>Export to a file you pick. Format chosen via the dialog filter (PNG / JPEG / BMP / GIF). Does not touch history.</value></data>
+  <data name="Editor_Outline" xml:space="preserve"><value>Outline</value></data>
+  <data name="Editor_Fill" xml:space="preserve"><value>Fill</value></data>
+  <data name="Editor_Text" xml:space="preserve"><value>Text</value></data>
+  <data name="Editor_Stroke" xml:space="preserve"><value>Stroke</value></data>
+  <data name="Editor_TextColor" xml:space="preserve"><value>Text color</value></data>
+  <data name="Editor_Font" xml:space="preserve"><value>Font</value></data>
+  <data name="Editor_Size" xml:space="preserve"><value>Size</value></data>
+  <data name="Editor_Bold" xml:space="preserve"><value>Bold</value></data>
+  <data name="Editor_Italic" xml:space="preserve"><value>Italic</value></data>
+  <data name="Editor_Alignment" xml:space="preserve"><value>Alignment</value></data>
+  <data name="Editor_Rotation" xml:space="preserve"><value>Rotation</value></data>
+  <data name="Editor_Effect" xml:space="preserve"><value>Effect</value></data>
+  <data name="Editor_BlurRadius" xml:space="preserve"><value>Blur radius (px)</value></data>
+  <data name="Editor_PixelBlockSize" xml:space="preserve"><value>Pixel block size</value></data>
+  <data name="Editor_SpotlightDim" xml:space="preserve"><value>Spotlight dim (%)</value></data>
+  <data name="Editor_SpotlightBlur" xml:space="preserve"><value>Spotlight blur (px)</value></data>
+  <data name="Editor_EdgeBlur" xml:space="preserve"><value>Edge blur (px)</value></data>
+  <data name="Editor_SmoothStroke" xml:space="preserve"><value>Smooth stroke</value></data>
+  <data name="Editor_EndArrow" xml:space="preserve"><value>End arrow</value></data>
+  <data name="Editor_TooltipSmoothStroke" xml:space="preserve"><value>Apply Chaikin corner-cutting + Catmull-Rom rendering to remove hand jitter from this stroke.</value></data>
+  <data name="Editor_TooltipEndArrow" xml:space="preserve"><value>Cap the stroke with an arrow head tangent to the last segment (ShareX-style freehand arrow).</value></data>
+  <data name="Editor_ApplyToSelected" xml:space="preserve"><value>Apply to selected</value></data>
+  <data name="Editor_TooltipApplyToSelected" xml:space="preserve"><value>Apply the default outline / fill / stroke above to the selected shape(s)</value></data>
+  <data name="Editor_SetAsDefault" xml:space="preserve"><value>Set as default</value></data>
+  <data name="Editor_TooltipSetAsDefault" xml:space="preserve"><value>Use the selected shape's outline/fill/stroke as the toolbar's current values</value></data>
+  <data name="Editor_Undo" xml:space="preserve"><value>Undo</value></data>
+  <data name="Editor_Redo" xml:space="preserve"><value>Redo</value></data>
+  <!-- Tool palette tooltips. The leading shortcut letter (V/R/E/L/A/F/T/N/I/B/X/O/K/C) is part
+       of the localised string so translators can keep or drop the hint as needed. -->
+  <data name="Editor_Tool_Select" xml:space="preserve"><value>V Select</value></data>
+  <data name="Editor_Tool_Rectangle" xml:space="preserve"><value>R Rectangle</value></data>
+  <data name="Editor_Tool_Ellipse" xml:space="preserve"><value>E Ellipse</value></data>
+  <data name="Editor_Tool_Line" xml:space="preserve"><value>L Line</value></data>
+  <data name="Editor_Tool_Arrow" xml:space="preserve"><value>A Arrow</value></data>
+  <data name="Editor_Tool_Freehand" xml:space="preserve"><value>F Freehand</value></data>
+  <data name="Editor_Tool_Text" xml:space="preserve"><value>T Text</value></data>
+  <data name="Editor_Tool_Step" xml:space="preserve"><value>N Step counter</value></data>
+  <data name="Editor_Tool_Image" xml:space="preserve"><value>I Image</value></data>
+  <data name="Editor_Tool_Blur" xml:space="preserve"><value>B Blur</value></data>
+  <data name="Editor_Tool_Pixelate" xml:space="preserve"><value>X Pixelate</value></data>
+  <data name="Editor_Tool_Spotlight" xml:space="preserve"><value>O Spotlight</value></data>
+  <data name="Editor_Tool_SmartEraser" xml:space="preserve"><value>K Smart eraser — fills the rect with a bilinear gradient of the 4 corner colors</value></data>
+  <data name="Editor_Tool_Crop" xml:space="preserve"><value>C Crop</value></data>
+  <data name="Editor_Tool_Resize" xml:space="preserve"><value>Resize…</value></data>
+  <!-- Shape kind names — used for the dynamic Properties title ("{0} Properties") and tool
+       category headers when the panel shows defaults for the active tool. -->
+  <data name="Editor_Shape_Rectangle" xml:space="preserve"><value>Rectangle</value></data>
+  <data name="Editor_Shape_Ellipse" xml:space="preserve"><value>Ellipse</value></data>
+  <data name="Editor_Shape_Arrow" xml:space="preserve"><value>Arrow</value></data>
+  <data name="Editor_Shape_Line" xml:space="preserve"><value>Line</value></data>
+  <data name="Editor_Shape_Freehand" xml:space="preserve"><value>Freehand</value></data>
+  <data name="Editor_Shape_Text" xml:space="preserve"><value>Text</value></data>
+  <data name="Editor_Shape_StepCounter" xml:space="preserve"><value>Step counter</value></data>
+  <data name="Editor_Shape_Image" xml:space="preserve"><value>Image</value></data>
+  <data name="Editor_Shape_Blur" xml:space="preserve"><value>Blur</value></data>
+  <data name="Editor_Shape_Pixelate" xml:space="preserve"><value>Pixelate</value></data>
+  <data name="Editor_Shape_Spotlight" xml:space="preserve"><value>Spotlight</value></data>
+  <data name="Editor_Shape_SmartEraser" xml:space="preserve"><value>Smart eraser</value></data>
 </root>

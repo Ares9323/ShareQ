@@ -99,7 +99,7 @@
                         <ColumnDefinition Width="Auto" />  <!-- title text -->
                         <ColumnDefinition Width="*" />     <!-- tools -->
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="ShareQ - Editor"
+                    <TextBlock x:Name="TitleBarText" Grid.Column="0" Text="ShareQ - Editor"
                                Foreground="#FFF" FontWeight="SemiBold" FontSize="13"
                                VerticalAlignment="Center" Margin="0,0,16,0" />
                     <ScrollViewer Grid.Column="1"
@@ -224,9 +224,9 @@
                         <ui:Button Content="1:1" Margin="2,0,0,0" HorizontalAlignment="Stretch" Click="OnZoomResetClicked" />
                     </UniformGrid>
                     <UniformGrid Columns="2" Rows="1">
-                        <ui:Button Content="Undo" Appearance="Danger" Margin="0,0,2,0"
+                        <ui:Button x:Name="UndoButton" Content="Undo" Appearance="Danger" Margin="0,0,2,0"
                                    HorizontalAlignment="Stretch" Click="OnUndoClicked" />
-                        <ui:Button Content="Redo" Margin="2,0,0,0"
+                        <ui:Button x:Name="RedoButton" Content="Redo" Margin="2,0,0,0"
                                    HorizontalAlignment="Stretch" Click="OnRedoClicked" />
                     </UniformGrid>
                 </StackPanel>
@@ -257,7 +257,7 @@
                      stroke" controls are in one column with the live Properties below.
                      Outline + Fill render side-by-side as a 2-col grid; Stroke + value live
                      stacked underneath because the slider needs the full width. -->
-                <TextBlock Text="Default properties" Foreground="White" FontSize="14" FontWeight="SemiBold"
+                <TextBlock x:Name="DefaultPropertiesTitle" Text="Default properties" Foreground="White" FontSize="14" FontWeight="SemiBold"
                            Margin="0,0,0,8" />
                 <Grid Margin="0,0,0,10">
                     <Grid.ColumnDefinitions>
@@ -266,17 +266,17 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" HorizontalAlignment="Center">
-                        <TextBlock Text="Outline" Foreground="#AAA" FontSize="11" Margin="0,0,0,4"
+                        <TextBlock x:Name="OutlineLabel" Text="Outline" Foreground="#AAA" FontSize="11" Margin="0,0,0,4"
                                    HorizontalAlignment="Center" />
                         <views:ColorSwatchButton x:Name="OutlineSwatch" HorizontalAlignment="Center" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" HorizontalAlignment="Center">
-                        <TextBlock Text="Fill" Foreground="#AAA" FontSize="11" Margin="0,0,0,4"
+                        <TextBlock x:Name="FillLabel" Text="Fill" Foreground="#AAA" FontSize="11" Margin="0,0,0,4"
                                    HorizontalAlignment="Center" />
                         <views:ColorSwatchButton x:Name="FillSwatch" HorizontalAlignment="Center" />
                     </StackPanel>
                     <StackPanel Grid.Column="2" HorizontalAlignment="Center">
-                        <TextBlock Text="Text" Foreground="#AAA" FontSize="11" Margin="0,0,0,4"
+                        <TextBlock x:Name="TextLabel" Text="Text" Foreground="#AAA" FontSize="11" Margin="0,0,0,4"
                                    HorizontalAlignment="Center" />
                         <views:ColorSwatchButton x:Name="TextSwatch" HorizontalAlignment="Center" />
                     </StackPanel>
@@ -287,7 +287,7 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Stroke" Foreground="#AAA" FontSize="11" />
+                        <TextBlock x:Name="StrokeLabel" Grid.Column="0" Text="Stroke" Foreground="#AAA" FontSize="11" />
                         <TextBlock Grid.Column="1" Foreground="#AAA" FontSize="11"
                                    Text="{Binding ElementName=StrokeSlider, Path=Value, StringFormat='{}{0:F0}px'}" />
                     </Grid>
@@ -321,11 +321,11 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" x:Name="SelOutlineSection">
-                            <TextBlock Text="Outline" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                            <TextBlock x:Name="SelOutlineLabel" Text="Outline" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
                             <views:ColorSwatchButton x:Name="SelOutlineSwatch" HorizontalAlignment="Left" />
                         </StackPanel>
                         <StackPanel Grid.Column="1" x:Name="SelFillSection">
-                            <TextBlock Text="Fill" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                            <TextBlock x:Name="SelFillLabel" Text="Fill" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
                             <views:ColorSwatchButton x:Name="SelFillSwatch" HorizontalAlignment="Left" />
                         </StackPanel>
                     </Grid>
@@ -338,7 +338,7 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Stroke" Foreground="#AAA" FontSize="11" />
+                            <TextBlock x:Name="SelStrokeLabel" Grid.Column="0" Text="Stroke" Foreground="#AAA" FontSize="11" />
                             <TextBlock Grid.Column="1" Foreground="#AAA" FontSize="11"
                                        Text="{Binding ElementName=SelStrokeSlider, Path=Value, StringFormat='{}{0:F0}px'}" />
                         </Grid>
@@ -385,7 +385,7 @@
                     </StackPanel>
 
                     <StackPanel x:Name="SelRotationSection" Visibility="Collapsed" Margin="0,0,0,12">
-                        <TextBlock Text="Rotation" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                        <TextBlock x:Name="SelRotationLabel" Text="Rotation" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -400,9 +400,9 @@
 
                     <StackPanel x:Name="SelStepCounterSection" Visibility="Collapsed" Margin="0,0,0,12">
                         <!-- Step counter size now rides on the Stroke slider above (Radius =
-                             StrokeWidth * 10), so this section only carries font knobs — no
+                             StrokeWidth * 2.5), so this section only carries font knobs — no
                              dedicated radius control. -->
-                        <TextBlock Text="Font" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                        <TextBlock x:Name="SelStepFontLabel" Text="Font" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
                         <Grid Margin="0,0,0,8">
                             <TextBox x:Name="SelStepFontInput" Padding="4,3" />
                             <Popup x:Name="SelStepFontPopup"
@@ -427,10 +427,10 @@
                     </StackPanel>
 
                     <StackPanel x:Name="SelTextStyleSection" Visibility="Collapsed" Margin="0,0,0,12">
-                        <TextBlock Text="Text color" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                        <TextBlock x:Name="SelTextColorLabel" Text="Text color" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
                         <views:ColorSwatchButton x:Name="SelTextColorSwatch" HorizontalAlignment="Left" Margin="0,0,0,8" />
 
-                        <TextBlock Text="Font" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                        <TextBlock x:Name="SelFontLabel" Text="Font" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
                         <Grid Margin="0,0,0,8">
                             <TextBox x:Name="SelFontInput" Padding="4,3" />
                             <Popup x:Name="SelFontPopup"
@@ -448,7 +448,7 @@
                             </Popup>
                         </Grid>
 
-                        <TextBlock Text="Size" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                        <TextBlock x:Name="SelSizeLabel" Text="Size" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
                         <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -465,7 +465,7 @@
                             <CheckBox x:Name="SelItalicCheck" Content="Italic" Foreground="White" />
                         </StackPanel>
 
-                        <TextBlock Text="Alignment" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
+                        <TextBlock x:Name="SelAlignmentLabel" Text="Alignment" Foreground="#AAA" FontSize="11" Margin="0,0,0,4" />
                         <StackPanel Orientation="Horizontal">
                             <ToggleButton x:Name="SelAlignLeftBtn" Content="L" Width="32" Margin="0,0,4,0" Click="OnSelAlignLeftClicked" />
                             <ToggleButton x:Name="SelAlignCenterBtn" Content="C" Width="32" Margin="0,0,4,0" Click="OnSelAlignCenterClicked" />
@@ -477,7 +477,7 @@
                          remains here because it's the inverse operation — read FROM selection
                          INTO the defaults, so it makes sense paired with the selection-only
                          section. -->
-                    <ui:Button Content="Set as default"
+                    <ui:Button x:Name="SetAsDefaultBtn" Content="Set as default"
                                HorizontalAlignment="Stretch"
                                ToolTip="Use the selected shape's outline/fill/stroke as the toolbar's current values"
                                Click="OnSetAsDefaultClicked" />
