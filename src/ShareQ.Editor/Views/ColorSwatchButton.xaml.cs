@@ -94,10 +94,11 @@ public partial class ColorSwatchButton : UserControl
                 dlg.Show();
             });
         };
-        // ShowDialog (modal) — required because OnOkClicked sets DialogResult, which is only
-        // valid for modal dialogs. Bonus: blocks the swatch button until the user commits or
-        // cancels, mirroring the Theme tab's color-picker flow in MainWindow.
-        if (dlg.ShowDialog() == true)
+        // ShowOwnerScopedDialog: modal w.r.t. its owner only — sibling editors / dialogs stay
+        // interactive. ShowDialog still drives the modal pump (OnOkClicked sets DialogResult,
+        // which is only valid in modal dialogs); we just re-enable everything except the owner
+        // after WPF's app-wide disable kicks in.
+        if (dlg.ShowOwnerScopedDialog() == true)
         {
             SelectedColor = dlg.PickedColor;
             OnColorPicked?.Invoke(dlg.PickedColor);

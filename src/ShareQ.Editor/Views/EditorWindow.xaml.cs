@@ -80,6 +80,12 @@ public partial class EditorWindow : FluentWindow
 
     private readonly ShareQ.Core.Imaging.IImageEncoder? _encoder;
 
+    // Crop magnifier — built lazily on first mouse-move while the Crop tool is active,
+    // hidden when the tool changes. The Image inside shows a NearestNeighbor-scaled chunk of
+    // SourceImage centered on the cursor so the user can see where pixel boundaries fall.
+    private System.Windows.Controls.Border? _cropMagnifier;
+    private System.Windows.Controls.Image? _cropMagnifierImage;
+
     public EditorWindow(EditorViewModel viewModel, ShareQ.Core.Imaging.IImageEncoder? encoder = null)
     {
         InitializeComponent();
@@ -89,12 +95,25 @@ public partial class EditorWindow : FluentWindow
 
         OutlineSwatch.SelectedColor = _vm.OutlineColor;
         FillSwatch.SelectedColor = _vm.FillColor;
+        TextSwatch.SelectedColor = _vm.CurrentTextStyle.Color;
         OutlineSwatch.SetBinding(ColorSwatchButton.SelectedColorProperty,
             new System.Windows.Data.Binding(nameof(EditorViewModel.OutlineColor)) { Mode = System.Windows.Data.BindingMode.TwoWay });
         FillSwatch.SetBinding(ColorSwatchButton.SelectedColorProperty,
             new System.Windows.Data.Binding(nameof(EditorViewModel.FillColor)) { Mode = System.Windows.Data.BindingMode.TwoWay });
         StrokeSlider.SetBinding(Slider.ValueProperty,
             new System.Windows.Data.Binding(nameof(EditorViewModel.StrokeWidth)) { Mode = System.Windows.Data.BindingMode.TwoWay });
+        // TextSwatch can't bind directly because TextStyle is an immutable record — instead we
+        // hook the swatch's SelectedColor change and project it back into a fresh CurrentTextStyle.
+        // Reverse direction (style change → swatch refresh) is handled in the PropertyChanged
+        // handler below to keep the two views in sync after Set-as-current / external mutations.
+        var textSwatchDescriptor = System.ComponentModel.DependencyPropertyDescriptor.FromProperty(
+            ColorSwatchButton.SelectedColorProperty, typeof(ColorSwatchButton));
+        textSwatchDescriptor?.AddValueChanged(TextSwatch, (_, _) =>
+        {
+            var current = _vm.CurrentTextStyle;
+            if (TextSwatch.SelectedColor.Equals(current.Color)) return;
+            _vm.CurrentTextStyle = current with { Color = TextSwatch.SelectedColor };
+        });
 
         _vm.Shapes.CollectionChanged += OnShapesChanged;
         _vm.PropertyChanged += (_, e) =>
@@ -102,7 +121,24 @@ public partial class EditorWindow : FluentWindow
             if (e.PropertyName == nameof(EditorViewModel.PreviewShape)) RedrawPreview();
             if (e.PropertyName == nameof(EditorViewModel.SourcePngBytes)) LoadSourceImage();
             if (e.PropertyName == nameof(EditorViewModel.SelectedShape)) OnSelectedShapeChanged();
-            if (e.PropertyName == nameof(EditorViewModel.CurrentTool)) { CommitInlineTextEdit(); RefreshToolButtonHighlight(); RefreshPropertyPanel(); }
+            if (e.PropertyName == nameof(EditorViewModel.CurrentTool))
+            {
+                CommitInlineTextEdit();
+                RefreshToolButtonHighlight();
+                RefreshPropertyPanel();
+                // Crop magnifier is tool-specific — switching to anything else means we need to
+                // pull it off the canvas, otherwise it sticks at its last position forever.
+                if (_vm.CurrentTool != EditorTool.Crop) HideCropMagnifier();
+            }
+            if (e.PropertyName == nameof(EditorViewModel.CurrentTextStyle))
+            {
+                // Reverse-sync: when the VM's text style changes (e.g. Set-as-current adopts
+                // the selected TextShape's colour), pull the new colour into the swatch so
+                // both views stay aligned. The forward direction (swatch click → vm) is
+                // wired via the DependencyPropertyDescriptor above.
+                if (!TextSwatch.SelectedColor.Equals(_vm.CurrentTextStyle.Color))
+                    TextSwatch.SelectedColor = _vm.CurrentTextStyle.Color;
+            }
         };
         _vm.SelectedShapes.CollectionChanged += (_, e) =>
         {
@@ -135,7 +171,7 @@ public partial class EditorWindow : FluentWindow
         SelFreehandEndArrowCheck.Checked += (_, _) => OnSelFreehandEndArrowChanged();
         SelFreehandEndArrowCheck.Unchecked += (_, _) => OnSelFreehandEndArrowChanged();
 
-        WireFontPicker();
+        WireFontPickers();
         SelFontSizeSlider.ValueChanged += (_, _) => OnSelFontSizeSliderChanged();
         SelFontSizeBox.LostFocus += (_, _) => OnSelFontSizeBoxCommitted();
         SelFontSizeBox.KeyDown += (_, ev) => { if (ev.Key == Key.Enter) OnSelFontSizeBoxCommitted(); };
@@ -143,6 +179,11 @@ public partial class EditorWindow : FluentWindow
         SelBoldCheck.Unchecked += (_, _) => OnSelTextStyleChanged();
         SelItalicCheck.Checked += (_, _) => OnSelTextStyleChanged();
         SelItalicCheck.Unchecked += (_, _) => OnSelTextStyleChanged();
+
+        SelStepBoldCheck.Checked += (_, _) => OnSelStepFontStyleChanged();
+        SelStepBoldCheck.Unchecked += (_, _) => OnSelStepFontStyleChanged();
+        SelStepItalicCheck.Checked += (_, _) => OnSelStepFontStyleChanged();
+        SelStepItalicCheck.Unchecked += (_, _) => OnSelStepFontStyleChanged();
 
         var swatchColorDescAlt = System.ComponentModel.DependencyPropertyDescriptor.FromProperty(
             ColorSwatchButton.SelectedColorProperty, typeof(ColorSwatchButton));
@@ -1082,6 +1123,18 @@ public partial class EditorWindow : FluentWindow
         // Cursor feedback on grip hover (independent of mouse button state).
         UpdateCursorForGripHover(e.GetPosition(DrawingCanvas));
 
+        // Crop tool magnifier — runs on every mouse-move, not just while dragging, so the user
+        // can preview where pixels lie before clicking down. Cheap because the underlying
+        // CroppedBitmap is just a window into the existing source bitmap (no copy).
+        if (_vm.CurrentTool == EditorTool.Crop)
+        {
+            UpdateCropMagnifier(e.GetPosition(DrawingCanvas));
+        }
+        else
+        {
+            HideCropMagnifier();
+        }
+
         if (e.LeftButton != MouseButtonState.Pressed) return;
 
         if (_isDrawingTextFrame)
@@ -1428,6 +1481,28 @@ public partial class EditorWindow : FluentWindow
         _vm.FreehandSmoothDefault = smooth;
     }
 
+    /// <summary>Read the step-counter font fields and apply them to every selected step counter,
+    /// then write back to the VM defaults so subsequent step counters inherit the same look.
+    /// Family/Bold/Italic are handled together — each individual control's change event funnels
+    /// through here, mirroring the text-style picker's <see cref="OnSelTextStyleChanged"/>.</summary>
+    private void OnSelStepFontStyleChanged()
+    {
+        if (_suppressLiveUpdates) return;
+        var family = string.IsNullOrWhiteSpace(SelStepFontInput.Text) ? "Segoe UI" : SelStepFontInput.Text;
+        var bold = SelStepBoldCheck.IsChecked == true;
+        var italic = SelStepItalicCheck.IsChecked == true;
+
+        _vm.StepFontFamily = family;
+        _vm.StepBold = bold;
+        _vm.StepItalic = italic;
+
+        foreach (var s in _vm.SelectedShapes.ToList())
+        {
+            if (s is StepCounterShape sc)
+                _vm.LiveReplaceShape(s, sc with { FontFamily = family, Bold = bold, Italic = italic });
+        }
+    }
+
     private void OnSelFreehandEndArrowChanged()
     {
         if (_suppressLiveUpdates) return;
@@ -1669,11 +1744,12 @@ public partial class EditorWindow : FluentWindow
             BorderBrush = new SolidColorBrush(Color.FromArgb(180, 80, 200, 255)),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(2),
-            // Fixed-size box: width/height match the shape, content wraps inside instead of
-            // pushing the box out. Aligns with Photoshop / Figma behaviour and avoids the
-            // right-edge cropping the auto-grow path used to suffer from.
+            // Fixed width — content wraps horizontally — but height auto-grows with the typed
+            // content. MinHeight is the original shape's box so a freshly-created TextShape
+            // doesn't visually shrink before the user types anything. The Canvas it lives in
+            // doesn't constrain the bottom edge, so additional lines extend down naturally.
             Width = boxW,
-            Height = boxH,
+            MinHeight = boxH,
             TextWrapping = TextWrapping.Wrap,
             VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
@@ -1861,105 +1937,146 @@ public partial class EditorWindow : FluentWindow
             .ToList());
 
     private bool _suppressFontInput;
+    private bool _suppressStepFontInput;
+    private FontPicker? _textFontPicker;
+    private FontPicker? _stepFontPicker;
+
+    /// <summary>Bag of refs + callbacks needed by <see cref="WireFontPicker(FontPicker)"/>. One
+    /// instance per autocomplete picker: text-shape style and step-counter font live independently
+    /// so each gets its own state (suppress flag, commit callback, controls).</summary>
+    private sealed class FontPicker
+    {
+        public required System.Windows.Controls.TextBox Input;
+        public required System.Windows.Controls.Primitives.Popup Popup;
+        public required ListBox List;
+        public required Action OnCommit;
+        public required Func<bool> GetSuppress;
+        public required Action<bool> SetSuppress;
+    }
 
     /// <summary>Custom font picker: TextBox + Popup with ListBox. The TextBox shows the current font
     /// and acts as a search field; the Popup lists matching fonts; clicking one applies it. This
     /// replaces the editable ComboBox approach which had constant flash from CollectionView refresh
-    /// fighting with WPF's text/caret bookkeeping.</summary>
-    private void WireFontPicker()
+    /// fighting with WPF's text/caret bookkeeping. Parameterised so the same wiring serves both
+    /// the text-style picker and the step-counter picker.</summary>
+    private void WireFontPickers()
+    {
+        _textFontPicker = new FontPicker
+        {
+            Input = SelFontInput,
+            Popup = SelFontPopup,
+            List = SelFontList,
+            OnCommit = () => OnSelTextStyleChanged(),
+            GetSuppress = () => _suppressFontInput,
+            SetSuppress = v => _suppressFontInput = v
+        };
+        _stepFontPicker = new FontPicker
+        {
+            Input = SelStepFontInput,
+            Popup = SelStepFontPopup,
+            List = SelStepFontList,
+            OnCommit = OnSelStepFontStyleChanged,
+            GetSuppress = () => _suppressStepFontInput,
+            SetSuppress = v => _suppressStepFontInput = v
+        };
+        WireFontPicker(_textFontPicker);
+        WireFontPicker(_stepFontPicker);
+    }
+
+    private void WireFontPicker(FontPicker p)
     {
         // No popup on GotFocus — that caused a flash from binding ~500 items into the ListBox.
         // Popup opens only when the user actually starts typing or hits Down arrow.
-        SelFontInput.TextChanged += (_, _) =>
+        p.Input.TextChanged += (_, _) =>
         {
-            if (_suppressFontInput) return;
-            var text = SelFontInput.Text ?? "";
-            if (text.Length == 0) { SelFontPopup.IsOpen = false; return; }
-            RebuildFontList(text);
+            if (p.GetSuppress()) return;
+            var text = p.Input.Text ?? "";
+            if (text.Length == 0) { p.Popup.IsOpen = false; return; }
+            RebuildFontList(p, text);
         };
-        SelFontInput.PreviewKeyDown += (_, e) =>
+        p.Input.PreviewKeyDown += (_, e) =>
         {
-            if (e.Key == Key.Escape) { SelFontPopup.IsOpen = false; e.Handled = true; }
+            if (e.Key == Key.Escape) { p.Popup.IsOpen = false; e.Handled = true; }
             else if (e.Key == Key.Down)
             {
-                if (!SelFontPopup.IsOpen)
+                if (!p.Popup.IsOpen)
                 {
-                    RebuildFontList(SelFontInput.Text ?? "");
-                    SelFontList.SelectedIndex = 0;
-                    (SelFontList.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem)?.BringIntoView();
+                    RebuildFontList(p, p.Input.Text ?? "");
+                    p.List.SelectedIndex = 0;
+                    (p.List.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem)?.BringIntoView();
                 }
-                else if (SelFontList.Items.Count > 0)
+                else if (p.List.Items.Count > 0)
                 {
-                    SelFontList.SelectedIndex = Math.Min(SelFontList.SelectedIndex + 1, SelFontList.Items.Count - 1);
-                    if (SelFontList.SelectedIndex < 0) SelFontList.SelectedIndex = 0;
-                    (SelFontList.ItemContainerGenerator.ContainerFromIndex(SelFontList.SelectedIndex) as ListBoxItem)?.BringIntoView();
+                    p.List.SelectedIndex = Math.Min(p.List.SelectedIndex + 1, p.List.Items.Count - 1);
+                    if (p.List.SelectedIndex < 0) p.List.SelectedIndex = 0;
+                    (p.List.ItemContainerGenerator.ContainerFromIndex(p.List.SelectedIndex) as ListBoxItem)?.BringIntoView();
                 }
-                PreviewSelectedFont();
+                PreviewSelectedFont(p);
                 e.Handled = true;
             }
             else if (e.Key == Key.Up)
             {
-                if (SelFontList.SelectedIndex > 0)
+                if (p.List.SelectedIndex > 0)
                 {
-                    SelFontList.SelectedIndex--;
-                    (SelFontList.ItemContainerGenerator.ContainerFromIndex(SelFontList.SelectedIndex) as ListBoxItem)?.BringIntoView();
+                    p.List.SelectedIndex--;
+                    (p.List.ItemContainerGenerator.ContainerFromIndex(p.List.SelectedIndex) as ListBoxItem)?.BringIntoView();
                 }
-                PreviewSelectedFont();
+                PreviewSelectedFont(p);
                 e.Handled = true;
             }
             else if (e.Key == Key.Enter)
             {
-                if (SelFontList.SelectedItem is string s) CommitFontPick(s);
-                else if (SelFontList.Items.Count > 0 && SelFontList.Items[0] is string first) CommitFontPick(first);
+                if (p.List.SelectedItem is string s) CommitFontPick(p, s);
+                else if (p.List.Items.Count > 0 && p.List.Items[0] is string first) CommitFontPick(p, first);
                 e.Handled = true;
             }
         };
-        SelFontList.PreviewMouseLeftButtonUp += (_, e) =>
+        p.List.PreviewMouseLeftButtonUp += (_, e) =>
         {
             if (e.OriginalSource is DependencyObject d)
             {
                 var item = FindParent<ListBoxItem>(d);
-                if (item?.Content is string s) CommitFontPick(s);
+                if (item?.Content is string s) CommitFontPick(p, s);
             }
         };
     }
 
-    private void RebuildFontList(string filter)
+    private static void RebuildFontList(FontPicker p, string filter)
     {
         var all = SystemFonts.Value;
         IEnumerable<string> source = string.IsNullOrEmpty(filter)
             ? all
             : all.Where(f => f.Contains(filter, StringComparison.OrdinalIgnoreCase));
-        SelFontList.ItemsSource = source.Take(200).ToList();
-        if (!SelFontPopup.IsOpen) SelFontPopup.IsOpen = true;
+        p.List.ItemsSource = source.Take(200).ToList();
+        if (!p.Popup.IsOpen) p.Popup.IsOpen = true;
     }
 
-    private void CommitFontPick(string family)
+    private static void CommitFontPick(FontPicker p, string family)
     {
-        _suppressFontInput = true;
+        p.SetSuppress(true);
         try
         {
-            SelFontInput.Text = family;
-            SelFontInput.CaretIndex = family.Length;
+            p.Input.Text = family;
+            p.Input.CaretIndex = family.Length;
         }
-        finally { _suppressFontInput = false; }
-        SelFontPopup.IsOpen = false;
-        OnSelTextStyleChanged();
+        finally { p.SetSuppress(false); }
+        p.Popup.IsOpen = false;
+        p.OnCommit();
     }
 
     /// <summary>Live-preview the font of the currently highlighted ListBox item without closing the popup.
-    /// Updates SelFontInput silently and applies the new style via the normal text-style path.</summary>
-    private void PreviewSelectedFont()
+    /// Updates the input silently and applies the new style via the picker's commit callback.</summary>
+    private static void PreviewSelectedFont(FontPicker p)
     {
-        if (SelFontList.SelectedItem is not string family) return;
-        _suppressFontInput = true;
+        if (p.List.SelectedItem is not string family) return;
+        p.SetSuppress(true);
         try
         {
-            SelFontInput.Text = family;
-            SelFontInput.CaretIndex = family.Length;
+            p.Input.Text = family;
+            p.Input.CaretIndex = family.Length;
         }
-        finally { _suppressFontInput = false; }
-        OnSelTextStyleChanged();
+        finally { p.SetSuppress(false); }
+        p.OnCommit();
     }
 
     private static T? FindParent<T>(DependencyObject d) where T : DependencyObject
@@ -2112,6 +2229,10 @@ public partial class EditorWindow : FluentWindow
         // Rotation only makes sense once a concrete shape exists with an X/Y/W/H bbox, so it
         // stays hidden in the defaults view — there's nothing to rotate yet.
         SelRotationSection.Visibility = Visibility.Collapsed;
+        // Step counter controls are per-shape only — radius is concrete, not a sticky default.
+        // The user picks font/bold/italic on a drawn step and that propagates to subsequent ones
+        // via the StepFontFamily/StepBold/StepItalic sticky defaults.
+        SelStepCounterSection.Visibility = Visibility.Collapsed;
 
         _suppressLiveUpdates = true;
         try
@@ -2171,34 +2292,56 @@ public partial class EditorWindow : FluentWindow
         finally { _suppressLiveUpdates = false; }
     }
 
-    /// <summary>Apply the toolbar's current outline/fill/stroke to every selected shape in one gesture.
-    /// The selection's live-edit snapshot was captured when the shapes were selected, so this
-    /// commits as a single undo step per shape (same machinery as drag-to-move).</summary>
+    /// <summary>Apply the default outline / fill / stroke / text-color (Default properties group)
+    /// to every selected shape in one gesture. The selection's live-edit snapshot was captured
+    /// when the shapes were selected, so this commits as a single undo step per shape (same
+    /// machinery as drag-to-move). Text color only applies to TextShape; ignored elsewhere.</summary>
     private void OnApplyCurrentClicked(object sender, RoutedEventArgs e)
     {
         if (_vm.SelectedShapes.Count == 0) return;
         var outline = _vm.OutlineColor;
         var fill = _vm.FillColor;
         var stroke = _vm.StrokeWidth;
+        var textColor = _vm.CurrentTextStyle.Color;
 
         foreach (var s in _vm.SelectedShapes.ToList())
         {
             var updated = ApplyStrokeWidth(ApplyFillColor(ApplyOutlineColor(s, outline), fill), stroke);
+            updated = ApplyTextColor(updated, textColor);
             _vm.LiveReplaceShape(s, updated);
         }
         RefreshPropertyPanel();
     }
 
-    /// <summary>Adopt the selected shape's outline/fill/stroke as the toolbar's current values.
-    /// On multi-selection, takes the first shape's values.</summary>
-    private void OnSetAsCurrentClicked(object sender, RoutedEventArgs e)
+    /// <summary>Adopt the selected shape's outline / fill / stroke as the default values; if the
+    /// selection is a TextShape, also lift its Style.Color into the default text color so the
+    /// next text-tool click reproduces it. On multi-selection, takes the first shape.</summary>
+    private void OnSetAsDefaultClicked(object sender, RoutedEventArgs e)
     {
         if (_vm.SelectedShapes.Count == 0) return;
         var s = _vm.SelectedShapes[0];
-        _vm.OutlineColor = s.Outline;
-        _vm.FillColor = s.Fill;
-        _vm.StrokeWidth = s.StrokeWidth;
+        // Only project properties the shape actually uses. Otherwise picking "Set as default"
+        // on e.g. a TextShape would clobber the global Outline/Fill/Stroke defaults with
+        // whatever residual values that shape happened to carry — TextShape stores its visible
+        // color in Style.Color, so its Outline/Fill aren't meaningful signal.
+        if (ShapeSupportsOutline(s)) _vm.OutlineColor = s.Outline;
+        if (ShapeSupportsFill(s)) _vm.FillColor = s.Fill;
+        if (ShapeSupportsStroke(s)) _vm.StrokeWidth = s.StrokeWidth;
+        if (s is TextShape t)
+        {
+            // Mutate via record-with so OnCurrentTextStyleChanged fires, which refreshes the
+            // TextTool factory and the text swatch through the PropertyChanged handler above.
+            _vm.CurrentTextStyle = _vm.CurrentTextStyle with { Color = t.Style.Color };
+        }
     }
+
+    /// <summary>Project the default text colour onto a TextShape's Style.Color. Non-TextShapes
+    /// pass through unchanged so this can be called unconditionally inside the apply loop.</summary>
+    private static Shape ApplyTextColor(Shape s, ShapeColor c) => s switch
+    {
+        TextShape t => t with { Style = t.Style with { Color = c } },
+        _ => s,
+    };
 
     private static Shape ApplyOutlineColor(Shape s, ShapeColor c) => s switch
     {
@@ -2307,13 +2450,170 @@ public partial class EditorWindow : FluentWindow
                 DrawingCanvas.Children.RemoveAt(i);
             }
         }
-        if (_vm.PreviewShape is not null)
+        if (_vm.PreviewShape is null) return;
+        // Crop tool gets a ShareX-style "marching ants" rect: white dash on top of black dash
+        // shifted half a period, so the gaps interlock and the rectangle reads on any
+        // background. Less aggressive than the red default outline used by drawing tools.
+        if (_vm.CurrentTool == EditorTool.Crop && _vm.PreviewShape is RectangleShape cropRect)
         {
-            var ui = MakeUiElement(_vm.PreviewShape);
-            if (ui is FrameworkElement fe) fe.Tag = "preview";
-            DrawingCanvas.Children.Add(ui);
+            foreach (var element in CreateCropPreview(cropRect))
+            {
+                if (element is FrameworkElement fe2) fe2.Tag = "preview";
+                DrawingCanvas.Children.Add(element);
+            }
+            return;
         }
+        var ui = MakeUiElement(_vm.PreviewShape);
+        if (ui is FrameworkElement fe1) fe1.Tag = "preview";
+        DrawingCanvas.Children.Add(ui);
     }
+
+    /// <summary>Two stacked Rectangles forming the ShareX-style dashed selection. The black
+    /// rect uses an offset dash array so its dashes sit in the gaps of the white one — gives
+    /// the "marching ants" silhouette legibility on both bright and dark backgrounds without
+    /// animating anything (cheaper than a DispatcherTimer-driven offset).</summary>
+    private static IEnumerable<UIElement> CreateCropPreview(RectangleShape r)
+    {
+        const double dashOn = 4;
+        const double dashOff = 4;
+        var black = new System.Windows.Shapes.Rectangle
+        {
+            Width = r.Width, Height = r.Height,
+            Stroke = System.Windows.Media.Brushes.Black,
+            StrokeThickness = 1,
+            StrokeDashArray = [dashOn, dashOff],
+            StrokeDashOffset = dashOn, // half-period shift relative to the white pass below
+            IsHitTestVisible = false,
+        };
+        Canvas.SetLeft(black, r.X);
+        Canvas.SetTop(black, r.Y);
+        var white = new System.Windows.Shapes.Rectangle
+        {
+            Width = r.Width, Height = r.Height,
+            Stroke = System.Windows.Media.Brushes.White,
+            StrokeThickness = 1,
+            StrokeDashArray = [dashOn, dashOff],
+            IsHitTestVisible = false,
+        };
+        Canvas.SetLeft(white, r.X);
+        Canvas.SetTop(white, r.Y);
+        yield return black;
+        yield return white;
+    }
+
+    /// <summary>Show / refresh the magnifier overlay near the cursor while the Crop tool is
+    /// active. Samples an 11×11 px window around the cursor from <see cref="SourceImage"/> and
+    /// scales it 10× with <c>NearestNeighbor</c> so each source pixel reads as a hard square.
+    /// A 1-px crosshair marks the exact cursor pixel — that's the pixel that ends up on the
+    /// crop edge if the user clicks now.</summary>
+    private void UpdateCropMagnifier(System.Windows.Point cursorOnCanvas)
+    {
+        if (SourceImage.Source is not BitmapSource src)
+        {
+            HideCropMagnifier();
+            return;
+        }
+
+        const int sampleSize = 11;          // odd, so a unique centre pixel exists
+        const int displaySize = 110;        // 10× zoom for pixel-art readability
+        var cx = (int)Math.Round(cursorOnCanvas.X);
+        var cy = (int)Math.Round(cursorOnCanvas.Y);
+        if (cx < 0 || cy < 0 || cx >= src.PixelWidth || cy >= src.PixelHeight)
+        {
+            HideCropMagnifier();
+            return;
+        }
+
+        var halfSample = sampleSize / 2;
+        var clampedX = Math.Max(0, Math.Min(cx - halfSample, src.PixelWidth - sampleSize));
+        var clampedY = Math.Max(0, Math.Min(cy - halfSample, src.PixelHeight - sampleSize));
+        // Ensure we never request a region larger than what's available — small images would
+        // otherwise blow up the CroppedBitmap ctor.
+        var w = Math.Min(sampleSize, src.PixelWidth);
+        var h = Math.Min(sampleSize, src.PixelHeight);
+        var crop = new CroppedBitmap(src, new Int32Rect(clampedX, clampedY, w, h));
+
+        if (_cropMagnifier is null)
+        {
+            // Mirrors ScreenColorPickerOverlay's magnifier styling: Image inside a 1-px outline
+            // border, with a small Rectangle marking the centre pixel (the pixel that ends up
+            // on the crop edge if the user clicks now). Same SampleSize / displaySize ratio as
+            // the screen sampler so the two surfaces feel like the same control.
+            _cropMagnifierImage = new System.Windows.Controls.Image
+            {
+                Width = displaySize, Height = displaySize,
+                Stretch = System.Windows.Media.Stretch.Fill,
+                IsHitTestVisible = false,
+            };
+            RenderOptions.SetBitmapScalingMode(_cropMagnifierImage, BitmapScalingMode.NearestNeighbor);
+
+            // Centre-pixel marker — Rectangle outline, same as the screen sampler. Size in
+            // display space = (1 source pixel) × zoomFactor.
+            var centerMarker = new System.Windows.Shapes.Rectangle
+            {
+                Width = (double)displaySize / sampleSize,
+                Height = (double)displaySize / sampleSize,
+                Stroke = System.Windows.Media.Brushes.Red,
+                StrokeThickness = 1.5,
+                Fill = System.Windows.Media.Brushes.Transparent,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false,
+            };
+            var inner = new System.Windows.Controls.Grid
+            {
+                Width = displaySize, Height = displaySize,
+                ClipToBounds = true,
+            };
+            inner.Children.Add(_cropMagnifierImage);
+            inner.Children.Add(centerMarker);
+            var innerFrame = new System.Windows.Controls.Border
+            {
+                Child = inner,
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+                BorderThickness = new Thickness(1),
+            };
+            _cropMagnifier = new System.Windows.Controls.Border
+            {
+                Padding = new Thickness(8),
+                Child = innerFrame,
+                Background = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(4),
+                IsHitTestVisible = false,
+                Tag = "crop-magnifier",
+                Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    BlurRadius = 8, ShadowDepth = 0, Opacity = 0.6, Color = Colors.Black,
+                },
+            };
+            DrawingCanvas.Children.Add(_cropMagnifier);
+        }
+        if (_cropMagnifierImage is not null) _cropMagnifierImage.Source = crop;
+
+        // Position the magnifier offset from the cursor so it doesn't sit under the pixel
+        // it's trying to show. Flip to the left / top edge when running off the canvas.
+        const double cursorOffset = 20;
+        var magW = _cropMagnifier.Width > 0 ? _cropMagnifier.Width : displaySize + 2;
+        var magH = _cropMagnifier.Height > 0 ? _cropMagnifier.Height : displaySize + 2;
+        var px = cursorOnCanvas.X + cursorOffset;
+        var py = cursorOnCanvas.Y + cursorOffset;
+        if (px + magW > src.PixelWidth) px = cursorOnCanvas.X - cursorOffset - displaySize;
+        if (py + magH > src.PixelHeight) py = cursorOnCanvas.Y - cursorOffset - displaySize;
+        Canvas.SetLeft(_cropMagnifier, px);
+        Canvas.SetTop(_cropMagnifier, py);
+        _cropMagnifier.Visibility = Visibility.Visible;
+    }
+
+    private void HideCropMagnifier()
+    {
+        if (_cropMagnifier is not null) _cropMagnifier.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>Hide the magnifier when the cursor leaves the canvas — otherwise it would
+    /// linger at the last position the mouse-move event reached, which looks dead.</summary>
+    private void OnCanvasMouseLeave(object sender, MouseEventArgs e) => HideCropMagnifier();
 
     private void RefreshSelectionAdorner()
     {
@@ -3022,18 +3322,19 @@ public partial class EditorWindow : FluentWindow
 
     private static UIElement CreateStepCounter(StepCounterShape c)
     {
-        // Outer-aligned outline (same EvenOdd ring trick BuildOuterStrokedShape uses). The
-        // disc fill stays at the user's radius; the outline band sits entirely outside it.
-        // Step counters always have a fill — transparent input fills with the outline colour,
-        // matching the legacy "filled disc with a number" look.
-        var t = c.StrokeWidth;
+        // Borderless filled disc + centered number. The user dropped the ring/stroke entirely
+        // (it just added an antialiasing seam and a redundant color knob); size now rides on
+        // StrokeWidth via Radius = StrokeWidth*10 inside the shape, so the existing stroke
+        // slider / mouse-wheel double as the size control. Fill is preferred when set; we
+        // fall back to Outline to preserve the legacy "transparent fill = use outline color"
+        // shortcut from the ShareX-era step-counter UX.
         var diameter = c.Radius * 2;
         var grid = new Grid
         {
-            Width = diameter + 2 * t,
-            Height = diameter + 2 * t
+            Width = diameter,
+            Height = diameter
         };
-        var fillEllipse = new System.Windows.Shapes.Ellipse
+        var disc = new System.Windows.Shapes.Ellipse
         {
             Width = diameter,
             Height = diameter,
@@ -3041,31 +3342,23 @@ public partial class EditorWindow : FluentWindow
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
-        grid.Children.Add(fillEllipse);
-
-        if (t > 0 && !c.Outline.IsTransparent)
-        {
-            var ringGroup = new GeometryGroup { FillRule = FillRule.EvenOdd };
-            ringGroup.Children.Add(new EllipseGeometry(new Rect(0, 0, diameter + 2 * t, diameter + 2 * t)));
-            ringGroup.Children.Add(new EllipseGeometry(new Rect(t, t, diameter, diameter)));
-            var ring = new System.Windows.Shapes.Path { Data = ringGroup, Fill = ToBrush(c.Outline) };
-            grid.Children.Add(ring);
-        }
+        grid.Children.Add(disc);
 
         var text = new System.Windows.Controls.TextBlock
         {
             Text = c.Number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            FontFamily = new FontFamily(string.IsNullOrWhiteSpace(c.FontFamily) ? "Segoe UI" : c.FontFamily),
             Foreground = Brushes.White,
-            FontWeight = FontWeights.Bold,
+            FontWeight = c.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStyle = c.Italic ? FontStyles.Italic : FontStyles.Normal,
             FontSize = c.Radius * 0.9,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
         grid.Children.Add(text);
 
-        // Offset by t so the disc centre still lands at (CenterX, CenterY) in world space.
-        Canvas.SetLeft(grid, c.CenterX - c.Radius - t);
-        Canvas.SetTop(grid, c.CenterY - c.Radius - t);
+        Canvas.SetLeft(grid, c.CenterX - c.Radius);
+        Canvas.SetTop(grid, c.CenterY - c.Radius);
         return grid;
     }
 
@@ -3077,6 +3370,9 @@ public partial class EditorWindow : FluentWindow
     private void RefreshPropertyPanel()
     {
         var sels = _vm.SelectedShapes;
+        // The "Apply to selected" button in the Default properties group is only meaningful
+        // when there's at least one shape selected — anything else would be a no-op click.
+        ApplyToSelectedBtn.IsEnabled = sels.Count > 0;
         if (sels.Count == 0)
         {
             // No selection: defer to the active tool. Drawing tools render their target shape's
@@ -3125,6 +3421,11 @@ public partial class EditorWindow : FluentWindow
         var textShapes = sels.OfType<TextShape>().ToList();
         var showTextSection = textShapes.Count > 0 || _vm.CurrentTool == EditorTool.Text;
         SelTextStyleSection.Visibility = showTextSection ? Visibility.Visible : Visibility.Collapsed;
+
+        // Step counter section: single-selection of a StepCounterShape, font knobs only —
+        // size now rides on the Stroke slider above (Radius = StrokeWidth * 10).
+        var singleStep = sels.Count == 1 ? sels[0] as StepCounterShape : null;
+        SelStepCounterSection.Visibility = singleStep is not null ? Visibility.Visible : Visibility.Collapsed;
 
         // Rotation section: only single-selection of a rotatable shape (rect/ellipse/text/image).
         var rotatable = sels.Count == 1 && sels[0] is RectangleShape or EllipseShape or TextShape or ImageShape;
@@ -3210,6 +3511,15 @@ public partial class EditorWindow : FluentWindow
                         break;
                 }
                 SelEffectSecondarySection.Visibility = sels[0] is SpotlightShape ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            if (singleStep is not null)
+            {
+                _suppressStepFontInput = true;
+                try { SelStepFontInput.Text = singleStep.FontFamily; }
+                finally { _suppressStepFontInput = false; }
+                SelStepBoldCheck.IsChecked = singleStep.Bold;
+                SelStepItalicCheck.IsChecked = singleStep.Italic;
             }
 
             if (textShapes.Count > 0)

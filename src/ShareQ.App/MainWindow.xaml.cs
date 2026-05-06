@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using ShareQ.App.Services;
 using ShareQ.App.ViewModels;
 using ShareQ.Editor.Model;
 using ShareQ.Editor.Views;
@@ -669,7 +670,7 @@ public partial class MainWindow : FluentWindow
     {
         if (DataContext is not SettingsViewModel vm) return;
         var dialog = new ShareQ.App.Views.IconPickerDialog(vm.Categories.NewCategoryIcon) { Owner = this };
-        if (dialog.ShowDialog() == true)
+        if (dialog.ShowOwnerScopedDialog() == true)
             vm.Categories.NewCategoryIcon = dialog.PickedGlyph;
     }
 
@@ -681,7 +682,7 @@ public partial class MainWindow : FluentWindow
         if (sender is not System.Windows.Controls.Button btn) return;
         if (btn.Tag is not ShareQ.App.ViewModels.CategoryRowViewModel row) return;
         var dialog = new ShareQ.App.Views.IconPickerDialog(row.Icon) { Owner = this };
-        if (dialog.ShowDialog() == true)
+        if (dialog.ShowOwnerScopedDialog() == true)
             row.Icon = dialog.PickedGlyph;
     }
 

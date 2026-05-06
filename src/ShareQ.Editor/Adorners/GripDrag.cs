@@ -155,8 +155,10 @@ public static class GripDrag
         var dy = py - c.CenterY;
         var dist = Math.Sqrt(dx * dx + dy * dy);
         // Grip sits at radius * sqrt(2)/2 ≈ radius * 0.707; invert to recover radius from drag distance.
+        // Radius is derived from StrokeWidth*2.5 inside StepCounterShape, so we drive the stroke
+        // to scale the disc — `c with { Radius = ... }` is no longer settable.
         var radius = Math.Clamp(dist / 0.707, 6, 200);
-        return c with { Radius = radius };
+        return c with { StrokeWidth = radius / 2.5 };
     }
 
     private interface IRectLike

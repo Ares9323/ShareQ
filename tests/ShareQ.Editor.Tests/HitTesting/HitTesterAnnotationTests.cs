@@ -37,14 +37,14 @@ public class HitTesterAnnotationTests
     [Fact]
     public void StepCounter_is_hit_inside_circle()
     {
-        var s = new StepCounterShape(100, 100, 20, 1, ShapeColor.Red, ShapeColor.Transparent, 2);
+        var s = new StepCounterShape(100, 100, 1, ShapeColor.Red, ShapeColor.Transparent, 8);
         Assert.True(ShapeHitTester.IsHit(s, 110, 100));
     }
 
     [Fact]
     public void StepCounter_is_not_hit_outside_circle()
     {
-        var s = new StepCounterShape(100, 100, 20, 1, ShapeColor.Red, ShapeColor.Transparent, 2);
+        var s = new StepCounterShape(100, 100, 1, ShapeColor.Red, ShapeColor.Transparent, 8);
         Assert.False(ShapeHitTester.IsHit(s, 200, 100));
     }
 }

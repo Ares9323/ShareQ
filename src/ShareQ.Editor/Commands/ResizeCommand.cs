@@ -78,7 +78,9 @@ public sealed class ResizeCommand : IEditorCommand
         // proportions match the pre-resize render. (Grip-resize is different — that one only
         // changes Width/Height to reflow the text, leaving the font alone.)
         TextShape t => t with { X = t.X * sx, Y = t.Y * sy, Width = t.Width * sx, Height = t.Height * sy, Style = t.Style with { FontSize = t.Style.FontSize * AvgScale(sx, sy) } },
-        StepCounterShape c => c with { CenterX = c.CenterX * sx, CenterY = c.CenterY * sy, Radius = c.Radius * AvgScale(sx, sy), StrokeWidth = c.StrokeWidth * AvgScale(sx, sy) },
+        // Radius rides on StrokeWidth (Radius = StrokeWidth * 10 inside StepCounterShape), so
+        // scaling stroke automatically scales the disc — no separate Radius assignment.
+        StepCounterShape c => c with { CenterX = c.CenterX * sx, CenterY = c.CenterY * sy, StrokeWidth = c.StrokeWidth * AvgScale(sx, sy) },
         BlurShape b => b with { X = b.X * sx, Y = b.Y * sy, Width = b.Width * sx, Height = b.Height * sy, Radius = b.Radius * AvgScale(sx, sy) },
         PixelateShape p => p with { X = p.X * sx, Y = p.Y * sy, Width = p.Width * sx, Height = p.Height * sy, BlockSize = (int)Math.Max(2, Math.Round(p.BlockSize * AvgScale(sx, sy))) },
         SpotlightShape sp => sp with { X = sp.X * sx, Y = sp.Y * sy, Width = sp.Width * sx, Height = sp.Height * sy, BlurRadius = sp.BlurRadius * AvgScale(sx, sy) },

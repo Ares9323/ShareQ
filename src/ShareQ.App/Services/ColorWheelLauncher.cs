@@ -98,7 +98,10 @@ public sealed class ColorWheelLauncher
             }
         };
 
-        if (dlg.ShowDialog() != true) return null;
+        // Use ShowOwnerScopedDialog so any open editor / other independent dialog stays
+        // interactive while the user is in the color picker — only the wheel's owner gets
+        // disabled. Same pattern fixes the icon picker → editor freeze.
+        if (dlg.ShowOwnerScopedDialog() != true) return null;
         return dlg.PickedColor;
     }
 

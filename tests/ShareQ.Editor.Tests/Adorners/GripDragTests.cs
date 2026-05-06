@@ -91,7 +91,9 @@ public class GripDragTests
     [Fact]
     public void StepCounter_Resize_grip_changes_Radius()
     {
-        var c = new StepCounterShape(100, 100, 20, 1, ShapeColor.Red, ShapeColor.Transparent, 2);
+        // Radius derived from StrokeWidth * 10 → stroke=2 yields radius=20 (matches the old
+        // explicit Radius arg).
+        var c = new StepCounterShape(100, 100, 1, ShapeColor.Red, ShapeColor.Transparent, 2);
         var resized = (StepCounterShape)GripDrag.Transform(c, GripKind.Resize, 200, 200, shiftHeld: false)!;
         Assert.True(resized.Radius > c.Radius);
         Assert.Equal(100, resized.CenterX);

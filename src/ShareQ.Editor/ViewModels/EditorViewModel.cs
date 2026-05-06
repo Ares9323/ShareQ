@@ -89,6 +89,34 @@ public sealed partial class EditorViewModel : ObservableObject
         if (_tools.TryGetValue(EditorTool.Freehand, out var t) && t is FreehandTool fh) fh.EndArrow = value;
     }
 
+    /// <summary>Sticky font defaults for the step counter tool. Decoupled from
+    /// <see cref="CurrentTextStyle"/> so the user can pick a different register for digits
+    /// inside the disc without affecting their text-shape font choice. Same propagation
+    /// pattern as the freehand flags: tool reads on next stroke, per-shape edit writes back.</summary>
+    [ObservableProperty]
+    private string _stepFontFamily = "Segoe UI";
+
+    partial void OnStepFontFamilyChanged(string value)
+    {
+        if (_tools.TryGetValue(EditorTool.StepCounter, out var t) && t is StepCounterTool sc) sc.FontFamily = value;
+    }
+
+    [ObservableProperty]
+    private bool _stepBold = true;
+
+    partial void OnStepBoldChanged(bool value)
+    {
+        if (_tools.TryGetValue(EditorTool.StepCounter, out var t) && t is StepCounterTool sc) sc.Bold = value;
+    }
+
+    [ObservableProperty]
+    private bool _stepItalic;
+
+    partial void OnStepItalicChanged(bool value)
+    {
+        if (_tools.TryGetValue(EditorTool.StepCounter, out var t) && t is StepCounterTool sc) sc.Italic = value;
+    }
+
     [ObservableProperty]
     private Shape? _selectedShape;
 
