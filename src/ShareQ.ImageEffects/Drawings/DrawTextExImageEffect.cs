@@ -60,13 +60,19 @@ public sealed class DrawTextExImageEffect : DrawingImageEffectBase
         ArgumentNullException.ThrowIfNull(source);
         if (string.IsNullOrEmpty(Text)) return source.Copy();
 
+        // ShareX-compatible placeholder expansion. Imported .sxie presets store templates like
+        // "%y-%mo-%d" that need to evaluate at render time — without this they get drawn
+        // verbatim. Covers the common date/time + width/height tokens; literal % is escaped
+        // via "%%". Out-of-set tokens fall through unchanged so we don't garble user text.
+        var resolvedText = ExpandPlaceholders(Text, source.Width, source.Height);
+
         var (family, size, style) = ParseFont(Font);
         using var typeface = SKTypeface.FromFamilyName(family, style);
         using var font = new SKFont(typeface, size);
 
         // Measure the text bounds once — used both for AutoHide and to anchor the rotated
         // string at its top-left, regardless of which Placement was picked.
-        font.MeasureText(Text, out var bounds);
+        font.MeasureText(resolvedText, out var bounds);
         if (AutoHide && (bounds.Width > source.Width || bounds.Height > source.Height))
             return source.Copy();
 
@@ -90,7 +96,7 @@ public sealed class DrawTextExImageEffect : DrawingImageEffectBase
             using var shadowPaint = new SKPaint { IsAntialias = true, Color = ShadowColor };
             if (ShadowUseGradient && ShadowGradient.IsValid)
                 shadowPaint.Shader = ShadowGradient.CreateShader(shaderWidth, shaderHeight);
-            canvas.DrawText(Text, ShadowOffsetX, -bounds.Top + ShadowOffsetY, font, shadowPaint);
+            canvas.DrawText(resolvedText, ShadowOffsetX, -bounds.Top + ShadowOffsetY, font, shadowPaint);
         }
 
         // Outline pass under the fill so the stroke shows around the glyphs.
@@ -105,13 +111,13 @@ public sealed class DrawTextExImageEffect : DrawingImageEffectBase
             };
             if (OutlineUseGradient && OutlineGradient.IsValid)
                 outlinePaint.Shader = OutlineGradient.CreateShader(shaderWidth, shaderHeight);
-            canvas.DrawText(Text, 0, -bounds.Top, font, outlinePaint);
+            canvas.DrawText(resolvedText, 0, -bounds.Top, font, outlinePaint);
         }
 
         using var fillPaint = new SKPaint { IsAntialias = true, Color = Color };
         if (UseGradient && Gradient.IsValid)
             fillPaint.Shader = Gradient.CreateShader(shaderWidth, shaderHeight);
-        canvas.DrawText(Text, 0, -bounds.Top, font, fillPaint);
+        canvas.DrawText(resolvedText, 0, -bounds.Top, font, fillPaint);
 
         canvas.Restore();
         return result;
@@ -147,6 +153,45 @@ public sealed class DrawTextExImageEffect : DrawingImageEffectBase
             default:
                 return new SKPoint(OffsetX, OffsetY);
         }
+    }
+
+    /// <summary>Expand ShareX-compatible placeholders in the watermark text. Templates like
+    /// <c>%y-%mo-%d</c> evaluate against <see cref="DateTime.Now"/>; image-dimension tokens
+    /// (<c>%width</c> / <c>%height</c>) evaluate against the source bitmap's pixels. Order of
+    /// replacement matters — the longer tokens (<c>%mo</c>, <c>%mi</c>) must be replaced
+    /// BEFORE the single-letter prefix subset they share (<c>%m</c>) or "month" gets eaten by
+    /// the minute pattern. Literal <c>%%</c> stays as a single <c>%</c>. Unknown tokens fall
+    /// through unchanged so user-typed text isn't mangled.</summary>
+    private static string ExpandPlaceholders(string template, int sourceWidth, int sourceHeight)
+    {
+        if (string.IsNullOrEmpty(template) || !template.Contains('%', StringComparison.Ordinal))
+            return template;
+        var now = DateTime.Now;
+        // Long-form tokens MUST replace before any prefix subset. e.g. "%h" eats the "h" in
+        // "%height" if the single-letter pattern runs first; "%mo" must beat "%m" (we don't
+        // expose %m, but the rule still matters if it gets added). Order from longest token
+        // to shortest within each prefix family.
+        return template
+            // Date / time
+            .Replace("%yyyy", now.Year.ToString("D4", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("%yy", (now.Year % 100).ToString("D2", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("%y", now.Year.ToString("D4", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("%mo", now.Month.ToString("D2", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("%mi", now.Minute.ToString("D2", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("%d", now.Day.ToString("D2", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("%s", now.Second.ToString("D2", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            // Image metadata — `%width` / `%height` BEFORE `%h` so the latter doesn't eat
+            // letters out of the former. `%w` similarly comes after `%width`.
+            .Replace("%width", sourceWidth.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("%height", sourceHeight.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("%h", now.Hour.ToString("D2", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("%w", sourceWidth.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            // Process / user / host names — synthesised from the live process running ShareQ.
+            // Mostly useful in screenshot-app contexts but kept for ShareX preset parity.
+            .Replace("%un", Environment.UserName, StringComparison.Ordinal)
+            .Replace("%hn", Environment.MachineName, StringComparison.Ordinal)
+            // Literal % escape — replaced last so we don't expand "%%y" as "%2026".
+            .Replace("%%", "%", StringComparison.Ordinal);
     }
 
     /// <summary>Parse a ShareX legacy font descriptor (<c>"Arial, 36pt"</c>). Returns family
