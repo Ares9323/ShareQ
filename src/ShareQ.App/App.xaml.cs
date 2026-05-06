@@ -40,6 +40,12 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Wire app-wide TextBox numeric-nudge handlers once. EventManager class-level hooks
+        // beat the implicit-Style route (which broke WPF-UI ui:TextBox rendering) — every
+        // TextBox / ui:TextBox in the app picks up the wheel + arrow ±1 (±5 with Shift)
+        // behaviour without touching individual XAML or stylesheets.
+        ShareQ.App.Behaviors.NumericInput.RegisterClassHandlers();
+
         // Pull the .sxcu / .sxie file path out of argv if present (Explorer file association
         // invokes us with the path as argv[0] / argv[1] depending on how shell picked it). We
         // only act on this once we know we're the primary; secondary instances forward it
@@ -790,4 +796,5 @@ public partial class App : Application
         }
         base.OnExit(e);
     }
+
 }
