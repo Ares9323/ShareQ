@@ -215,7 +215,22 @@ public sealed class TrayIconService : IDisposable
                     return;
                 }
                 Run<TargetWindowTracker>(t => t.CaptureCurrentForeground());
-                Run<ShareQ.App.Views.ClipboardWindow>(w => { w.Show(); w.Activate(); });
+                // Mirrors the launcher pattern below: PrepareAsync fires before Show so the
+                // row list is ready when the window paints. Same fire-and-forget continuation
+                // (Run<T> takes Action<T>, async-await needs an outer wrapper).
+                _ = ShowClipboardAsync();
+                async Task ShowClipboardAsync()
+                {
+                    try
+                    {
+                        var w = (ShareQ.App.Views.ClipboardWindow)_services.GetService(typeof(ShareQ.App.Views.ClipboardWindow))!;
+                        try { await w.PrepareAsync(); }
+                        catch (Exception ex) { _logger.LogWarning(ex, "Clipboard PrepareAsync failed; showing anyway"); }
+                        w.Show();
+                        w.Activate();
+                    }
+                    catch (Exception ex) { _logger.LogWarning(ex, "Clipboard show failed"); }
+                }
             }));
         menu.Items.Add(BuildShortcutMenuItem(Strings.Tray_OpenLauncher, DefaultPipelineProfiles.OpenLauncherId,
             () =>

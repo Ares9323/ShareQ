@@ -95,28 +95,44 @@ public partial class ClipboardWindow : Wpf.Ui.Controls.FluentWindow
         // pane itself so we capture both window resizes and splitter drags.
         PreviewPane.SizeChanged += OnPreviewPaneSizeChanged;
 
-        // Refresh data every time the window becomes visible (Singleton lifetime — Loaded
-        // fires once, IsVisibleChanged fires on every Show).
-        IsVisibleChanged += async (_, e) =>
+        // Sync-only handler: data hydration lives in PrepareAsync (called by hosts BEFORE Show).
+        // Previously this method did the full SQLite query + Rows.Clear+refill AFTER the window
+        // was already visible, which produced a brief stale-then-empty-then-fresh flash. The
+        // VM's ItemsChanged subscription keeps Rows live while hidden, so PrepareAsync usually
+        // skips the query entirely (version-skip path).
+        IsVisibleChanged += (_, e) =>
         {
             if (e.NewValue is not true) return;
             _isClosing = false;
-            // Pull the persisted type-chip state once. Idempotent — VM latches after the first
-            // load so subsequent shows reuse the in-memory values.
-            await ViewModel.LoadTypeFiltersAsync(CancellationToken.None).ConfigureAwait(true);
-            // On-open immediate sweep: enforce per-category MaxItems + AutoCleanupAfter before
-            // we paint the list, so a "1-minute cleanup" item that's already expired doesn't
-            // flash onscreen for the gap between Now and the next 30s scheduler tick. Best-
-            // effort — failures fall through to whatever the scheduler's next tick produces.
-            if (_categoryRotation is not null)
-            {
-                try { await _categoryRotation.RunAsync(CancellationToken.None).ConfigureAwait(true); }
-                catch { /* sweep is fire-and-forget — Refresh below shows whatever survived */ }
-            }
-            await ViewModel.RefreshAsync(CancellationToken.None);
             Focus();
         };
     }
+
+    /// <summary>Hosts await this before <c>Show()</c>. Composes:
+    /// <list type="bullet">
+    /// <item>Throttled per-category cleanup sweep — skipped when the previous sweep was less
+    /// than 15s ago (the rotation scheduler's regular tick is 30s, so we don't need a write
+    /// every open). Eliminates the redundant SQLite write when the user reopens the window
+    /// rapidly (Win+V, Esc, Win+V).</item>
+    /// <item>VM <c>PrepareAsync</c>: one-shot type-filter hydration + version-gated refresh.</item>
+    /// </list></summary>
+    public async Task PrepareAsync()
+    {
+        // Cleanup sweep throttle — skip when the last sweep was recent. The 30s scheduler tick
+        // already covers cold periods; this just avoids the per-open write hit.
+        if (_categoryRotation is not null && (DateTime.UtcNow - _lastCategorySweep).TotalSeconds > 15)
+        {
+            try
+            {
+                await _categoryRotation.RunAsync(CancellationToken.None).ConfigureAwait(true);
+                _lastCategorySweep = DateTime.UtcNow;
+            }
+            catch { /* sweep is best-effort — Refresh shows whatever survived */ }
+        }
+        await ViewModel.PrepareAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
+    private DateTime _lastCategorySweep = DateTime.MinValue;
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {

@@ -184,13 +184,24 @@ public partial class QrGeneratorWindow : Wpf.Ui.Controls.FluentWindow
         catch { /* best-effort */ }
     }
 
+    private static string Loc(string key, params object[] args)
+    {
+        var culture = ShareQ.App.Markup.LocalizedStrings.Instance.Culture
+                      ?? System.Globalization.CultureInfo.CurrentUICulture;
+        // Fully qualified — the bare "Resources" identifier collides with FrameworkElement.Resources
+        // (this Window inherits from FluentWindow → FrameworkElement) and the compiler picks the
+        // instance member over the namespace.
+        var template = ShareQ.App.Resources.Strings.ResourceManager.GetString(key, culture) ?? key;
+        return args.Length == 0 ? template : string.Format(culture, template, args);
+    }
+
     private void Schedule()
     {
         // Guard against InitializeComponent-time invocations: the Slider raises ValueChanged
         // before the rest of the visual tree is instantiated, so InputText / StatusText may
         // still be null when this fires the first time.
         if (InputText is null || _renderDebounce is null) return;
-        if (StatusText is not null) StatusText.Text = $"{InputText.Text.Length} characters";
+        if (StatusText is not null) StatusText.Text = Loc("QrGenerator_CharactersFormat", InputText.Text.Length);
         _renderDebounce.Stop();
         _renderDebounce.Start();
     }
@@ -199,7 +210,7 @@ public partial class QrGeneratorWindow : Wpf.Ui.Controls.FluentWindow
     {
         // Same XAML-init-time guard as Schedule.
         if (DensityValueText is null || DensitySlider is null) return;
-        DensityValueText.Text = $"{(int)DensitySlider.Value} px";
+        DensityValueText.Text = Loc("QrGenerator_PixelsFormat", (int)DensitySlider.Value);
         Schedule();
         PersistOptions();
     }
@@ -214,7 +225,7 @@ public partial class QrGeneratorWindow : Wpf.Ui.Controls.FluentWindow
         }
         var bmp = _qr.TryRenderBitmap(text, (int)DensitySlider.Value, GetEccLevel());
         QrPreview.Source = bmp;
-        if (bmp is null) StatusText.Text = "Couldn't generate QR (text may be too long for this ECC level).";
+        if (bmp is null) StatusText.Text = Loc("QrGenerator_StatusFail");
     }
 
     /// <summary>Read the ECC dropdown's selected Tag back into the QRCoder enum. Tag is a
@@ -239,15 +250,15 @@ public partial class QrGeneratorWindow : Wpf.Ui.Controls.FluentWindow
     {
         if (string.IsNullOrEmpty(InputText.Text)) return;
         var bmp = _qr.TryRenderBitmap(InputText.Text, (int)DensitySlider.Value, GetEccLevel());
-        if (bmp is null) { StatusText.Text = "Render failed — nothing copied."; return; }
+        if (bmp is null) { StatusText.Text = Loc("QrGenerator_StatusRenderFailCopy"); return; }
         try
         {
             System.Windows.Clipboard.SetImage(bmp);
-            StatusText.Text = "Copied to clipboard.";
+            StatusText.Text = Loc("QrGenerator_StatusCopied");
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Clipboard copy failed: {ex.Message}";
+            StatusText.Text = Loc("QrGenerator_StatusCopyFail", ex.Message);
         }
     }
 
@@ -255,11 +266,11 @@ public partial class QrGeneratorWindow : Wpf.Ui.Controls.FluentWindow
     {
         if (string.IsNullOrEmpty(InputText.Text)) return;
         var bytes = _qr.TryRenderPng(InputText.Text, (int)DensitySlider.Value, GetEccLevel());
-        if (bytes is null) { StatusText.Text = "Render failed — nothing saved."; return; }
+        if (bytes is null) { StatusText.Text = Loc("QrGenerator_StatusRenderFailSave"); return; }
         var dlg = new Microsoft.Win32.SaveFileDialog
         {
-            Title = "Save QR as PNG",
-            Filter = "PNG image|*.png|All files|*.*",
+            Title = Loc("QrGenerator_SavePngTitle"),
+            Filter = Loc("QrGenerator_FilterPng"),
             FileName = "qr.png",
             DefaultExt = ".png",
             AddExtension = true,
@@ -268,11 +279,11 @@ public partial class QrGeneratorWindow : Wpf.Ui.Controls.FluentWindow
         try
         {
             File.WriteAllBytes(dlg.FileName, bytes);
-            StatusText.Text = $"Saved: {Path.GetFileName(dlg.FileName)}";
+            StatusText.Text = Loc("QrGenerator_StatusSaved", Path.GetFileName(dlg.FileName));
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Save failed: {ex.Message}";
+            StatusText.Text = Loc("QrGenerator_StatusSaveFail", ex.Message);
         }
     }
 
@@ -280,11 +291,11 @@ public partial class QrGeneratorWindow : Wpf.Ui.Controls.FluentWindow
     {
         if (string.IsNullOrEmpty(InputText.Text)) return;
         var svg = _qr.TryRenderSvg(InputText.Text, (int)DensitySlider.Value, GetEccLevel());
-        if (string.IsNullOrEmpty(svg)) { StatusText.Text = "Render failed — nothing saved."; return; }
+        if (string.IsNullOrEmpty(svg)) { StatusText.Text = Loc("QrGenerator_StatusRenderFailSave"); return; }
         var dlg = new Microsoft.Win32.SaveFileDialog
         {
-            Title = "Save QR as SVG",
-            Filter = "SVG image|*.svg|All files|*.*",
+            Title = Loc("QrGenerator_SaveSvgTitle"),
+            Filter = Loc("QrGenerator_FilterSvg"),
             FileName = "qr.svg",
             DefaultExt = ".svg",
             AddExtension = true,
@@ -293,11 +304,11 @@ public partial class QrGeneratorWindow : Wpf.Ui.Controls.FluentWindow
         try
         {
             File.WriteAllText(dlg.FileName, svg);
-            StatusText.Text = $"Saved: {Path.GetFileName(dlg.FileName)}";
+            StatusText.Text = Loc("QrGenerator_StatusSaved", Path.GetFileName(dlg.FileName));
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Save failed: {ex.Message}";
+            StatusText.Text = Loc("QrGenerator_StatusSaveFail", ex.Message);
         }
     }
 
@@ -306,7 +317,7 @@ public partial class QrGeneratorWindow : Wpf.Ui.Controls.FluentWindow
         if (_ingestion is null) return;
         if (string.IsNullOrEmpty(InputText.Text)) return;
         var bytes = _qr.TryRenderPng(InputText.Text, (int)DensitySlider.Value, GetEccLevel());
-        if (bytes is null) { StatusText.Text = "Render failed — nothing saved."; return; }
+        if (bytes is null) { StatusText.Text = Loc("QrGenerator_StatusRenderFailSave"); return; }
         try
         {
             // First 80 chars of the encoded payload form the search-text — same shape Win+V's
@@ -314,24 +325,13 @@ public partial class QrGeneratorWindow : Wpf.Ui.Controls.FluentWindow
             var searchText = InputText.Text.Length <= 80 ? InputText.Text : InputText.Text[..80] + "…";
             await _ingestion.IngestBytesAsync(bytes, "png", ItemKind.Image, $"QR · {searchText}",
                 DefaultPipelineProfiles.SaveQrToHistoryId, System.Threading.CancellationToken.None);
-            StatusText.Text = "Saved to history.";
+            StatusText.Text = Loc("QrGenerator_StatusSavedHistory");
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Save-to-history failed: {ex.Message}";
+            StatusText.Text = Loc("QrGenerator_StatusHistoryFail", ex.Message);
         }
     }
 
     private void OnCloseClicked(object sender, RoutedEventArgs e) => Close();
-
-    /// <summary>Drag-resize via the bottom-right grip thumb — same handler shape as the
-    /// launcher's resize thumb. The window is also edge-resizable (FluentWindow default), so
-    /// this is just a visual + grab-point convenience that matches other surfaces.</summary>
-    private void OnResizeThumbDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
-    {
-        var newW = Math.Max(MinWidth, ActualWidth + e.HorizontalChange);
-        var newH = Math.Max(MinHeight, ActualHeight + e.VerticalChange);
-        Width = newW;
-        Height = newH;
-    }
 }

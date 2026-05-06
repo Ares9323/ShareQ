@@ -127,9 +127,11 @@ public sealed class EditorLauncher
                 byte[]? png = null;
                 if (window.Saved)
                 {
-                    var canvasHost = (Grid)window.FindName("CanvasHost")!;
-                    var (exportW, exportH) = ResolveExportPixels(canvasHost);
-                    png = CanvasPngExporter.Export(canvasHost, exportW, exportH);
+                    // Use the editor's own ExportCanvasPng so the selection adorner (dashed bbox
+                    // + grip handles, all tagged "adorner") is hidden for the render — without
+                    // this, confirming with a shape selected would bake the bright-blue rect
+                    // into the saved image.
+                    png = window.ExportCanvasPng();
                 }
                 doneTcs.TrySetResult((snap, window.Saved, png));
             };
@@ -232,9 +234,13 @@ public sealed class EditorLauncher
                 int w = 0, h = 0;
                 if (window.Saved)
                 {
+                    // ExportCanvasPng hides the selection adorners during render so the saved
+                    // image doesn't include the bright-blue selection bbox / grip handles.
+                    // W/H are still resolved off the canvas for downstream encoders that need
+                    // pixel dims.
                     var canvasHost = (Grid)window.FindName("CanvasHost")!;
                     (w, h) = ResolveExportPixels(canvasHost);
-                    png = CanvasPngExporter.Export(canvasHost, w, h);
+                    png = window.ExportCanvasPng();
                 }
                 snapshotTcs.TrySetResult((snap, window.Saved, png, w, h));
             };

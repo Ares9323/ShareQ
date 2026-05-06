@@ -10,6 +10,7 @@
         WindowStartupLocation="CenterScreen"
         WindowBackdropType="None"
         Background="{DynamicResource Surface2Brush}"
+        Foreground="{DynamicResource AccentForegroundBrush}"
         ExtendsContentIntoTitleBar="True"
         Topmost="True"
         ShowInTaskbar="False"
@@ -25,13 +26,13 @@
              slots (own clipboard, doesn't touch the OS clipboard), wipe. -->
         <ContextMenu x:Key="LauncherCellMenu"
                      DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-            <MenuItem Header="Open file location" Click="OnMenuOpenLocation" />
-            <MenuItem Header="Edit…"              Click="OnMenuEdit" />
+            <MenuItem Header="{Markup:Loc Launcher_MenuOpenLocation}" Click="OnMenuOpenLocation" />
+            <MenuItem Header="{Markup:Loc Launcher_MenuEdit}"         Click="OnMenuEdit" />
             <Separator />
-            <MenuItem Header="Copy"               Click="OnMenuCopy" />
-            <MenuItem Header="Paste"              Click="OnMenuPaste" />
+            <MenuItem Header="{Markup:Loc Launcher_MenuCopy}"          Click="OnMenuCopy" />
+            <MenuItem Header="{Markup:Loc Launcher_MenuPaste}"         Click="OnMenuPaste" />
             <Separator />
-            <MenuItem Header="Delete"             Click="OnMenuDelete" />
+            <MenuItem Header="{Markup:Loc Launcher_MenuDelete}"        Click="OnMenuDelete" />
         </ContextMenu>
     </ui:FluentWindow.Resources>
     <!-- Accent-tinted 2px frame around the whole window content (titlebar + body), matching
@@ -76,7 +77,7 @@
                                 Margin="0,0,8,0"
                                 TextChanged="OnSearchTextChanged"
                                 ToolTip="{Markup:Loc Launcher_TooltipSearch}" />
-                    <ui:Button Grid.Column="2" x:Name="DragToggle" Content="📥 Drag mode"
+                    <ui:Button Grid.Column="2" x:Name="DragToggle" Content="{Markup:Loc Launcher_DragMode}"
                                Padding="10,4" FontSize="11" Margin="0,0,8,0" Click="OnDragToggleClick"
                                ToolTip="{Markup:Loc Launcher_TooltipDragMode}" />
                     <Grid x:Name="DragSizingPanel" Grid.Column="3" Visibility="Collapsed">
@@ -401,7 +402,7 @@
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource AccentBackgroundLightBrush}"
                            Visibility="Collapsed"
-                           Text="🎯 Drag-and-drop mode — drop files / folders / shortcuts onto cells to map them. Esc or click toggle to exit." />
+                           Text="{Markup:Loc Launcher_DragModeBanner}" />
             </StackPanel>
 
         </Grid>

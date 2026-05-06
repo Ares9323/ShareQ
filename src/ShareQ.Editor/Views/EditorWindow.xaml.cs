@@ -207,6 +207,41 @@ public partial class EditorWindow : FluentWindow
 
     public bool Saved { get; private set; }
 
+    /// <summary>Render the canvas (image + shapes) to PNG bytes. Hosts (EditorLauncher) call
+    /// this from the <c>Closed</c> handler when <see cref="Saved"/> is true; the in-window
+    /// "Save as…" button calls it inline. Hides selection adorners (dashed bbox + grip handles)
+    /// during the render so the export captures only the user-drawn artwork — without this the
+    /// confirm flow would bake the bright-blue selection rectangle into the screenshot.</summary>
+    public byte[] ExportCanvasPng()
+    {
+        var canvasHost = (System.Windows.Controls.Grid)FindName("CanvasHost")!;
+        var (exportW, exportH) = ResolveExportPixels(canvasHost);
+
+        // Adorners (selection bbox + every resize/rotate/bend grip) all live as direct children
+        // of DrawingCanvas with Tag="adorner" — see RefreshSelectionAdorner. Collapse them for
+        // the render, restore in the finally. Restoring matters for "Save as…" (which keeps
+        // editing); for the confirm flow the window is about to close so cleanup is moot.
+        var hidden = new List<UIElement>();
+        foreach (UIElement child in DrawingCanvas.Children)
+        {
+            if (child is FrameworkElement fe
+                && fe.Visibility == Visibility.Visible
+                && (fe.Tag as string) == "adorner")
+            {
+                hidden.Add(child);
+            }
+        }
+        foreach (var a in hidden) a.Visibility = Visibility.Collapsed;
+        try
+        {
+            return ShareQ.Editor.Rendering.CanvasPngExporter.Export(canvasHost, exportW, exportH);
+        }
+        finally
+        {
+            foreach (var a in hidden) a.Visibility = Visibility.Visible;
+        }
+    }
+
     /// <summary>Localised label dictionary pushed by the host (ShareQ.App.EditorLauncher) just
     /// before <see cref="System.Windows.Window.ShowDialog"/>. Same handoff pattern as
     /// <see cref="ColorPickerWindow.ApplyLocalization"/> — this assembly can't reach the App's
@@ -679,9 +714,9 @@ public partial class EditorWindow : FluentWindow
 
         try
         {
-            var canvasHost = (System.Windows.Controls.Grid)FindName("CanvasHost")!;
-            var (exportW, exportH) = ResolveExportPixels(canvasHost);
-            var pngBytes = ShareQ.Editor.Rendering.CanvasPngExporter.Export(canvasHost, exportW, exportH);
+            // ExportCanvasPng hides the selection adorners during render so the saved file
+            // captures only the user-drawn artwork — no dashed selection rect baked in.
+            var pngBytes = ExportCanvasPng();
 
             byte[] outputBytes;
             if (target == ShareQ.Core.Imaging.ImageFormat.Png || _encoder is null)

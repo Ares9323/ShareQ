@@ -11,6 +11,7 @@
         WindowStartupLocation="Manual"
         WindowBackdropType="None"
         Background="{DynamicResource Surface2Brush}"
+        Foreground="{DynamicResource AccentForegroundBrush}"
         ExtendsContentIntoTitleBar="True"
         Topmost="True"
         ShowInTaskbar="False"
@@ -32,6 +33,22 @@
                          Color="{DynamicResource AccentBackgroundDarkColor}" />
         <SolidColorBrush x:Key="AccentButtonBorderBrushPressed"
                          Color="{DynamicResource AccentBackgroundColor}" />
+
+        <!-- Press-feedback for the right-rail toolbar icon buttons (Paste / Pin / Copy path /
+             QR / Edit image / Edit text / Delete). The default ui:Button press visual is too
+             subtle — the user couldn't tell whether they'd actually clicked. Same Opacity 0.7
+             dip used by the category-chip style above (TargetName="Bd" trigger on IsPressed).
+             Opacity is non-destructive: it doesn't touch the WPF-UI template's internal
+             RenderTransform / Background animations, so we get the visual cue without breaking
+             keyed-style cascades. Scoped to this Window only — global ui:Button overrides
+             cause Primary / Danger / chip buttons to look broken in unrelated surfaces. -->
+        <Style x:Key="ToolbarIconBtn" TargetType="{x:Type ui:Button}" BasedOn="{StaticResource {x:Type ui:Button}}">
+            <Style.Triggers>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Opacity" Value="0.7" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </ui:FluentWindow.Resources>
     <!-- Accent-tinted 2px frame around the whole window content (titlebar + body), matching
          MainWindow / ImageEffectsWindow / GradientEditorWindow / QrGeneratorWindow. FluentWindow's
@@ -505,24 +522,53 @@
                                   HorizontalScrollBarVisibility="Disabled"
                                   Margin="8,2,0,2">
                         <StackPanel Orientation="Vertical" VerticalAlignment="Top">
-                            <ui:Button Width="32" Height="32" Padding="0"
+                            <ui:Button Width="32" Height="32" Padding="0" Style="{StaticResource ToolbarIconBtn}"
                                        Margin="0,0,0,4"
                                        ToolTip="{Markup:Loc Clipboard_TooltipPaste}"
                                        Appearance="Primary"
                                        Command="{Binding PasteSelectedCommand}">
                                 <TextBlock Text="&#xE77F;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
                             </ui:Button>
+                            <!-- Pin/unpin: visual state mirrors the SelectedRow's Pinned flag.
+                                 DataTrigger on Pinned=True swaps the button's Appearance to
+                                 Primary so the accent fill makes "this row is pinned" obvious
+                                 — same on/off pattern the category-tab chips and filter chips
+                                 use. The trigger lives in a per-button Style that BasedOn the
+                                 ToolbarIconBtn so the press-feedback Opacity-dip carries over. -->
                             <ui:Button Width="32" Height="32" Padding="0"
                                        Margin="0,0,0,4"
                                        ToolTip="{Markup:Loc Clipboard_TooltipPin}"
                                        Command="{Binding TogglePinSelectedCommand}">
+                                <ui:Button.Style>
+                                    <Style TargetType="{x:Type ui:Button}" BasedOn="{StaticResource ToolbarIconBtn}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SelectedRow.Pinned}" Value="True">
+                                                <Setter Property="Appearance" Value="Primary" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ui:Button.Style>
                                 <TextBlock Text="&#xE718;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
+                            </ui:Button>
+                            <!-- Copy file path to clipboard — visible only when the selected row
+                                 has a real on-disk file (image/video/files saved via a SaveToFile
+                                 step). Lets the user paste the path into another app instead of
+                                 the binary contents. Bound to HasFileOnDisk so rows without a
+                                 BlobRef collapse the button entirely (nothing to copy). -->
+                            <ui:Button Width="32" Height="32" Padding="0" Style="{StaticResource ToolbarIconBtn}"
+                                       Margin="0,0,0,4"
+                                       ToolTip="{Markup:Loc Clipboard_TooltipCopyPath}"
+                                       ToolTipService.InitialShowDelay="500"
+                                       ToolTipService.ShowOnDisabled="True"
+                                       Command="{Binding CopyPathToClipboardCommand}"
+                                       Visibility="{Binding HasFileOnDisk, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="&#xE8C8;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
                             </ui:Button>
                             <!-- Generate QR — opens the live generator pre-filled with the row's
                                  preview text. Visible only for text-shaped rows (Text/Html/Rtf):
                                  a QR code carries a textual payload, so on Image/Video/Files
                                  rows the button has nothing useful to do and collapses out. -->
-                            <ui:Button Width="32" Height="32" Padding="0"
+                            <ui:Button Width="32" Height="32" Padding="0" Style="{StaticResource ToolbarIconBtn}"
                                        Margin="0,0,0,4"
                                        ToolTip="{Markup:Loc Clipboard_TooltipQr}"
                                        Click="OnGenerateQrFromItemClicked"
@@ -531,7 +577,7 @@
                             </ui:Button>
                             <!-- Edit (image): in-app annotation editor. Hidden for text /
                                  file rows. -->
-                            <ui:Button Width="32" Height="32" Padding="0"
+                            <ui:Button Width="32" Height="32" Padding="0" Style="{StaticResource ToolbarIconBtn}"
                                        Margin="0,0,0,4"
                                        ToolTip="{Markup:Loc Clipboard_TooltipOpenEditor}"
                                        Command="{Binding OpenInEditorCommand}"
@@ -543,14 +589,14 @@
                                  falling back to the Windows .txt default. Edits stream back to
                                  the SQLite item via FileSystemWatcher. Same Edit glyph as the
                                  image button — both buttons share the slot mutually-exclusively. -->
-                            <ui:Button Width="32" Height="32" Padding="0"
+                            <ui:Button Width="32" Height="32" Padding="0" Style="{StaticResource ToolbarIconBtn}"
                                        Margin="0,0,0,4"
                                        ToolTip="{Markup:Loc Clipboard_TooltipExtEditor}"
                                        Command="{Binding OpenInExternalEditorCommand}"
                                        Visibility="{Binding IsTextSelected, Converter={StaticResource BoolToVisibility}}">
                                 <TextBlock Text="&#xE70F;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
                             </ui:Button>
-                            <ui:Button Width="32" Height="32" Padding="0"
+                            <ui:Button Width="32" Height="32" Padding="0" Style="{StaticResource ToolbarIconBtn}"
                                        Margin="0,0,0,4"
                                        ToolTip="{Markup:Loc Clipboard_TooltipShowExplorer}"
                                        Command="{Binding OpenInExplorerCommand}"
@@ -559,7 +605,7 @@
                             </ui:Button>
                             <!-- Open URL in browser — visible only when the selected text item parses
                                  as an http(s) URL. Glyph: Globe (Segoe Fluent Icons E774). -->
-                            <ui:Button Width="32" Height="32" Padding="0"
+                            <ui:Button Width="32" Height="32" Padding="0" Style="{StaticResource ToolbarIconBtn}"
                                        Margin="0,0,0,4"
                                        ToolTip="{Markup:Loc Clipboard_TooltipOpenUrl}"
                                        Command="{Binding OpenInBrowserCommand}"
@@ -573,14 +619,14 @@
                                  Renders the URL in a hidden WebView2, feeds the PNG into the
                                  webpage-capture pipeline (save / history / copy / upload /
                                  toast). Glyph: ScreenSnapshot (E89E). -->
-                            <ui:Button Width="32" Height="32" Padding="0"
+                            <ui:Button Width="32" Height="32" Padding="0" Style="{StaticResource ToolbarIconBtn}"
                                        Margin="0,0,0,4"
                                        ToolTip="{Markup:Loc Clipboard_TooltipCaptureWebpage}"
                                        Command="{Binding CaptureWebpageCommand}"
                                        Visibility="{Binding CanCaptureWebpage, Converter={StaticResource BoolToVisibility}}">
                                 <TextBlock Text="&#xE89E;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14" />
                             </ui:Button>
-                            <ui:Button Width="32" Height="32" Padding="0"
+                            <ui:Button Width="32" Height="32" Padding="0" Style="{StaticResource ToolbarIconBtn}"
                                        ToolTip="{Markup:Loc Clipboard_TooltipDelete}"
                                        Appearance="Danger"
                                        Command="{Binding DeleteSelectedCommand}">

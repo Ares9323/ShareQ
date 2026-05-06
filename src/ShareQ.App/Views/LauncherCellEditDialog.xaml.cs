@@ -8,11 +8,19 @@ namespace ShareQ.App.Views;
 /// <summary>Modal dialog used by the launcher overlay to edit a single cell. Returns the
 /// updated <see cref="LauncherCell"/> via <see cref="Result"/> when DialogResult==true; on
 /// "Clear" the result is an empty cell so the caller can persist deconfiguration.</summary>
-public partial class LauncherCellEditDialog : Window
+public partial class LauncherCellEditDialog : Wpf.Ui.Controls.FluentWindow
 {
     private readonly string _tabKey;
     private readonly string _keyChar;
     private readonly IconService _icons;
+
+    /// <summary>Wraps an enum value with its localised display string for the WindowMode combo.
+    /// ItemTemplate-less ComboBox renders ToString(), so we override that to the localised
+    /// caption while keeping the enum tag retrievable via <see cref="Value"/>.</summary>
+    private sealed record WindowModeOption(LauncherWindowMode Value, string Display)
+    {
+        public override string ToString() => Display;
+    }
 
     public LauncherCellEditDialog(LauncherCell initial, IconService icons)
     {
@@ -29,8 +37,8 @@ public partial class LauncherCellEditDialog : Window
         // matches what the user just right-clicked. Storage stays canonical underneath.
         var glyph = KeyboardLayoutMapper.GetDisplayChar(_keyChar);
         HeaderText.Text = _tabKey == LauncherTabs.FunctionStrip
-            ? $"Function key  {glyph}"
-            : $"Tab {_tabKey}  ·  Cell  {glyph}";
+            ? Loc("LauncherCellEdit_HeaderFunctionKey", glyph)
+            : Loc("LauncherCellEdit_HeaderTabCell", _tabKey, glyph);
         LabelBox.Text = initial.Label;
         PathBox.Text  = initial.Path;
         ArgsBox.Text  = initial.Args;
@@ -38,10 +46,35 @@ public partial class LauncherCellEditDialog : Window
         IconIndexBox.Text = initial.IconIndex == 0 ? string.Empty : initial.IconIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
         RunAsAdminBox.IsChecked = initial.RunAsAdmin;
-        WindowModeBox.ItemsSource = Enum.GetValues<LauncherWindowMode>();
-        WindowModeBox.SelectedItem = initial.WindowMode;
+        // Localise enum values via WindowModeOption — the bare Enum.GetValues path renders
+        // "Normal/Minimized/…" verbatim, ignoring the user's UI language.
+        var modes = Enum.GetValues<LauncherWindowMode>()
+            .Select(m => new WindowModeOption(m, m switch
+            {
+                LauncherWindowMode.Normal     => Loc("LauncherCellEdit_WindowModeNormal"),
+                LauncherWindowMode.Minimized  => Loc("LauncherCellEdit_WindowModeMinimized"),
+                LauncherWindowMode.Maximized  => Loc("LauncherCellEdit_WindowModeMaximized"),
+                LauncherWindowMode.Hidden     => Loc("LauncherCellEdit_WindowModeHidden"),
+                _ => m.ToString(),
+            }))
+            .ToList();
+        WindowModeBox.ItemsSource = modes;
+        WindowModeBox.SelectedItem = modes.FirstOrDefault(o => o.Value == initial.WindowMode) ?? modes[0];
         WindowTitleBox.Text = initial.WindowTitle;
         ProcessNameBox.Text = initial.ProcessName;
+    }
+
+    private static string Loc(string key, params object[] args)
+    {
+        var culture = ShareQ.App.Markup.LocalizedStrings.Instance.Culture
+                      ?? System.Globalization.CultureInfo.CurrentUICulture;
+        var template = ShareQ.App.Resources.Strings.ResourceManager.GetString(key, culture) ?? key;
+        // CA1863 wants a cached CompositeFormat for "repeated" formatting; this helper runs
+        // exactly twice per dialog open with runtime-loaded templates that vary per culture.
+        // Caching per (key, culture) tuple is heavier than the work it saves — suppress.
+#pragma warning disable CA1863
+        return args.Length == 0 ? template : string.Format(culture, template, args);
+#pragma warning restore CA1863
     }
 
     public LauncherCell? Result { get; private set; }
@@ -140,7 +173,7 @@ public partial class LauncherCellEditDialog : Window
 
     private void OnOkClicked(object sender, RoutedEventArgs e)
     {
-        var mode = WindowModeBox.SelectedItem is LauncherWindowMode m ? m : LauncherWindowMode.Normal;
+        var mode = WindowModeBox.SelectedItem is WindowModeOption opt ? opt.Value : LauncherWindowMode.Normal;
         var iconIndex = int.TryParse(IconIndexBox.Text.Trim(), System.Globalization.NumberStyles.Integer,
             System.Globalization.CultureInfo.InvariantCulture, out var ii) ? ii : 0;
         Result = new LauncherCell(_tabKey, _keyChar,

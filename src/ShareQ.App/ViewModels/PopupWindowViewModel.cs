@@ -17,6 +17,12 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
     private readonly IServiceProvider _services;
     private long _previewLoadToken;
     private string? _selectedItemBlobRef;
+    /// <summary>Monotonic version of the underlying item store as observed by this VM.
+    /// Bumped by <see cref="OnItemsChanged"/> whenever the store reports a mutation.
+    /// <see cref="RefreshAsync"/> snapshots it after a successful load; <see cref="PrepareAsync"/>
+    /// compares the snapshot against the current value and skips redundant refreshes.</summary>
+    private long _itemsVersion;
+    private long _lastRefreshedVersion = -1;
 
     public PopupWindowViewModel(IItemStore items, ICategoryStore categories, IServiceProvider services)
     {
@@ -70,6 +76,9 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
 
     private void OnItemsChanged(object? sender, ItemsChangedEventArgs e)
     {
+        // Bump the version BEFORE marshalling — the dispatcher hop has measurable latency and
+        // a window-open during the gap should still see "data has changed" via PrepareAsync.
+        System.Threading.Interlocked.Increment(ref _itemsVersion);
         // Marshal to UI thread; Refresh updates the ObservableCollection.
         Application.Current?.Dispatcher.InvokeAsync(() => _ = RefreshAsync(CancellationToken.None));
     }
@@ -140,8 +149,18 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
     private const string ShowTextKey = "clipboard.show_text";
     private const string PinnedKey = "clipboard.pinned";
 
-    partial void OnShowImagesChanged(bool value) => PersistTypeFilter(ShowImagesKey, value);
-    partial void OnShowTextChanged(bool value) => PersistTypeFilter(ShowTextKey, value);
+    partial void OnShowImagesChanged(bool value)
+    {
+        PersistTypeFilter(ShowImagesKey, value);
+        // Chip toggle is a filter applied INSIDE RefreshAsync — without this kick the visible
+        // list wouldn't update until something else (search, category) triggered a refresh.
+        if (_typeFiltersLoaded) _ = RefreshAsync(CancellationToken.None);
+    }
+    partial void OnShowTextChanged(bool value)
+    {
+        PersistTypeFilter(ShowTextKey, value);
+        if (_typeFiltersLoaded) _ = RefreshAsync(CancellationToken.None);
+    }
     partial void OnIsPinnedChanged(bool value) => PersistFlag(PinnedKey, value);
 
     private void PersistFlag(string key, bool value)
@@ -260,6 +279,7 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
         OpenInEditorCommand.NotifyCanExecuteChanged();
         OpenInExternalEditorCommand.NotifyCanExecuteChanged();
         OpenInExplorerCommand.NotifyCanExecuteChanged();
+        CopyPathToClipboardCommand.NotifyCanExecuteChanged();
         OpenInBrowserCommand.NotifyCanExecuteChanged();
         CaptureWebpageCommand.NotifyCanExecuteChanged();
         // CanCaptureWebpage = IsUrlSelected && WebView2 available — the second factor is a
@@ -286,9 +306,16 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
     public bool IsTextSelected =>
         SelectedRow?.Kind is ItemKind.Text or ItemKind.Html or ItemKind.Rtf;
 
-    /// <summary>True when the selected item has a saved file on disk (BlobRef populated by
-    /// the SaveToFile pipeline step). Gates the "Show in explorer" affordance.</summary>
-    public bool HasFileOnDisk => !string.IsNullOrEmpty(_selectedItemBlobRef);
+    /// <summary>True when the selected item has a real file currently on disk (BlobRef
+    /// populated by a SaveToFile pipeline step AND the file still exists). Gates the "Show in
+    /// explorer" + "Copy path to clipboard" affordances. The File.Exists check is sync I/O
+    /// but only runs once per selection change (the property is re-evaluated via
+    /// OnPropertyChanged(nameof(HasFileOnDisk)) when SelectedRow flips), so the cost is a
+    /// single stat() per row click — negligible for the user's clicking cadence. Without the
+    /// existence check we'd offer "Copy path" for clipboard-only images whose BlobRef points
+    /// to a transient path that was never written, or to a file that's since been deleted.</summary>
+    public bool HasFileOnDisk =>
+        !string.IsNullOrEmpty(_selectedItemBlobRef) && System.IO.File.Exists(_selectedItemBlobRef);
 
     /// <summary>True when the selected item resolves to a parseable http(s) URL — gates the
     /// "Open in browser" affordance. Covers two cases: a plain-text row whose entire payload
@@ -354,6 +381,10 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
 
     public async Task RefreshAsync(CancellationToken cancellationToken)
     {
+        // Snapshot the version BEFORE the load — if a save races us we'll miss the bump on
+        // this pass but PrepareAsync (or the next OnItemsChanged) picks it up. Reading after
+        // would let a concurrent change look already-applied to us.
+        var versionAtStart = System.Threading.Interlocked.Read(ref _itemsVersion);
         // Skip payload decryption for the list view — only metadata + SearchText is needed for the
         // row preview. Payload (decrypted via DPAPI) is fetched on-demand via GetByIdAsync when the
         // user actually pastes / opens an item.
@@ -385,11 +416,47 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
         if (previousId is { } id) SelectedRow = Rows.FirstOrDefault(r => r.Id == id);
         SelectedRow ??= Rows.FirstOrDefault();
         NotifyCommandsCanExecuteChanged();
+        _lastRefreshedVersion = versionAtStart;
     }
+
+    /// <summary>Hosts (OpenClipboardWindowTask, future tray entry-points) await this BEFORE
+    /// <see cref="System.Windows.Window.Show"/> so the row list is already populated when the
+    /// window paints — no Clear+Refill flash. Skips the SQLite query entirely when the store
+    /// hasn't bumped its version since the last refresh (the common case: VM is singleton and
+    /// stays subscribed to <c>ItemsChanged</c> while the window is hidden, so <see cref="Rows"/>
+    /// is already current). Also runs the one-shot type-filter hydration on first call.</summary>
+    public async Task PrepareAsync(CancellationToken cancellationToken)
+    {
+        await LoadTypeFiltersAsync(cancellationToken).ConfigureAwait(true);
+        var current = System.Threading.Interlocked.Read(ref _itemsVersion);
+        if (current != _lastRefreshedVersion)
+        {
+            await RefreshAsync(cancellationToken).ConfigureAwait(true);
+        }
+    }
+
+    private System.Windows.Threading.DispatcherTimer? _searchDebounce;
 
     partial void OnSearchTextChanged(string value)
     {
-        _ = RefreshAsync(CancellationToken.None);
+        // Debounce per-keystroke search to avoid spamming the SQLite query (and Rows.Clear+
+        // refill) per character. 200ms feels instant for typing but coalesces a burst into a
+        // single refresh. DispatcherTimer is fine here — the VM is constructed on the UI
+        // thread and OnSearchTextChanged fires from WPF data binding (also UI thread).
+        if (_searchDebounce is null)
+        {
+            _searchDebounce = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(200)
+            };
+            _searchDebounce.Tick += (_, _) =>
+            {
+                _searchDebounce!.Stop();
+                _ = RefreshAsync(CancellationToken.None);
+            };
+        }
+        _searchDebounce.Stop();
+        _searchDebounce.Start();
     }
 
     [RelayCommand]
@@ -529,6 +596,20 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
             Arguments = $"/select,\"{path}\"",
             UseShellExecute = true
         });
+    }
+
+    /// <summary>Copy the on-disk file path of the selected item to the clipboard. Visible only
+    /// when the row has a populated BlobRef (image / video / file with SaveToFile applied).
+    /// Doesn't validate File.Exists at copy time — copying a stale path is acceptable behavior;
+    /// the user can paste it into Explorer's address bar to see "the location where this used
+    /// to live" without us second-guessing them.</summary>
+    [RelayCommand(CanExecute = nameof(HasFileOnDisk))]
+    private void CopyPathToClipboard()
+    {
+        var path = _selectedItemBlobRef;
+        if (string.IsNullOrEmpty(path)) return;
+        try { System.Windows.Clipboard.SetText(path); }
+        catch { /* clipboard locked by another app — best-effort, no toast for an internal op */ }
     }
 
     [RelayCommand]

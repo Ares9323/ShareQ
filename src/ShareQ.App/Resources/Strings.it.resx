@@ -117,6 +117,7 @@
   <data name="Clipboard_MenuGenerateQr" xml:space="preserve"><value>Genera codice QR…</value></data>
   <data name="Clipboard_TooltipPaste" xml:space="preserve"><value>Incolla (Invio)</value></data>
   <data name="Clipboard_TooltipPin" xml:space="preserve"><value>Spilla / rimuovi spillo (Ctrl+P)</value></data>
+  <data name="Clipboard_TooltipCopyPath" xml:space="preserve"><value>Copia path del file negli appunti</value></data>
   <data name="Clipboard_TooltipQr" xml:space="preserve"><value>Genera codice QR…</value></data>
   <data name="Clipboard_TooltipOpenEditor" xml:space="preserve"><value>Apri nell'editor immagini</value></data>
   <data name="Clipboard_TooltipExtEditor" xml:space="preserve"><value>Modifica testo in editor esterno (VSCode / Notepad / …)</value></data>
@@ -128,6 +129,50 @@
   <data name="Clipboard_TooltipPinned" xml:space="preserve"><value>Attiva/disattiva modalità persistente — la finestra resta aperta dopo incolla / doppio click. Esc o Win+V chiudono comunque.</value></data>
 
   <data name="Launcher_Title" xml:space="preserve"><value>ShareQ - Launcher</value></data>
+  <data name="Launcher_DragMode" xml:space="preserve"><value>📥 Modalità trascinamento</value></data>
+  <data name="Launcher_DragModeOn" xml:space="preserve"><value>✓ Modalità trascinamento attiva</value></data>
+  <data name="Launcher_DragModeBanner" xml:space="preserve"><value>🎯 Modalità trascinamento — trascina file / cartelle / collegamenti sulle celle per associarli. Esc o clic sul toggle per uscire.</value></data>
+  <data name="Launcher_MenuOpenLocation" xml:space="preserve"><value>Apri posizione file</value></data>
+  <data name="Launcher_MenuEdit" xml:space="preserve"><value>Modifica…</value></data>
+  <data name="Launcher_MenuCopy" xml:space="preserve"><value>Copia</value></data>
+  <data name="Launcher_MenuPaste" xml:space="preserve"><value>Incolla</value></data>
+  <data name="Launcher_MenuDelete" xml:space="preserve"><value>Elimina</value></data>
+  <data name="LauncherCellEdit_Title" xml:space="preserve"><value>Modifica cella launcher</value></data>
+  <data name="LauncherCellEdit_Label" xml:space="preserve"><value>Etichetta</value></data>
+  <data name="LauncherCellEdit_Path" xml:space="preserve"><value>Percorso destinazione</value></data>
+  <data name="LauncherCellEdit_Browse" xml:space="preserve"><value>Sfoglia…</value></data>
+  <data name="LauncherCellEdit_Args" xml:space="preserve"><value>Argomenti</value></data>
+  <data name="LauncherCellEdit_RunAsAdmin" xml:space="preserve"><value>Esegui come amministratore</value></data>
+  <data name="LauncherCellEdit_WindowMode" xml:space="preserve"><value>Modalità finestra</value></data>
+  <data name="LauncherCellEdit_WindowModeNormal" xml:space="preserve"><value>Normale</value></data>
+  <data name="LauncherCellEdit_WindowModeMinimized" xml:space="preserve"><value>Minimizzata</value></data>
+  <data name="LauncherCellEdit_WindowModeMaximized" xml:space="preserve"><value>Massimizzata</value></data>
+  <data name="LauncherCellEdit_WindowModeHidden" xml:space="preserve"><value>Nascosta</value></data>
+  <data name="LauncherCellEdit_WindowTitle" xml:space="preserve"><value>Titolo finestra (opzionale)</value></data>
+  <data name="LauncherCellEdit_ProcessName" xml:space="preserve"><value>Nome processo (opzionale)</value></data>
+  <data name="LauncherCellEdit_Icon" xml:space="preserve"><value>Icona</value></data>
+  <data name="LauncherCellEdit_PickIcon" xml:space="preserve"><value>Scegli icona…</value></data>
+  <data name="LauncherCellEdit_Save" xml:space="preserve"><value>Salva</value></data>
+  <data name="LauncherCellEdit_Cancel" xml:space="preserve"><value>Annulla</value></data>
+  <data name="LauncherCellEdit_Clear" xml:space="preserve"><value>Svuota</value></data>
+  <data name="LauncherCellEdit_ClearTooltip" xml:space="preserve"><value>Svuota questa cella — rimuove l'associazione.</value></data>
+  <data name="LauncherCellEdit_LabelPlaceholder" xml:space="preserve"><value>(nome breve mostrato sulla cella)</value></data>
+  <data name="LauncherCellEdit_PathPlaceholder" xml:space="preserve"><value>exe / file / cartella / URL — qualsiasi cosa la shell sappia aprire</value></data>
+  <data name="LauncherCellEdit_PickFile" xml:space="preserve"><value>Scegli un file…</value></data>
+  <data name="LauncherCellEdit_PickFolder" xml:space="preserve"><value>Scegli una cartella…</value></data>
+  <data name="LauncherCellEdit_IconPlaceholder" xml:space="preserve"><value>(opzionale — .ico / .png / .jpg personalizzato che sovrascrive l'icona shell)</value></data>
+  <data name="LauncherCellEdit_IconIndexTooltip" xml:space="preserve"><value>Indice icona dentro un container multi-icona (.dll / .exe / .ico). 0 = prima.</value></data>
+  <data name="LauncherCellEdit_ClearIcon" xml:space="preserve"><value>Rimuove l'icona personalizzata (ripristina l'icona shell predefinita).</value></data>
+  <data name="LauncherCellEdit_ArgsPlaceholder" xml:space="preserve"><value>(argomenti command-line opzionali)</value></data>
+  <data name="LauncherCellEdit_Advanced" xml:space="preserve"><value>Avanzate</value></data>
+  <data name="LauncherCellEdit_RunAsAdminTooltip" xml:space="preserve"><value>Avvia con il verbo "runas" così Windows mostra il prompt UAC per l'elevazione. Usare con parsimonia — i processi admin possono modificare lo stato di sistema.</value></data>
+  <data name="LauncherCellEdit_WindowModeTooltip" xml:space="preserve"><value>Come appare la finestra all'avvio. La maggior parte delle app GUI rispetta Massimizzata/Minimizzata; alcune ignorano l'hint. Nascosta esegue il processo senza mostrare una finestra — utile per task headless.</value></data>
+  <data name="LauncherCellEdit_WindowTitlePlaceholder" xml:space="preserve"><value>(se una finestra con questo titolo è aperta, focalizzala invece di lanciare)</value></data>
+  <data name="LauncherCellEdit_PickWindow" xml:space="preserve"><value>Scegli tra le finestre aperte…</value></data>
+  <data name="LauncherCellEdit_ProcessNamePlaceholder" xml:space="preserve"><value>(se un processo con questo nome è in esecuzione, focalizzalo — es. notepad)</value></data>
+  <data name="LauncherCellEdit_AdvancedHint" xml:space="preserve"><value>Titolo finestra / nome processo: match per sottostringa (case-insensitive). Anche uno solo non vuoto attiva la modalità "attiva se in esecuzione" — la cella focalizza la finestra esistente invece di lanciare una nuova istanza. Lasciali entrambi vuoti per il comportamento "lancia sempre" predefinito.</value></data>
+  <data name="LauncherCellEdit_HeaderFunctionKey" xml:space="preserve"><value>Tasto funzione  {0}</value></data>
+  <data name="LauncherCellEdit_HeaderTabCell" xml:space="preserve"><value>Tab {0}  ·  Cella  {1}</value></data>
   <data name="Launcher_TooltipSearch" xml:space="preserve"><value>Filtra le celle per etichetta o percorso. Le celle vuote e la riga F non sono influenzate; le tab senza risultati perdono il titolo.</value></data>
   <data name="Launcher_TooltipDragMode" xml:space="preserve"><value>Attiva/disattiva modalità drag-and-drop — il launcher resta aperto e le celle accettano file / cartelle / collegamenti rilasciati.</value></data>
   <data name="Launcher_TabRenameHint" xml:space="preserve"><value>Click destro per rinominare questa tab — rilascia un file per cambiare tab senza eseguire.</value></data>
@@ -179,6 +224,39 @@
 
   <data name="Settings_StartWithWindows" xml:space="preserve"><value>Avvia ShareQ all'accensione di Windows</value></data>
   <data name="Settings_StartWithWindowsTooltip" xml:space="preserve"><value>Aggiunge (o rimuove) ShareQ dalla lista di avvio utente di Windows. Non servono permessi di amministratore.</value></data>
+  <data name="QrGenerator_Title" xml:space="preserve"><value>ShareQ - Generatore QR</value></data>
+  <data name="QrGenerator_Content" xml:space="preserve"><value>Contenuto</value></data>
+  <data name="QrGenerator_PlaceholderInput" xml:space="preserve"><value>Incolla un URL, testo, vCard, credenziali Wi-Fi, …</value></data>
+  <data name="QrGenerator_CharactersFormat" xml:space="preserve"><value>{0} caratteri</value></data>
+  <data name="QrGenerator_Preview" xml:space="preserve"><value>Anteprima</value></data>
+  <data name="QrGenerator_ErrorCorrection" xml:space="preserve"><value>Correzione errori</value></data>
+  <data name="QrGenerator_EccL" xml:space="preserve"><value>L — recupera ~7%</value></data>
+  <data name="QrGenerator_EccM" xml:space="preserve"><value>M — recupera ~15%</value></data>
+  <data name="QrGenerator_EccQ" xml:space="preserve"><value>Q — recupera ~25%</value></data>
+  <data name="QrGenerator_EccH" xml:space="preserve"><value>H — recupera ~30%</value></data>
+  <data name="QrGenerator_ModuleSize" xml:space="preserve"><value>Dimensione modulo</value></data>
+  <data name="QrGenerator_PixelsFormat" xml:space="preserve"><value>{0} px</value></data>
+  <data name="QrGenerator_CopyImage" xml:space="preserve"><value>Copia immagine</value></data>
+  <data name="QrGenerator_SaveToHistory" xml:space="preserve"><value>Salva in cronologia</value></data>
+  <data name="QrGenerator_SavePng" xml:space="preserve"><value>Salva PNG…</value></data>
+  <data name="QrGenerator_SaveSvg" xml:space="preserve"><value>Salva SVG…</value></data>
+  <data name="QrGenerator_Close" xml:space="preserve"><value>Chiudi</value></data>
+  <data name="QrGenerator_TooltipCopyImage" xml:space="preserve"><value>Copia il PNG del QR negli appunti di Windows</value></data>
+  <data name="QrGenerator_TooltipSaveHistory" xml:space="preserve"><value>Salva il PNG del QR nella cartella screenshot + lo inserisce nella cronologia clipboard (stesso flusso delle catture)</value></data>
+  <data name="QrGenerator_TooltipSaveSvg" xml:space="preserve"><value>Salva come vettore scalabile — resta nitido a qualsiasi dimensione</value></data>
+  <data name="QrGenerator_StatusFail" xml:space="preserve"><value>Impossibile generare QR (il testo potrebbe essere troppo lungo per questo livello ECC).</value></data>
+  <data name="QrGenerator_StatusRenderFailCopy" xml:space="preserve"><value>Render fallito — niente copiato.</value></data>
+  <data name="QrGenerator_StatusCopied" xml:space="preserve"><value>Copiato negli appunti.</value></data>
+  <data name="QrGenerator_StatusCopyFail" xml:space="preserve"><value>Copia negli appunti fallita: {0}</value></data>
+  <data name="QrGenerator_StatusRenderFailSave" xml:space="preserve"><value>Render fallito — niente salvato.</value></data>
+  <data name="QrGenerator_StatusSaved" xml:space="preserve"><value>Salvato: {0}</value></data>
+  <data name="QrGenerator_StatusSaveFail" xml:space="preserve"><value>Salvataggio fallito: {0}</value></data>
+  <data name="QrGenerator_StatusSavedHistory" xml:space="preserve"><value>Salvato in cronologia.</value></data>
+  <data name="QrGenerator_StatusHistoryFail" xml:space="preserve"><value>Salvataggio in cronologia fallito: {0}</value></data>
+  <data name="QrGenerator_SavePngTitle" xml:space="preserve"><value>Salva QR come PNG</value></data>
+  <data name="QrGenerator_SaveSvgTitle" xml:space="preserve"><value>Salva QR come SVG</value></data>
+  <data name="QrGenerator_FilterPng" xml:space="preserve"><value>Immagine PNG|*.png|Tutti i file|*.*</value></data>
+  <data name="QrGenerator_FilterSvg" xml:space="preserve"><value>Immagine SVG|*.svg|Tutti i file|*.*</value></data>
   <data name="Toast_OpenUrl" xml:space="preserve"><value>Apri URL</value></data>
   <data name="Toast_CopyUrl" xml:space="preserve"><value>Copia URL</value></data>
   <data name="Toast_CopyPathToClipboard" xml:space="preserve"><value>Copia path negli appunti</value></data>

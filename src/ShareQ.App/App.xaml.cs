@@ -511,16 +511,31 @@ public partial class App : Application
         // whatever opens the launcher), Show() paints with cells already there — no grey flash.
         // Fire-and-forget: any failure (corrupt SQLite, missing icon) just falls back to the
         // standard load path on first explicit open.
+        // Same treatment for the clipboard window: hydrates Rows + type filters in the background
+        // so Win+V's first press paints with the row list already populated.
         _ = Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, async () =>
         {
+            // _host is set during host build above and lives for the process lifetime; the
+            // null-forgiving here keeps the analyzer happy without an early return that would
+            // mask a real bug. If _host were ever null here something is catastrophically wrong.
+            var services = _host!.Services;
             try
             {
-                var launcher = _host.Services.GetRequiredService<ShareQ.App.Views.LauncherWindow>();
+                var launcher = services.GetRequiredService<ShareQ.App.Views.LauncherWindow>();
                 await launcher.PrepareAsync();
             }
             catch (Exception ex)
             {
-                _host?.Services.GetService<ILogger<App>>()?.LogDebug(ex, "Launcher pre-warm failed; first open will load lazily");
+                services.GetService<ILogger<App>>()?.LogDebug(ex, "Launcher pre-warm failed; first open will load lazily");
+            }
+            try
+            {
+                var clipboard = services.GetRequiredService<ShareQ.App.Views.ClipboardWindow>();
+                await clipboard.PrepareAsync();
+            }
+            catch (Exception ex)
+            {
+                services.GetService<ILogger<App>>()?.LogDebug(ex, "Clipboard pre-warm failed; first open will load lazily");
             }
         });
 

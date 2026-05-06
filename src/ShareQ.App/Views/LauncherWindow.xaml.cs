@@ -519,7 +519,15 @@ public partial class LauncherWindow : Wpf.Ui.Controls.FluentWindow
         _dragMode = on;
         DragModeBanner.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         DragSizingPanel.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-        DragToggle.Content = on ? "✓ Drag mode (on)" : "📥 Drag mode";
+        // Resolve via ResourceManager — the XAML-side Markup:Loc binding only fires when the
+        // toggle is in its "off" state (default Content). Flipping to "on" needs a runtime
+        // string lookup honouring the singleton's pinned culture.
+        var culture = ShareQ.App.Markup.LocalizedStrings.Instance.Culture
+                      ?? System.Globalization.CultureInfo.CurrentUICulture;
+        // Fully-qualified — the bare `Resources` name collides with FrameworkElement.Resources.
+        DragToggle.Content = on
+            ? ShareQ.App.Resources.Strings.ResourceManager.GetString("Launcher_DragModeOn", culture) ?? "✓ Drag mode (on)"
+            : ShareQ.App.Resources.Strings.ResourceManager.GetString("Launcher_DragMode", culture) ?? "📥 Drag mode";
         // Persist so closing the launcher while in drag mode reopens it the same way next time.
         // Fire-and-forget: persistence is sub-ms (single SQLite key write).
         _ = _store.SaveDragModeAsync(on, CancellationToken.None);
@@ -816,10 +824,13 @@ public partial class LauncherWindow : Wpf.Ui.Controls.FluentWindow
         // Don't Hide() the launcher: ShowDialog with a hidden owner crashes WPF (this was the
         // empty-cell click crash). Instead suppress our own auto-close-on-deactivate while the
         // dialog is up; the launcher stays visible behind it, gets the focus back on close.
+        // Owner-scoped: blocks only the launcher (the actual owner) — MainWindow / ClipboardWindow
+        // / tray flows stay interactive while the user edits a cell. Same helper used by the
+        // editor's color picker and effects window opens.
         _suppressDeactivation = true;
         try
         {
-            var ok = dlg.ShowDialog() == true && dlg.Result is not null;
+            var ok = ShareQ.App.Services.WindowModalScope.ShowOwnerScopedDialog(dlg) == true && dlg.Result is not null;
             if (ok) { _ = PersistCellAndReloadAsync(dlg.Result!); }
         }
         finally

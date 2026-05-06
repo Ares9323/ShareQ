@@ -24,7 +24,7 @@ public sealed class OpenClipboardWindowTask : IPipelineTask
 
     public Task ExecuteAsync(PipelineContext context, JsonNode? config, CancellationToken cancellationToken)
     {
-        Application.Current.Dispatcher.InvokeAsync(() =>
+        Application.Current.Dispatcher.InvokeAsync(async () =>
         {
             if (ClipboardWindow.IsOpen) { ClipboardWindow.RequestClose(); return; }
 
@@ -36,6 +36,10 @@ public sealed class OpenClipboardWindowTask : IPipelineTask
             target.CaptureCurrentForeground();
 
             var window = _services.GetRequiredService<ClipboardWindow>();
+            // PrepareAsync runs BEFORE Show so the row list paints already populated — no
+            // Rows.Clear+refill flash. Also batches the per-category cleanup sweep + the
+            // type-filter hydration so the user's first frame is final.
+            await window.PrepareAsync();
             window.Show();
             window.Activate();
         });
