@@ -26,11 +26,15 @@ public sealed class OpenLauncherDragModeTask : IPipelineTask
     {
         // Toggle: invoking again while the launcher is up closes it. Same UX as the plain
         // "Open launcher menu" task — one shortcut, two phases (summon / dismiss).
-        Application.Current.Dispatcher.InvokeAsync(() =>
+        // PrepareAsync runs BEFORE Show so the cell grid is populated when painted; the
+        // StartInDragMode flag is set before Prepare so PrepareAsync's drag-mode handler
+        // honours the explicit request from this task.
+        Application.Current.Dispatcher.InvokeAsync(async () =>
         {
             if (LauncherWindow.IsOpen) { LauncherWindow.RequestClose(); return; }
             var window = _services.GetRequiredService<LauncherWindow>();
             window.StartInDragMode = true;
+            await window.PrepareAsync();
             window.Show();
             window.Activate();
         });

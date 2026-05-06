@@ -134,33 +134,16 @@ public partial class LauncherWindow : Wpf.Ui.Controls.FluentWindow
         // the default 1280×640 centred. SQLite read is ~1ms, fine to block.
         TryRestoreGeometry();
 
-        // Re-do "fresh open" work every time the window becomes visible, not just on first
-        // Loaded. Singleton lifetime means Loaded fires once per app run, but we want the
-        // user's edits (cell additions / drag-mode toggles from a previous open) reflected
-        // every time they hit the shortcut.
-        IsVisibleChanged += async (_, e) =>
+        // Sync-only handler: data loading lives in PrepareAsync (called by hosts BEFORE Show).
+        // This used to do all the SQLite reads + collection rebuilds inline, which produced a
+        // visible "grey flash → items appear" because IsVisibleChanged fires AFTER the window
+        // is on screen. Now the cells are already populated by the time Show() paints.
+        IsVisibleChanged += (_, e) =>
         {
             if (e.NewValue is true)
             {
                 // Hiding then re-showing resets _isClosing so the next deactivate can re-trigger.
                 _isClosing = false;
-                await ReloadAsync();
-                // Drag-mode persistence: explicit open-in-drag from the host (StartInDragMode)
-                // wins; otherwise the persisted flag from the previous close is honoured. So
-                // closing while in drag mode reopens in drag mode automatically.
-                var startDrag = StartInDragMode || await _store.LoadDragModeAsync(CancellationToken.None);
-                SetDragMode(startDrag);
-                StartInDragMode = false;   // consume the explicit flag so a normal re-open isn't sticky
-                // Apply persisted icon / label sizing exactly once per process lifetime —
-                // _sizingLoaded latches afterwards so subsequent IsVisibleChanged ticks (and the
-                // first slider drag) don't re-save the freshly-loaded values.
-                if (!_sizingLoaded)
-                {
-                    var (icon, label) = await _store.LoadSizingAsync(CancellationToken.None);
-                    IconSize = icon;
-                    LabelFontSize = label;
-                    _sizingLoaded = true;
-                }
                 // Focus the launcher root, NOT the search box — auto-focusing the search swallows
                 // every shortcut key (Q, F1, …) the user wanted to press to fire a cell. Ctrl+F
                 // gives them an explicit way into the search box when they actually want to type.
@@ -174,6 +157,57 @@ public partial class LauncherWindow : Wpf.Ui.Controls.FluentWindow
             }
         };
     }
+
+    /// <summary>Hosts (TrayIconService, OpenLauncherMenu/DragModeTask) await this before
+    /// <c>Show()</c> so the cell grid is fully populated by the time the window paints —
+    /// no more "grey flash → items materialise" UX. Internally:
+    /// <list type="bullet">
+    /// <item>First call ever: loads sizing / active-tab from storage (one-shot, latched).</item>
+    /// <item>Cells / titles: skipped entirely if <see cref="LauncherStore.StateVersion"/>
+    /// hasn't bumped since the last load — the common case, since the user rarely edits
+    /// cells between opens. Saves a SQLite round-trip + 3 ItemsControl rebuilds per open.</item>
+    /// <item>Drag mode: read every time (cheap), so closing in drag mode reopens in drag mode.</item>
+    /// </list></summary>
+    public async Task PrepareAsync()
+    {
+        if (!_oneShotSettingsLoaded)
+        {
+            // Active tab + sizing only need to come back once per process lifetime — they
+            // don't change between opens unless the user fiddles with the in-window controls,
+            // and those write through directly to the live VM properties.
+            var savedTab = await _store.LoadActiveTabAsync(CancellationToken.None);
+            if (savedTab is not null) _activeTab = savedTab;
+            _activeTabRestored = true;
+            var (icon, label) = await _store.LoadSizingAsync(CancellationToken.None);
+            IconSize = icon;
+            LabelFontSize = label;
+            _sizingLoaded = true;
+            _oneShotSettingsLoaded = true;
+        }
+
+        // Cells / tab-titles: skip when the store hasn't been mutated since our last load.
+        // First-ever call (_loadedStateVersion == -1) always falls through — _stateVersion
+        // starts at 0 so the inequality holds.
+        var current = _store.StateVersion;
+        if (_loadedStateVersion != current)
+        {
+            _state = await _store.LoadAsync(CancellationToken.None);
+            _loadedStateVersion = current;
+            RebuildFunctionRow();
+            RebuildTabHeaders();
+            RebuildActiveTab();
+        }
+
+        // Drag-mode persistence: explicit StartInDragMode from the host wins; otherwise the
+        // persisted flag from the previous close is honoured. Read on every Prepare because
+        // the user can save the flag mid-session and we want to honour it.
+        var startDrag = StartInDragMode || await _store.LoadDragModeAsync(CancellationToken.None);
+        SetDragMode(startDrag);
+        StartInDragMode = false;   // consume the explicit flag so a normal re-open isn't sticky
+    }
+
+    private bool _oneShotSettingsLoaded;
+    private long _loadedStateVersion = -1;
 
     private void TryRestoreGeometry()
     {
@@ -245,7 +279,12 @@ public partial class LauncherWindow : Wpf.Ui.Controls.FluentWindow
 
     private async Task ReloadAsync()
     {
+        // Snapshot the version BEFORE the load — if a save races us we'll miss it on this
+        // pass but pick it up on the next PrepareAsync, which is acceptable. Reading after
+        // would let a concurrent save's version-bump look "already-loaded" to us.
+        var version = _store.StateVersion;
         _state = await _store.LoadAsync(CancellationToken.None);
+        _loadedStateVersion = version;
         // Restore the active tab from settings on first reload (StorageIndex of the previous
         // open session) so the user lands back where they left off. Subsequent reloads (after
         // a cell edit / rename) keep whatever tab they're currently viewing.

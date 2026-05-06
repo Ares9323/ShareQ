@@ -227,7 +227,27 @@ public sealed class TrayIconService : IDisposable
                     ShareQ.App.Views.LauncherWindow.RequestClose();
                     return;
                 }
-                Run<ShareQ.App.Views.LauncherWindow>(w => { w.Show(); w.Activate(); });
+                // PrepareAsync must complete before Show so the cell grid is populated when
+                // the window paints — fire-and-forget continuation chain on the UI dispatcher
+                // (already on it; tray menu click runs on the message pump). Errors in
+                // PrepareAsync surface via the dispatcher's unhandled-exception path; we
+                // don't crash the menu over a bad SQLite read.
+                _ = ShowLauncherAsync();
+                async Task ShowLauncherAsync()
+                {
+                    try
+                    {
+                        var w = (ShareQ.App.Views.LauncherWindow)_services.GetService(typeof(ShareQ.App.Views.LauncherWindow))!;
+                        try { await w.PrepareAsync(); }
+                        catch (Exception ex) { _logger.LogWarning(ex, "Launcher PrepareAsync failed; showing anyway"); }
+                        w.Show();
+                        w.Activate();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Launcher show failed");
+                    }
+                }
             }));
         menu.Items.Add(BuildShortcutMenuItem(Strings.Tray_ToggleIncognito, DefaultPipelineProfiles.ToggleIncognitoId,
             () => Run<IncognitoModeService>(s => _ = s.ToggleAsync(CancellationToken.None))));

@@ -24,14 +24,16 @@ public sealed class OpenLauncherMenuTask : IPipelineTask
     public Task ExecuteAsync(PipelineContext context, JsonNode? config, CancellationToken cancellationToken)
     {
         // Window construction touches WPF state, has to land on the UI thread. We resolve the
-        // window from the container so its constructor dependencies (LauncherStore + logger)
-        // are wired by DI; a fresh instance per opening is cheap and avoids stale state.
+        // window from the container (singleton) so DI wires its constructor dependencies and
+        // subsequent opens reuse the same instance. PrepareAsync runs BEFORE Show so the
+        // cell grid paints already populated — eliminates the old "grey flash" on open.
         // Toggle behaviour: if the launcher is already up, close it instead of stacking a new
         // instance — the same shortcut becomes "open" on first press, "close" on the second.
-        Application.Current.Dispatcher.InvokeAsync(() =>
+        Application.Current.Dispatcher.InvokeAsync(async () =>
         {
             if (LauncherWindow.IsOpen) { LauncherWindow.RequestClose(); return; }
             var window = _services.GetRequiredService<LauncherWindow>();
+            await window.PrepareAsync();
             window.Show();
             window.Activate();
         });

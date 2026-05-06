@@ -35,8 +35,16 @@ public sealed class LauncherStore
     public const double MaxLabelFontSize = 18;
 
     private readonly ISettingsStore _settings;
+    private long _stateVersion;
 
     public LauncherStore(ISettingsStore settings) { _settings = settings; }
+
+    /// <summary>Monotonic version bumped on every cell/tab-title mutation. Read-only consumers
+    /// (LauncherWindow) snapshot the value after a successful load and skip subsequent reloads
+    /// when the store hasn't changed since. Volatile read so a save on the UI thread is visible
+    /// to the next read on the same thread without needing a fence — there's no cross-thread
+    /// race here in practice (the launcher window runs everything on the dispatcher).</summary>
+    public long StateVersion => System.Threading.Interlocked.Read(ref _stateVersion);
 
     public async Task<LauncherState> LoadAsync(CancellationToken cancellationToken)
     {
@@ -127,6 +135,7 @@ public sealed class LauncherStore
         };
         var json = JsonSerializer.Serialize(dto);
         await _settings.SetAsync(SettingsKey, json, sensitive: false, cancellationToken).ConfigureAwait(false);
+        System.Threading.Interlocked.Increment(ref _stateVersion);
     }
 
     public async Task UpdateCellAsync(LauncherCell cell, CancellationToken cancellationToken)
@@ -134,6 +143,7 @@ public sealed class LauncherStore
         var state = await LoadAsync(cancellationToken).ConfigureAwait(false);
         var cells = new Dictionary<string, LauncherCell>(state.Cells, StringComparer.OrdinalIgnoreCase);
         cells[cell.ComposedKey] = cell;
+        // Funnels through SaveAsync, so the version bump happens there.
         await SaveAsync(new LauncherState(cells, state.TabTitles), cancellationToken).ConfigureAwait(false);
     }
 

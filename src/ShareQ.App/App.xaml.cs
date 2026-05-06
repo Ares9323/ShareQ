@@ -504,6 +504,26 @@ public partial class App : Application
             ((Window)sender!).Hide();
         };
 
+        // Pre-warm the launcher singleton so the first hotkey press doesn't pay the construction
+        // cost (XAML parse + InitializeComponent + first SQLite read) on the user's critical path.
+        // Resolving the service triggers the ctor; PrepareAsync runs in the background to populate
+        // the cell grid + load sizing/active-tab from storage. By the time the user hits Win+Z (or
+        // whatever opens the launcher), Show() paints with cells already there — no grey flash.
+        // Fire-and-forget: any failure (corrupt SQLite, missing icon) just falls back to the
+        // standard load path on first explicit open.
+        _ = Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, async () =>
+        {
+            try
+            {
+                var launcher = _host.Services.GetRequiredService<ShareQ.App.Views.LauncherWindow>();
+                await launcher.PrepareAsync();
+            }
+            catch (Exception ex)
+            {
+                _host?.Services.GetService<ILogger<App>>()?.LogDebug(ex, "Launcher pre-warm failed; first open will load lazily");
+            }
+        });
+
         var helper = new WindowInteropHelper(window);
         helper.EnsureHandle();
         var source = HwndSource.FromHwnd(helper.Handle)!;
