@@ -39,8 +39,33 @@ public sealed partial class TraceWindow : Wpf.Ui.Controls.FluentWindow
         Loaded += async (_, _) =>
         {
             await SvgPreviewWeb.EnsureCoreWebView2Async();
+            // Kill the browser-native Ctrl+wheel zoom so it doesn't compound with our
+            // custom transform-based zoom. Without this both fire on the same event and
+            // the user perceives "zoom keeps climbing past the cap" because the native
+            // zoom factor is still climbing while our own z is clamped at 100.
+            if (SvgPreviewWeb.CoreWebView2?.Settings is { } wv2Settings)
+            {
+                wv2Settings.IsZoomControlEnabled = false;
+            }
             await _params.LoadCustomPresetsAsync(CancellationToken.None);
+            // Restore the last-used preset so the user returns to whatever they were
+            // dialling in. Falls back to [Default] when nothing is stored or the saved
+            // name no longer exists (e.g. user deleted a custom preset between sessions).
+            var lastName = await _presetStore.GetLastUsedAsync(CancellationToken.None);
+            if (!string.IsNullOrEmpty(lastName))
+            {
+                var match = _params.Presets.FirstOrDefault(p => p.Name == lastName);
+                if (match is not null) _params.SelectedPreset = match;
+            }
             SchedulePreview();
+        };
+        Closed += async (_, _) =>
+        {
+            if (_params.SelectedPreset is { } p)
+            {
+                try { await _presetStore.SetLastUsedAsync(p.Name, CancellationToken.None); }
+                catch { /* settings write is best-effort */ }
+            }
         };
     }
 
@@ -51,6 +76,15 @@ public sealed partial class TraceWindow : Wpf.Ui.Controls.FluentWindow
         {
             RefreshPreview();
             return;
+        }
+        // Sync the swatch fill when IgnoreColor changes from anywhere (preset apply, programmatic
+        // reset). The picker click already updates the swatch directly, but presets that include
+        // an IgnoreColor (Sketched Art, Silhouettes) need this to reflect the value visually.
+        if (e.PropertyName == nameof(TraceParametersViewModel.IgnoreColor))
+        {
+            IgnoreSwatchFill.Fill = _params.IgnoreColor is { } col
+                ? new System.Windows.Media.SolidColorBrush(col)
+                : System.Windows.Media.Brushes.Transparent;
         }
         if (_params.PreviewEnabled) SchedulePreview();
     }
@@ -92,14 +126,24 @@ public sealed partial class TraceWindow : Wpf.Ui.Controls.FluentWindow
 
     private async void OnPresetSaveClicked(object sender, RoutedEventArgs e)
     {
-        // TabTitleDialog signature: (tabKey, currentTitle); result lives on TabTitle (empty
-        // string when the user cancels). Adapted from the plan's pseudocode (which used
-        // Prompt/ResultText props that don't exist on this dialog).
-        var dlg = new TabTitleDialog("trace preset", string.Empty) { Owner = this };
+        // Pre-fill the rename dialog with the current preset's name so the user can either
+        // overwrite it (same name → store de-dupes by name) or quickly tweak it for a
+        // variant ("3 Colors" → "3 Colors No BG"). Stock presets show their name too;
+        // saving with a stock name effectively shadows it with a custom of the same name.
+        var current = _params.SelectedPreset?.Name ?? string.Empty;
+        var dlg = new TabTitleDialog("trace preset", current) { Owner = this };
         if (dlg.ShowDialog() != true || string.IsNullOrWhiteSpace(dlg.TabTitle)) return;
-        var preset = new TracePreset(dlg.TabTitle.Trim(), _params.ToOptions());
+        var name = dlg.TabTitle.Trim();
+        var preset = new TracePreset(name, _params.ToOptions());
         await _presetStore.SaveAsync(preset, CancellationToken.None);
         await _params.LoadCustomPresetsAsync(CancellationToken.None);
+        // Auto-select the just-saved preset. Without this, LoadCustomPresetsAsync re-picks
+        // the previously-selected preset (e.g. "[Default]") and ApplyPreset wipes the
+        // user's freshly-saved IgnoreColor / params back to that preset's defaults — exactly
+        // the "creo un preset custom e me lo resetta" bug.
+        var saved = _params.Presets.FirstOrDefault(p =>
+            string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (saved is not null) _params.SelectedPreset = saved;
     }
 
     private async void OnPresetDeleteClicked(object sender, RoutedEventArgs e)
@@ -125,66 +169,48 @@ public sealed partial class TraceWindow : Wpf.Ui.Controls.FluentWindow
 
     private void OnCancelClicked(object sender, RoutedEventArgs e) => Close();
 
-    /// <summary>Wires the "Pick…" button next to the Ignore Color swatch to the full-screen
-    /// eyedropper (the same overlay the tray's Color Sampler uses). Falls back to a one-shot
-    /// click on the source preview when <see cref="ScreenColorPickerService"/> isn't registered
-    /// (always present in production DI; the fallback keeps the window usable in test harnesses
-    /// or when a stripped App composition is in play).</summary>
-    private void OnPickIgnoreClicked(object sender, RoutedEventArgs e)
+    /// <summary>Click on the IgnoreColor swatch opens ShareQ's <see cref="ColorPickerWindow"/>
+    /// (same picker used by image effects + theme + editor swatches). Includes the in-window
+    /// eyedropper button via <see cref="ColorSwatchButton.EyedropperHandler"/> if a host
+    /// has wired one up (the tray + editor wire it; the trace window inherits the wiring
+    /// because it's process-wide static). On Apply, the picked colour writes back to the
+    /// VM and the Rectangle fill updates so the user sees the chosen value in the swatch.</summary>
+    private void OnIgnoreSwatchMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        // Plan called for picker.PickAsync(Action<Color>) but the real service exposes a
-        // synchronous string? SampleAtCursor() that returns a "#RRGGBB" hex (or null on
-        // cancel) and internally pumps the overlay via Dispatcher.Invoke. Adapted accordingly.
-        var picker = (Application.Current as App)?.Services?.GetService<ScreenColorPickerService>();
-        if (picker is null) { PickFromSourceInline(); return; }
-        var hex = picker.SampleAtCursor();
-        if (hex is null) return; // user cancelled
-        if (!TryParseHexColor(hex, out var col)) return;
-        ApplyIgnoreColor(col);
+        if (!_params.IgnoreColorEnabled) return;
+        e.Handled = true;
+        var current = _params.IgnoreColor is { } c
+            ? new ShareQ.Editor.Model.ShapeColor(c.A, c.R, c.G, c.B)
+            : ShareQ.Editor.Model.ShapeColor.Black;
+        var dlg = new ShareQ.Editor.Views.ColorPickerWindow(current) { Owner = this };
+        if (dlg.ShowDialog() != true) return;
+        ApplyIgnoreShapeColor(dlg.PickedColor);
     }
 
-    /// <summary>Fallback when the screen-picker service is missing: arms a one-shot mouse hook
-    /// on the left-pane source preview and reads the clicked pixel straight out of the
-    /// <see cref="BitmapSource"/>.</summary>
-    private void PickFromSourceInline()
+    private void ApplyIgnoreShapeColor(ShareQ.Editor.Model.ShapeColor sc)
     {
-        void OneShot(object s, System.Windows.Input.MouseButtonEventArgs me)
-        {
-            SourcePreview.MouseLeftButtonDown -= OneShot;
-            if (SourcePreview.Source is not BitmapSource src) return;
-            var rel = me.GetPosition(SourcePreview);
-            if (SourcePreview.ActualWidth <= 0 || SourcePreview.ActualHeight <= 0) return;
-            var px = (int)(rel.X / SourcePreview.ActualWidth * src.PixelWidth);
-            var py = (int)(rel.Y / SourcePreview.ActualHeight * src.PixelHeight);
-            if (px < 0 || py < 0 || px >= src.PixelWidth || py >= src.PixelHeight) return;
-            var pixel = new byte[4];
-            src.CopyPixels(new System.Windows.Int32Rect(px, py, 1, 1), pixel, 4, 0);
-            // BitmapSource default for PNG-loaded BitmapImage is Bgra32 — pixel layout B,G,R,A.
-            var col = System.Windows.Media.Color.FromArgb(pixel[3], pixel[2], pixel[1], pixel[0]);
-            ApplyIgnoreColor(col);
-        }
-        SourcePreview.MouseLeftButtonDown += OneShot;
-    }
-
-    private void ApplyIgnoreColor(System.Windows.Media.Color col)
-    {
+        var col = System.Windows.Media.Color.FromArgb(sc.A, sc.R, sc.G, sc.B);
         _params.IgnoreColor = col;
         _params.IgnoreColorEnabled = true;
-        IgnoreSwatch.Background = new System.Windows.Media.SolidColorBrush(col);
+        IgnoreSwatchFill.Fill = new System.Windows.Media.SolidColorBrush(col);
     }
 
-    private static bool TryParseHexColor(string hex, out System.Windows.Media.Color color)
+    /// <summary>Eyedropper button next to the IgnoreColor swatch. Opens the full-screen
+    /// <see cref="ScreenColorPickerService"/> overlay (same one the tray's color sampler /
+    /// image-effects swatches use) so the user can sample any pixel on-screen — including
+    /// pixels from the source preview to the left of the trace window.</summary>
+    private void OnIgnoreEyedropperClicked(object sender, RoutedEventArgs e)
     {
+        var picker = (Application.Current as App)?.Services?.GetService<ScreenColorPickerService>();
+        if (picker is null) return;
+        var hex = picker.SampleAtCursor();
+        if (string.IsNullOrEmpty(hex)) return;
         try
         {
-            color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex)!;
-            return true;
+            var c = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex)!;
+            ApplyIgnoreShapeColor(new ShareQ.Editor.Model.ShapeColor(c.A, c.R, c.G, c.B));
         }
-        catch
-        {
-            color = default;
-            return false;
-        }
+        catch { /* malformed hex — ignore */ }
     }
 
     private static BitmapImage LoadBitmap(byte[] bytes)

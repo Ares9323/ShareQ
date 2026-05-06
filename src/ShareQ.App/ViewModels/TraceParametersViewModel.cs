@@ -125,16 +125,13 @@ public sealed partial class TraceParametersViewModel : ObservableObject
     }
 
     // Ignore-color enable toggle. When unchecked, also clears the picked colour so the next
-    // ToOptions() call won't re-apply a stale ignore. When CHECKED, auto-enables
-    // Transparency: without it the multi-colour path repaints the ignored colour as an
-    // opaque background rect, which makes the trace look visually unchanged ("Ignore color
-    // doesn't seem to do anything"). User can untoggle Transparency afterwards if they
-    // want a flat-bg fill.
+    // ToOptions() call won't re-apply a stale ignore. The Transparency flag is independent
+    // (Illustrator semantics): IgnoreColor always makes the matched pixels transparent in
+    // the output regardless of Transparency, which controls source-alpha preservation.
     [ObservableProperty] private bool _ignoreColorEnabled;
     partial void OnIgnoreColorEnabledChanged(bool value)
     {
         if (!value) IgnoreColor = null;
-        else Transparency = true;
     }
 
     // Info readout — refilled after each successful trace.
@@ -174,6 +171,12 @@ public sealed partial class TraceParametersViewModel : ObservableObject
         SnapCurvesToLines = o.SnapCurvesToLines;
         Transparency = o.Transparency;
         IgnoreColor = o.IgnoreColor is { } c ? System.Windows.Media.Color.FromArgb(c.A, c.R, c.G, c.B) : null;
+        // Sync the Ignore Color checkbox with the preset's IgnoreColor presence so the UI
+        // state never drifts from the actual setting. Without this, switching between a
+        // preset-with-IgnoreColor and one-without leaves the checkbox stale: it could be
+        // checked while IgnoreColor is null (stock preset just loaded) or unchecked while
+        // IgnoreColor was just restored from a custom preset, both confusing the user.
+        IgnoreColorEnabled = o.IgnoreColor is not null;
         IgnoreTolerance = o.IgnoreTolerance;
         AutoGrouping = o.AutoGrouping;
     }

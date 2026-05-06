@@ -10,23 +10,18 @@ jobs:
   build-and-test:
     runs-on: windows-latest
     timeout-minutes: 15
-    env:
-      # Opt JS-based actions onto Node 24 ahead of GitHub's deprecation of Node 20 (forced flip
-      # 2026-06-02, full removal 2026-09-16). Silences the deprecation warning + surfaces any
-      # Node 24 incompat now rather than at the deadline.
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
@@ -43,7 +38,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: test-results
           path: '**/TestResults/*.trx'

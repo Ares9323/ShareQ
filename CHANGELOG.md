@@ -3,6 +3,102 @@
 All notable changes to ShareQ. Format loosely follows [Keep a Changelog](https://keepachangelog.com/),
 versions follow [SemVer](https://semver.org/).
 
+## [0.1.1] — 2026-05-06
+
+Second alpha. Big editor refactor, full Italian localization, image trace (raster → SVG)
+feature, plus a sweep of UX polish across capture, clipboard, launcher and effects.
+
+### New — Image trace (raster → SVG)
+- New "Trace" button in the editor toolbar opens an Illustrator-style preview window:
+  source image on the left, live SVG preview on the right (WebView2-rendered against a
+  checker background), parameter dock at the bottom.
+- 12 stock presets matching Illustrator (`[Default]`, `High Fidelity Photo`, `Low Fidelity
+  Photo`, `3 Colors`, `6 Colors`, `16 Colors`, `Shades of Gray`, `Black and White Logo`,
+  `Sketched Art`, `Silhouettes`, `Line Art`, `Technical Drawing`) + user-saved custom
+  presets persisted in settings.
+- Modes: Color / Grayscale / Black and White. Palette: Automatic (elbow-prune) / Limited /
+  Full Tone. Parameters: Colors (2-30), Threshold (0-255 for B&W), Paths %, Corners %,
+  Noise (despeckle), Snap Curves to Lines, Transparency, Auto Grouping.
+- Ignore Color eyedropper drops a picked colour from the trace; tolerance slider widens
+  the match. Toggling Ignore Color auto-enables Transparency so the effect is visible.
+- View dropdown: Tracing Result / + Outlines / Outlines / + Source Image / Source Image —
+  swaps the right pane without re-tracing.
+- Preview toggle + explicit Trace button so the user can pause auto-rerun on slow inputs.
+- Bundled `potrace.exe` 1.16 (BSD) under `Tools/`. Pipeline task `Trace to SVG` exposes the
+  same tracer to workflows.
+
+### Editor
+- Total UX refactor — toolbar / canvas / properties panel rebuilt for clarity and density.
+- Effects launcher: open the image-effects panel directly from the editor, applies the
+  rendered result back as an undoable canvas swap.
+- Multi-editor — open multiple editor windows in parallel without focus stealing.
+- "Save as…" exports in PNG / JPEG / BMP / GIF (independent of the global capture format).
+- Rotate effect added; tiling import fixed.
+- Pan + zoom preview during region select.
+- Numeric input nudge: wheel / Up / Down arrows on focused TextBox = ±1 (Shift = ±5),
+  preserves decimal precision.
+- Editor opens fullscreen by default (configurable). Removed always-on-top priority when
+  the editor is opened from a toast.
+- Editor selection bounding box no longer leaks into the captured / saved image.
+- Crop + effect chain after editor confirmation now produces correctly-sized output
+  (previously caused vertical-strip artifacts on high-DPI displays — DPI metadata was
+  ignored by the canvas exporter).
+
+### Capture
+- Region capture: snapshot is now taken **before** the overlay window is constructed, so
+  open dropdowns / hover popups / animated UI stay frozen in the captured image (matches
+  ShareX's behaviour). Eliminates the gap that closed transient state before BitBlt fired.
+- Capture webpage path: timing fix so the WebView2 renders the loaded page before the
+  pipeline grabs bytes.
+
+### Clipboard
+- Pinned mode: keep the popup open through actions (multipaste, paste-and-keep-open) so
+  the user can paste several items in a row without re-invoking Win+V.
+- Multipaste without losing focus on the source app.
+- Copy-path-to-clipboard button for items backed by a real file on disk.
+- Process blacklist + incognito mode coverage tightened.
+- Faster popup invocation (cached enumeration + warm DI).
+- New filter chips and tighter padding; transparency removed in favour of an opaque
+  Surface1 background (improves readability on busy desktops).
+- "Generate QR code…" affordances (toolbar button + context menu) now hide on non-text
+  rows (Image / Video / Files).
+- Smart notifications: per-item tag/group so successive toasts don't replace or stack.
+
+### Launcher
+- Faster invocation; resize handles polished; cell-edit dialog restyled to match the rest
+  of the app (FluentWindow chrome, owner-scoped modal).
+- Italian text fits properly in the cell-edit dialog (auto-width).
+
+### QR codes
+- QR generator window restyled to match the rest of the app (FluentWindow + accent border).
+
+### Image effects
+- ShareX `.sxie` round-trip: DrawTextEx placeholder expansion (`%y / %mo / %d / %h / %width
+  / %height / %un / %hn`) — Polaroid-style date stamps now render correctly.
+- ShareQ `Apply effects preset` pipeline task gains an editor-mode handoff (open effects
+  with the editor's bytes, return rendered result as an undoable swap).
+- Color picker theme now follows the active app accent.
+
+### Localization
+- Italian translation (full coverage of UI surface — settings, editor, image effects,
+  pipeline-action catalog, dialogs).
+
+### Tray + lifecycle
+- Start-minimized option (Settings → General).
+- Dynamic tray-menu shortcuts: hotkey labels reflect the user's current bindings instead
+  of hardcoded strings.
+- Tray menu entries renamed for clarity.
+- PrintScreen / Pause hotkey override fixed (low-level hook now correctly suppresses
+  the keystroke from reaching the foreground app).
+
+### Build + CI
+- GitHub Actions bumped to `@v5` (Node 24) — `actions/checkout`, `actions/setup-dotnet`,
+  `actions/cache`, `actions/upload-artifact`. Drops the Node 20 deprecation warning ahead
+  of GitHub's 2026-09-16 removal deadline.
+- Velopack build flow polished — `.md` ampersand parsing fix, token scope tightened.
+
+---
+
 ## [0.1.0] — 2026-05-05
 
 First public release. Alpha — feature-complete enough for daily clipboard + screenshot work

@@ -2642,15 +2642,33 @@ public partial class EditorWindow : FluentWindow
     private void RedrawAll()
     {
         DrawingCanvas.Children.Clear();
+        // Effects (blur / pixelate / spotlight / smart-eraser) render BELOW annotations
+        // regardless of insertion order. Without this split, dropping a blur over an
+        // existing arrow visually erases the arrow because the blur's UIElement is just a
+        // cropped+blurred copy of the source pixels — it doesn't include the annotation
+        // layer above. The two-pass render keeps arrows / text / step counters always on
+        // top of effects, matching what the user expects ("the blur should leave my
+        // arrows visible"). Relative order WITHIN each bucket is preserved so stacking
+        // two effects (or two annotations) still respects the user's z-stacking.
         foreach (var shape in _vm.Shapes)
         {
             if (ReferenceEquals(shape, _editingTextShape)) continue;
+            if (!IsEffectShape(shape)) continue;
+            DrawingCanvas.Children.Add(MakeUiElement(shape));
+        }
+        foreach (var shape in _vm.Shapes)
+        {
+            if (ReferenceEquals(shape, _editingTextShape)) continue;
+            if (IsEffectShape(shape)) continue;
             DrawingCanvas.Children.Add(MakeUiElement(shape));
         }
         RedrawPreview();
         RefreshSelectionAdorner();
         if (_activeTextBox is not null) DrawingCanvas.Children.Add(_activeTextBox);
     }
+
+    private static bool IsEffectShape(Shape s) =>
+        s is BlurShape or PixelateShape or SpotlightShape or SmartEraserShape;
 
     private void RedrawPreview()
     {

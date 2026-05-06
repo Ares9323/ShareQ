@@ -133,7 +133,7 @@
                                Visibility="{Binding IsColorOrGrayscale, Converter={StaticResource BoolToVisibility}}">
                         <TextBlock Text="{markup:Loc Trace_ParamColors}" Width="120" />
                         <TextBox Text="{Binding ColorCount}" Width="48" DockPanel.Dock="Right" />
-                        <Slider Value="{Binding ColorCount}" Minimum="2" Maximum="30" IsSnapToTickEnabled="True" TickFrequency="1" />
+                        <Slider Value="{Binding ColorCount}" Minimum="2" Maximum="64" IsSnapToTickEnabled="True" TickFrequency="1" />
                     </DockPanel>
                     <DockPanel Grid.Column="0" Grid.Row="0" LastChildFill="True" Margin="0,0,12,8"
                                Visibility="{Binding IsBlackAndWhite, Converter={StaticResource BoolToVisibility}}">
@@ -178,19 +178,37 @@
                               Content="{markup:Loc Trace_ParamAutoGrouping}"
                               IsChecked="{Binding AutoGrouping}" Margin="12,0,12,0" />
 
-                    <!-- Column 3 — Ignore Color (eyedropper + tolerance) -->
-                    <CheckBox Grid.Column="2" Grid.Row="0" Margin="12,0,0,8"
-                              Content="{markup:Loc Trace_ParamIgnoreColor}"
-                              IsChecked="{Binding IgnoreColorEnabled}" />
-                    <StackPanel Grid.Column="2" Grid.Row="1" Orientation="Horizontal" Margin="12,0,0,8"
-                                IsEnabled="{Binding IgnoreColorEnabled}">
-                        <Border x:Name="IgnoreSwatch" Width="32" Height="32"
+                    <!-- Column 3 — Ignore Color row: checkbox + swatch + eyedropper inline.
+                         Same vertical position as the Method row in column 2 so the user can
+                         see at a glance which colour they're ignoring (and re-pick it). -->
+                    <StackPanel Grid.Column="2" Grid.Row="0" Orientation="Horizontal"
+                                Margin="12,0,0,8" VerticalAlignment="Center">
+                        <CheckBox Content="{markup:Loc Trace_ParamIgnoreColor}"
+                                  IsChecked="{Binding IgnoreColorEnabled}"
+                                  VerticalAlignment="Center" />
+                        <Border x:Name="IgnoreSwatch"
+                                Width="28" Height="28" CornerRadius="3" Margin="8,0,0,0"
                                 BorderBrush="{DynamicResource AccentForegroundDarkBrush}"
-                                BorderThickness="1" Background="Transparent" />
-                        <ui:Button Content="{markup:Loc Trace_ParamPickIgnore}" Click="OnPickIgnoreClicked"
-                                   Margin="8,0,0,0" />
+                                BorderThickness="1"
+                                Background="{StaticResource CheckerBrush}"
+                                Cursor="Hand"
+                                ToolTip="{markup:Loc Trace_ParamPickIgnore}"
+                                IsEnabled="{Binding IgnoreColorEnabled}"
+                                MouseLeftButtonDown="OnIgnoreSwatchMouseDown">
+                            <Rectangle x:Name="IgnoreSwatchFill" RadiusX="2" RadiusY="2" />
+                        </Border>
+                        <!-- Eyedropper button: opens the full-screen ScreenColorPickerOverlay
+                             so the user can sample any pixel on screen (including from the
+                             source preview to the left). Same overlay the tray's color
+                             sampler / image-effects swatches use. -->
+                        <ui:Button Width="28" Height="28" Padding="3" Margin="4,0,0,0"
+                                   Click="OnIgnoreEyedropperClicked"
+                                   IsEnabled="{Binding IgnoreColorEnabled}"
+                                   ToolTip="{markup:Loc Trace_ParamPickFromScreen}">
+                            <Image Source="{StaticResource EyedropperIcon}" />
+                        </ui:Button>
                     </StackPanel>
-                    <DockPanel Grid.Column="2" Grid.Row="2" LastChildFill="True" Margin="12,0,0,8"
+                    <DockPanel Grid.Column="2" Grid.Row="1" LastChildFill="True" Margin="12,0,0,8"
                                IsEnabled="{Binding IgnoreColorEnabled}">
                         <TextBlock Text="{markup:Loc Trace_ParamTolerance}" Width="120" />
                         <TextBox Text="{Binding IgnoreTolerance}" Width="48" DockPanel.Dock="Right" />
@@ -215,8 +233,14 @@
                     <CheckBox Content="{markup:Loc Trace_PreviewToggle}"
                               IsChecked="{Binding PreviewEnabled, Mode=TwoWay}"
                               VerticalAlignment="Center" Margin="0,0,16,0" />
+                    <!-- Manual "Trace now" button — only enabled when Preview is OFF. With
+                         Preview on, every parameter change auto-runs the trace via the 150ms
+                         debounce, so the button would be a redundant no-op. Matches
+                         Illustrator's convention: Preview ↔ Trace are mutually exclusive
+                         drivers of the right pane. -->
                     <ui:Button Content="{markup:Loc Trace_TraceNow}"
-                               Click="OnTraceNowClicked" Margin="0,0,16,0" />
+                               Click="OnTraceNowClicked" Margin="0,0,16,0"
+                               IsEnabled="{Binding PreviewEnabled, Converter={StaticResource InverseBool}}" />
                     <ui:Button Content="{markup:Loc Common_Cancel}"
                                Click="OnCancelClicked" Margin="0,0,8,0" />
                     <ui:Button x:Name="SaveBtn" Content="{markup:Loc Trace_SaveButton}"
