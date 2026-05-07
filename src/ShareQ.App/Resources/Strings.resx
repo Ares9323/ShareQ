@@ -790,8 +790,9 @@
   <data name="Editor_DefaultProperties" xml:space="preserve"><value>Default properties</value></data>
   <data name="Editor_Save" xml:space="preserve"><value>Save</value></data>
   <data name="Editor_SaveAs" xml:space="preserve"><value>Save as…</value></data>
-  <data name="Editor_TooltipSave" xml:space="preserve"><value>Save the edited image into history (uses the global image format from Settings → Capture)</value></data>
+  <data name="Editor_TooltipSave" xml:space="preserve"><value>Confirm / copy to clipboard. Adds the edited image as a new history item and pushes it to the Windows clipboard so you can paste it. The original is preserved.</value></data>
   <data name="Editor_TooltipSaveAs" xml:space="preserve"><value>Export to a file you pick. Format chosen via the dialog filter (PNG / JPEG / BMP / GIF). Does not touch history.</value></data>
+  <data name="Editor_TooltipCancel" xml:space="preserve"><value>Discard edits and close. The original stays in history; the Windows clipboard is not changed.</value></data>
   <data name="Editor_Outline" xml:space="preserve"><value>Outline</value></data>
   <data name="Editor_Fill" xml:space="preserve"><value>Fill</value></data>
   <data name="Editor_Text" xml:space="preserve"><value>Text</value></data>
@@ -837,6 +838,25 @@
   <data name="Editor_Tool_Crop" xml:space="preserve"><value>C Crop</value></data>
   <data name="Editor_Tool_Resize" xml:space="preserve"><value>Resize…</value></data>
   <data name="Editor_Tool_Trace" xml:space="preserve"><value>Trace to SVG…</value></data>
+  <data name="Editor_Tool_MagicEraser" xml:space="preserve"><value>Remove background…</value></data>
+  <data name="BgRemover_WindowTitle" xml:space="preserve"><value>ShareQ - Remove background</value></data>
+  <data name="BgRemover_ParamThreshold" xml:space="preserve"><value>Threshold</value></data>
+  <data name="BgRemover_ParamFeather" xml:space="preserve"><value>Feather</value></data>
+  <data name="BgRemover_ParamEdgeOffset" xml:space="preserve"><value>Edge offset</value></data>
+  <data name="BgRemover_ParamBackgroundOpacity" xml:space="preserve"><value>BG opacity</value></data>
+  <data name="BgRemover_BrushLabel" xml:space="preserve"><value>Brush:</value></data>
+  <data name="BgRemover_BrushOff" xml:space="preserve"><value>Off</value></data>
+  <data name="BgRemover_BrushAdd" xml:space="preserve"><value>Add</value></data>
+  <data name="BgRemover_BrushRemove" xml:space="preserve"><value>Remove</value></data>
+  <data name="BgRemover_BrushSize" xml:space="preserve"><value>Size</value></data>
+  <data name="BgRemover_BrushHardness" xml:space="preserve"><value>Hardness</value></data>
+  <data name="BgRemover_BrushReset" xml:space="preserve"><value>Reset brush</value></data>
+  <data name="BgRemover_ResetView" xml:space="preserve"><value>Reset view</value></data>
+  <data name="BgRemover_Apply" xml:space="preserve"><value>Apply</value></data>
+  <data name="BgRemover_StatusRunning" xml:space="preserve"><value>Running AI…</value></data>
+  <data name="BgRemover_StatusReady" xml:space="preserve"><value>Ready. Adjust sliders or paint with the brush to refine the cut-out.</value></data>
+  <data name="BgRemover_StatusModelUnavailable" xml:space="preserve"><value>Background-removal model unavailable. Cancel and retry, or close to keep the original image.</value></data>
+  <data name="BgRemover_StatusDecodeFailed" xml:space="preserve"><value>Source image could not be decoded.</value></data>
   <data name="Trace_SaveDialogTitle" xml:space="preserve"><value>Save traced SVG</value></data>
   <data name="Trace_FilterSvg" xml:space="preserve"><value>SVG image|*.svg|All files|*.*</value></data>
   <data name="Trace_FailMessage" xml:space="preserve"><value>Tracing failed — potrace.exe may be missing from the install. Check the log.</value></data>

@@ -1,7 +1,5 @@
-using System.IO;
 using System.Text;
 using System.Windows;
-using System.Windows.Media.Imaging;
 using Microsoft.Extensions.Logging;
 using ShareQ.App.Native;
 using ShareQ.Core.Domain;
@@ -66,13 +64,10 @@ public sealed class AutoPaster
                     if (pngBytes.Length == 0) return false;
                     try
                     {
-                        var bitmap = new BitmapImage();
-                        bitmap.BeginInit();
-                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                        bitmap.StreamSource = new MemoryStream(pngBytes);
-                        bitmap.EndInit();
-                        bitmap.Freeze();
-                        System.Windows.Clipboard.SetImage(bitmap);
+                        // PNG-aware publish (preserves alpha for Telegram / Discord / browsers).
+                        // SetImage alone publishes only CF_BITMAP and modern apps interpret it
+                        // as no-alpha — semi-transparent pixels render opaque on paste.
+                        ClipboardImagePublisher.SetPng(pngBytes);
                     }
                     catch (Exception ex)
                     {

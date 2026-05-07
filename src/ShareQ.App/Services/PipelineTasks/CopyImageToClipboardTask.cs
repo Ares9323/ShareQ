@@ -1,7 +1,5 @@
-using System.IO;
 using System.Text.Json.Nodes;
 using System.Windows;
-using System.Windows.Media.Imaging;
 using Microsoft.Extensions.Logging;
 using ShareQ.Clipboard;
 using ShareQ.Core.Pipeline;
@@ -40,14 +38,11 @@ public sealed class CopyImageToClipboardTask : IPipelineTask
             // Tell the listener to ignore the WM_CLIPBOARDUPDATE we are about to cause —
             // otherwise our own write would re-ingest into the on-clipboard pipeline.
             _listener.SuppressNext();
-
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.StreamSource = new MemoryStream(pngBytes);
-            bitmap.EndInit();
-            bitmap.Freeze();
-            System.Windows.Clipboard.SetImage(bitmap);
+            // Use the PNG-aware publisher so semi-transparent shadows / cut-outs paste with
+            // alpha intact in Telegram / Discord / browsers. The legacy SetImage path was
+            // turning a soft Shadow glow into a hard neon shape on paste because CF_BITMAP
+            // alone strips alpha for most modern consumers.
+            ClipboardImagePublisher.SetPng(pngBytes);
         });
 
         _logger.LogDebug("CopyImageToClipboardTask: image placed on clipboard ({Bytes} bytes)", pngBytes.Length);

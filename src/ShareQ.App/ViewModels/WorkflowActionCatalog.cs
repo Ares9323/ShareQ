@@ -197,6 +197,11 @@ public static class WorkflowActionCatalog
             StringParameters: [new StringParameter("colors", "Color count", "2",
                 Placeholder: "2", IsEditable: true)]),
 
+        new("shareq.remove-background",
+            "Remove background",
+            "Run AI background removal on the captured image (U2NetP ONNX model). Replaces the in-flight bytes with a transparent-background PNG. Best on portraits / objects with clear edges; subtle / fluffy edges may show artefacts. Falls through silently when the model fails to load. First call costs ~150-500 ms session warmup; subsequent calls are ~100-500 ms.",
+            "Editor"),
+
         new("shareq.save-to-file",
             "Save to file",
             "Write the current bytes to disk under the configured capture folder (Settings → Capture). 'Format' is optional: leave empty to keep whatever's already in the bag (the global capture format), or pick one to force a re-encode for this step.",

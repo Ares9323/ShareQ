@@ -166,6 +166,9 @@
                             <ui:Button x:Name="TraceBtn" Style="{StaticResource ToolBtn}" Click="OnTraceClicked" ToolTip="Trace to SVG…">
                                 <Image Source="{StaticResource ToolIconTrace}" Style="{StaticResource ToolIcon}" />
                             </ui:Button>
+                            <ui:Button x:Name="MagicEraserBtn" Style="{StaticResource ToolBtn}" Click="OnMagicEraserClicked" ToolTip="Remove background…">
+                                <Image Source="{StaticResource ToolIconMagicEraser}" Style="{StaticResource ToolIcon}" />
+                            </ui:Button>
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>
@@ -240,21 +243,41 @@
 
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel x:Name="PropertyPanel">
-                <!-- Action triplet: Save (confirm + close) / Save as… (one-shot file export) /
-                     Cancel. Sits above Properties so the user-visible "what do I do with this
-                     edit" controls live next to the surface they just touched. -->
-                <UniformGrid Columns="3" Rows="1" Margin="0,0,0,8">
-                    <ui:Button x:Name="SaveButton" Content="Save" Appearance="Primary"
+                <!-- Action triplet: Confirm/Copy (push edited bytes back to history + Windows
+                     clipboard) / Save as… (one-shot file export) / Cancel (discard). Now
+                     icon-only since the new "Save" semantics is "copy to clipboard" rather
+                     than "save to disk" — the icons make the distinction clear at a glance,
+                     and the tooltips explain the action. Cancel uses Danger appearance so
+                     the destructive choice is visually distinct from the two confirms. -->
+                <UniformGrid Columns="3" Rows="1" Margin="0,0,0,8" Height="36">
+                    <!-- Glyphs: FontAwesome 7 Free Solid (already embedded as IconFont in
+                         App.xaml). DynamicResource because the resource lives in the host
+                         assembly, not ShareQ.Editor. f0c5 = copy, f0c7 = floppy-disk,
+                         f00d = xmark — codepoints stable across FA versions. -->
+                    <ui:Button x:Name="SaveButton" Appearance="Primary"
                                Margin="0,0,2,0" HorizontalAlignment="Stretch"
                                Click="OnSaveClicked"
-                               ToolTip="Save the edited image into history (uses the global image format from Settings → Capture)" />
-                    <ui:Button x:Name="SaveAsButton" Content="Save as…"
+                               ToolTip="Confirm / copy to clipboard (also adds to history; original kept for safety)">
+                        <TextBlock Text="&#xf0c5;" FontFamily="{DynamicResource IconFont}"
+                                   FontSize="14" Foreground="White"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </ui:Button>
+                    <ui:Button x:Name="SaveAsButton"
                                Margin="2,0,2,0" HorizontalAlignment="Stretch"
                                Click="OnSaveAsClicked"
-                               ToolTip="Export to a file you pick. Format chosen via the dialog filter (PNG / JPEG / BMP / GIF). Does not touch history." />
-                    <ui:Button x:Name="CancelButton" Content="Cancel"
+                               ToolTip="Export to a file you pick. Format chosen via the dialog filter (PNG / JPEG / BMP / GIF). Does not touch history.">
+                        <TextBlock Text="&#xf0c7;" FontFamily="{DynamicResource IconFont}"
+                                   FontSize="14" Foreground="White"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </ui:Button>
+                    <ui:Button x:Name="CancelButton" Appearance="Danger"
                                Margin="2,0,0,0" HorizontalAlignment="Stretch"
-                               Click="OnCancelClicked" />
+                               Click="OnCancelClicked"
+                               ToolTip="Discard edits and close (original stays in history)">
+                        <TextBlock Text="&#xf00d;" FontFamily="{DynamicResource IconFont}"
+                                   FontSize="14" Foreground="White"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </ui:Button>
                 </UniformGrid>
                 <Border Height="1" Background="#333" Margin="0,0,0,12" />
 

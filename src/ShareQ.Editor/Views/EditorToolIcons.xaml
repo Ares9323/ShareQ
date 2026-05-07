@@ -151,6 +151,18 @@
         </DrawingImage.Drawing>
     </DrawingImage>
 
+    <!-- Magic Eraser: an eraser shape with a small AI sparkle. Rectangular eraser body +
+         tip diagonal + sparkle dot reads as "magically remove" at toolbar size. -->
+    <DrawingImage x:Key="ToolIconMagicEraser">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="White" Geometry="M40,8L56,24 24,56 8,40Z M16,40L40,16 48,24 24,48Z" />
+                <GeometryDrawing Brush="White" Geometry="M14,52 L4,62 12,60 Z" />
+                <GeometryDrawing Brush="White" Geometry="M52,4 L54,10 60,12 54,14 52,20 50,14 44,12 50,10 Z" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
     <DrawingImage x:Key="ToolIconResize">
         <DrawingImage.Drawing>
             <DrawingGroup>

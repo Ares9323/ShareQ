@@ -156,7 +156,17 @@ public partial class PinnedImageWindow : Window
 
     private void OnCopyClick(object sender, RoutedEventArgs e)
     {
-        try { System.Windows.Clipboard.SetImage(_bitmap); }
+        // Encode current bitmap → PNG → publish via the alpha-aware helper. SetImage alone
+        // strips alpha for modern consumers (Telegram / Discord / browsers paste it as opaque);
+        // ClipboardImagePublisher publishes both PNG and CF_BITMAP for full coverage.
+        try
+        {
+            using var ms = new System.IO.MemoryStream();
+            var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(_bitmap));
+            enc.Save(ms);
+            ShareQ.App.Services.ClipboardImagePublisher.SetPng(ms.ToArray());
+        }
         catch { /* clipboard locked — silent */ }
     }
 

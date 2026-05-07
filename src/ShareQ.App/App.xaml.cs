@@ -228,6 +228,7 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, UploadClipboardTextTask>();
                 services.AddSingleton<IPipelineTask, NotifyToastTask>();
                 services.AddSingleton<IPipelineTask, TraceToSvgTask>();
+                services.AddSingleton<IPipelineTask, RemoveBackgroundTask>();
                 services.AddSingleton<IPipelineTask, OpenEditorBeforeUploadTask>();
                 services.AddSingleton<IPipelineTask, ToggleIncognitoTask>();
                 services.AddSingleton<IPipelineTask, ColorSamplerTask>();
@@ -313,6 +314,11 @@ public partial class App : Application
                 services.AddSingleton<ShareQ.Editor.Persistence.EditorDefaultsStore>();
                 services.AddSingleton<ShareQ.AI.IImageTracer, ShareQ.AI.PotraceImageTracer>();
                 services.AddSingleton<TracePresetStore>();
+                // Background removal: U2NetP ONNX model. Singleton because the ONNX session
+                // costs ~150 ms to spin up + holds ~5 MB of model data + DirectML resources;
+                // amortising it across the process lifetime keeps the first-use latency on
+                // subsequent calls in the inference-only band (~100-500 ms).
+                services.AddSingleton<ShareQ.AI.IBackgroundRemover, ShareQ.AI.U2NetBackgroundRemover>();
 
                 services.AddTransient<PopupWindowViewModel>();
 

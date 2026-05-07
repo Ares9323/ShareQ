@@ -49,6 +49,13 @@
          use GPU contexts but the API is otherwise compatible with 2.x ShareX code. -->
     <PackageVersion Include="SkiaSharp" Version="3.116.1" />
 
+    <!-- ONNX Runtime + DirectML EP, used by ShareQ.AI for U2NetP background removal. The
+         DirectML package brings GPU acceleration on any DX12 GPU (Win10/11); the base
+         package is referenced explicitly because some transitive resolutions otherwise
+         pin an older version that fails to load alongside DirectML. -->
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.21.0" />
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.21.0" />
+
     <!-- QR code generation (used by the QR pipeline task + Show QR window) -->
     <PackageVersion Include="QRCoder" Version="1.6.0" />
 

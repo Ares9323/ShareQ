@@ -731,8 +731,9 @@
   <data name="Editor_DefaultProperties" xml:space="preserve"><value>Proprietà predefinite</value></data>
   <data name="Editor_Save" xml:space="preserve"><value>Salva</value></data>
   <data name="Editor_SaveAs" xml:space="preserve"><value>Salva con nome…</value></data>
-  <data name="Editor_TooltipSave" xml:space="preserve"><value>Salva l'immagine modificata nella cronologia (usa il formato globale da Impostazioni → Cattura)</value></data>
+  <data name="Editor_TooltipSave" xml:space="preserve"><value>Conferma / copia nella clipboard. Aggiunge l'immagine modificata come nuovo elemento della cronologia e la mette nella clipboard di Windows pronta per l'incolla. L'originale viene preservato.</value></data>
   <data name="Editor_TooltipSaveAs" xml:space="preserve"><value>Esporta su un file scelto da te. Il formato dipende dal filtro del dialogo (PNG / JPEG / BMP / GIF). Non tocca la cronologia.</value></data>
+  <data name="Editor_TooltipCancel" xml:space="preserve"><value>Annulla le modifiche e chiudi. L'originale resta in cronologia; la clipboard di Windows non viene modificata.</value></data>
   <data name="Editor_Outline" xml:space="preserve"><value>Contorno</value></data>
   <data name="Editor_Fill" xml:space="preserve"><value>Riempimento</value></data>
   <data name="Editor_Text" xml:space="preserve"><value>Testo</value></data>
@@ -776,6 +777,25 @@
   <data name="Editor_Tool_Crop" xml:space="preserve"><value>C Ritaglia</value></data>
   <data name="Editor_Tool_Resize" xml:space="preserve"><value>Ridimensiona…</value></data>
   <data name="Editor_Tool_Trace" xml:space="preserve"><value>Vettorizza in SVG…</value></data>
+  <data name="Editor_Tool_MagicEraser" xml:space="preserve"><value>Rimuovi sfondo…</value></data>
+  <data name="BgRemover_WindowTitle" xml:space="preserve"><value>ShareQ - Rimuovi sfondo</value></data>
+  <data name="BgRemover_ParamThreshold" xml:space="preserve"><value>Soglia</value></data>
+  <data name="BgRemover_ParamFeather" xml:space="preserve"><value>Sfumatura</value></data>
+  <data name="BgRemover_ParamEdgeOffset" xml:space="preserve"><value>Offset bordo</value></data>
+  <data name="BgRemover_ParamBackgroundOpacity" xml:space="preserve"><value>Opacità sfondo</value></data>
+  <data name="BgRemover_BrushLabel" xml:space="preserve"><value>Pennello:</value></data>
+  <data name="BgRemover_BrushOff" xml:space="preserve"><value>Off</value></data>
+  <data name="BgRemover_BrushAdd" xml:space="preserve"><value>Aggiungi</value></data>
+  <data name="BgRemover_BrushRemove" xml:space="preserve"><value>Rimuovi</value></data>
+  <data name="BgRemover_BrushSize" xml:space="preserve"><value>Dim.</value></data>
+  <data name="BgRemover_BrushHardness" xml:space="preserve"><value>Durezza</value></data>
+  <data name="BgRemover_BrushReset" xml:space="preserve"><value>Reset pennello</value></data>
+  <data name="BgRemover_ResetView" xml:space="preserve"><value>Reset vista</value></data>
+  <data name="BgRemover_Apply" xml:space="preserve"><value>Applica</value></data>
+  <data name="BgRemover_StatusRunning" xml:space="preserve"><value>Esecuzione AI…</value></data>
+  <data name="BgRemover_StatusReady" xml:space="preserve"><value>Pronto. Regola gli slider o usa il pennello per perfezionare il ritaglio.</value></data>
+  <data name="BgRemover_StatusModelUnavailable" xml:space="preserve"><value>Modello non disponibile. Annulla e riprova, oppure chiudi per tenere l'immagine originale.</value></data>
+  <data name="BgRemover_StatusDecodeFailed" xml:space="preserve"><value>Impossibile decodificare l'immagine sorgente.</value></data>
   <data name="Trace_SaveDialogTitle" xml:space="preserve"><value>Salva SVG vettorizzato</value></data>
   <data name="Trace_FilterSvg" xml:space="preserve"><value>Immagine SVG|*.svg|Tutti i file|*.*</value></data>
   <data name="Trace_FailMessage" xml:space="preserve"><value>Vettorizzazione fallita — potrace.exe potrebbe mancare dall'installazione. Controlla il log.</value></data>

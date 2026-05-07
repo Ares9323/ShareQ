@@ -51,6 +51,52 @@ public sealed class EditorLauncher
         // Trace tool delegates here too: the editor doesn't reference ShareQ.AI directly so
         // we resolve the tracer from DI on demand and own the Save dialog + file IO.
         ShareQ.Editor.Views.EditorWindow.TraceHandler = TraceToSvgAsync;
+        // Magic Eraser tool: same cross-assembly pattern. ShareQ.AI's IBackgroundRemover is
+        // resolved lazily so the ONNX runtime / model load only happens when the user
+        // actually clicks the button — keeps editor open latency unchanged for users who
+        // never use the feature.
+        ShareQ.Editor.Views.EditorWindow.RemoveBackgroundHandler = RemoveBackgroundAsync;
+    }
+
+    /// <summary>Open the BgRemoverWindow modeless on top of the editor, await its Closed
+    /// event, return the user-approved cut-out PNG (or null on cancel / failure). The window
+    /// runs the U2NetP inference once and then drives all post-processing locally so slider
+    /// changes / brush strokes don't re-trigger ONNX. Mirrors the modeless +
+    /// TaskCompletionSource pattern used by <see cref="OpenEffectsAsync"/>.</summary>
+    private Task<byte[]?> RemoveBackgroundAsync(byte[] sourceBytes, CancellationToken ct)
+    {
+        var dispatcher = System.Windows.Application.Current.Dispatcher;
+        var tcs = new TaskCompletionSource<byte[]?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        dispatcher.InvokeAsync(() =>
+        {
+            try
+            {
+                var remover = _services.GetRequiredService<ShareQ.AI.IBackgroundRemover>();
+                var window = new ShareQ.App.Views.BgRemoverWindow(remover, sourceBytes)
+                {
+                    Owner = System.Windows.Application.Current.Windows
+                        .OfType<System.Windows.Window>()
+                        .FirstOrDefault(w => w.IsActive),
+                };
+                window.Closed += (_, _) => tcs.TrySetResult(window.ResultPng);
+                window.Show();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "EditorLauncher: failed to open BgRemoverWindow");
+                tcs.TrySetResult(null);
+            }
+        });
+
+        // Cancellation cookie: if the editor host signals ct (e.g. editor closes), let the
+        // awaiter unblock with null. The window itself is responsible for tearing down on
+        // its own Closed; we don't proactively close it here.
+        if (ct.CanBeCanceled)
+        {
+            ct.Register(() => tcs.TrySetResult(null));
+        }
+        return tcs.Task;
     }
 
     /// <summary>Open <see cref="ImageEffectsWindow"/> with the editor's current source bytes
@@ -257,8 +303,31 @@ public sealed class EditorLauncher
         if (!saved || pngBytes is null) return;
 
         var bytes = await EncodeForGlobalFormatAsync(pngBytes, cancellationToken).ConfigureAwait(false);
-        await _items.UpdatePayloadAsync(itemId, bytes, bytes.LongLength, cancellationToken).ConfigureAwait(false);
-        _logger.LogInformation("EditorLauncher: saved {Bytes} bytes back to item {Id}", bytes.Length, itemId);
+
+        // Save creates a NEW history entry rather than overwriting the original — preserves
+        // the captured original for safety (user preference). Source = Manual to mark it as
+        // a user-derived edit; Category copied from the original so the new item lands in
+        // the same popup bucket. The pre-edit record stays untouched.
+        var newItem = new NewItem(
+            Kind: ShareQ.Core.Domain.ItemKind.Image,
+            Source: ShareQ.Core.Domain.ItemSource.Manual,
+            CreatedAt: DateTimeOffset.UtcNow,
+            Payload: bytes,
+            PayloadSize: bytes.LongLength,
+            Category: string.IsNullOrEmpty(record.Category) ? "Clipboard" : record.Category);
+        var newId = await _items.AddAsync(newItem, cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("EditorLauncher: edit saved as new item {NewId} ({Bytes} bytes), original {OriginalId} preserved",
+            newId, bytes.Length, itemId);
+
+        // Also publish to the Windows clipboard so the user can paste the edited result
+        // immediately without re-clicking the item in Win+V. SuppressNext keeps the listener
+        // from re-ingesting our own write as a third duplicate item.
+        await dispatcher.InvokeAsync(() =>
+        {
+            var listener = _services.GetService<ShareQ.Clipboard.IClipboardListener>();
+            listener?.SuppressNext();
+            ClipboardImagePublisher.SetPng(bytes);
+        });
     }
 
     /// <summary>
@@ -433,11 +502,9 @@ public sealed class EditorLauncher
             ["Properties"]              = Loc("Editor_Properties"),
             ["NoSelection"]             = Loc("Editor_NoSelection"),
             ["DefaultProperties"]       = Loc("Editor_DefaultProperties"),
-            ["Save"]                    = Loc("Editor_Save"),
-            ["SaveAs"]                  = Loc("Editor_SaveAs"),
-            ["Cancel"]                  = Loc("Common_Cancel"),
             ["TooltipSave"]             = Loc("Editor_TooltipSave"),
             ["TooltipSaveAs"]           = Loc("Editor_TooltipSaveAs"),
+            ["TooltipCancel"]           = Loc("Editor_TooltipCancel"),
             ["Outline"]                 = Loc("Editor_Outline"),
             ["Fill"]                    = Loc("Editor_Fill"),
             ["Text"]                    = Loc("Editor_Text"),
@@ -481,6 +548,7 @@ public sealed class EditorLauncher
             ["Tool_Crop"]               = Loc("Editor_Tool_Crop"),
             ["Tool_Resize"]             = Loc("Editor_Tool_Resize"),
             ["Tool_Trace"]              = Loc("Editor_Tool_Trace"),
+            ["Tool_MagicEraser"]        = Loc("Editor_Tool_MagicEraser"),
             ["Shape_Rectangle"]         = Loc("Editor_Shape_Rectangle"),
             ["Shape_Ellipse"]           = Loc("Editor_Shape_Ellipse"),
             ["Shape_Arrow"]             = Loc("Editor_Shape_Arrow"),

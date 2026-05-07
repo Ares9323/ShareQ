@@ -230,6 +230,13 @@ public partial class EditorWindow : FluentWindow
     /// back since tracing produces a separate vector artifact rather than a new raster.</summary>
     public static Func<byte[], System.Windows.Window?, Task>? TraceHandler { get; set; }
 
+    /// <summary>Cross-assembly handoff for the Magic Eraser (AI background removal).
+    /// Takes source bytes; returns processed bytes (transparent-bg PNG) or null on cancel /
+    /// failure. Same shape as <see cref="OpenEffectsHandler"/> minus the owner window since
+    /// background removal runs without showing a dialog. <see cref="EditorLauncher"/> wires
+    /// this once at startup.</summary>
+    public static Func<byte[], CancellationToken, Task<byte[]?>>? RemoveBackgroundHandler { get; set; }
+
     private async void OnEffectsClicked(object sender, RoutedEventArgs e)
     {
         var handler = OpenEffectsHandler;
@@ -258,6 +265,31 @@ public partial class EditorWindow : FluentWindow
             // Trace failures are logged inside the handler (host-side); the editor stays open.
         }
         finally { TraceBtn.IsEnabled = true; }
+    }
+
+    private async void OnMagicEraserClicked(object sender, RoutedEventArgs e)
+    {
+        var handler = RemoveBackgroundHandler;
+        if (handler is null || _vm.SourcePngBytes.Length == 0) return;
+        // Disable the button while inference runs (100 ms-3 s) so a frantic user can't queue
+        // a second pass and end up with stale state on the second result. The editor as a
+        // whole stays interactive — drawing / arrow placement remain available, only the
+        // Magic Eraser button itself is greyed.
+        MagicEraserBtn.IsEnabled = false;
+        try
+        {
+            var result = await handler(_vm.SourcePngBytes, default);
+            if (result is null || result.Length == 0) return;
+            _vm.ApplyReplaceSource(result);
+        }
+        catch
+        {
+            // Failures are logged inside the host-side handler; UI just stays on the original.
+        }
+        finally
+        {
+            MagicEraserBtn.IsEnabled = true;
+        }
     }
 
     /// <summary>Render the canvas (image + shapes) to PNG bytes. Hosts (EditorLauncher) call
@@ -329,13 +361,15 @@ public partial class EditorWindow : FluentWindow
         if (_labels.TryGetValue("Tool_Crop", out var cr)) CropToolBtn.ToolTip = cr;
         if (_labels.TryGetValue("Tool_Resize", out var rz)) ResizeBtn.ToolTip = rz;
         if (_labels.TryGetValue("Tool_Trace", out var tr)) TraceBtn.ToolTip = tr;
+        if (_labels.TryGetValue("Tool_MagicEraser", out var me)) MagicEraserBtn.ToolTip = me;
 
-        // Action triplet (top of right column).
-        if (_labels.TryGetValue("Save", out var save)) SaveButton.Content = save;
-        if (_labels.TryGetValue("SaveAs", out var saveAs)) SaveAsButton.Content = saveAs;
-        if (_labels.TryGetValue("Cancel", out var cancel)) CancelButton.Content = cancel;
+        // Action triplet (top of right column). Buttons now host icon Images instead of text
+        // labels (Confirm/Copy, Floppy/Save-as, Dismiss/Cancel) so we DON'T overwrite their
+        // Content here — that would replace the Image with a string. Tooltips stay localised
+        // since hover help is the discoverability for the icon-only buttons.
         if (_labels.TryGetValue("TooltipSave", out var tSave)) SaveButton.ToolTip = tSave;
         if (_labels.TryGetValue("TooltipSaveAs", out var tSaveAs)) SaveAsButton.ToolTip = tSaveAs;
+        if (_labels.TryGetValue("TooltipCancel", out var tCancel)) CancelButton.ToolTip = tCancel;
 
         // Default properties block.
         if (_labels.TryGetValue("DefaultProperties", out var dp)) DefaultPropertiesTitle.Text = dp;
@@ -631,17 +665,24 @@ public partial class EditorWindow : FluentWindow
                     data.SetText(t.Text);
                     break;
                 case ImageShape img when img.PngBytes is { Length: > 0 }:
-                    using (var ms = new System.IO.MemoryStream(img.PngBytes))
-                    {
-                        var decoder = System.Windows.Media.Imaging.BitmapFrame.Create(
-                            ms,
-                            System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat,
-                            System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
-                        data.SetImage(decoder);
-                    }
+                    // Publish PNG format too (preserves alpha for Telegram / Discord / browsers
+                    // / any modern paste target). SetImage alone publishes only CF_BITMAP and
+                    // strips alpha — semi-transparent shadows pasted as opaque neon blobs.
+                    AddPngWithAlpha(data, img.PngBytes);
                     break;
                 default:
-                    if (RasterizeSelection(sels) is { } bs) data.SetImage(bs);
+                    if (RasterizeSelection(sels) is { } bs)
+                    {
+                        // Encode the rasterised selection as PNG so we can also publish the
+                        // alpha-preserving format alongside the legacy CF_BITMAP. Without this,
+                        // copying a shape with semi-transparent fill loses the transparency on
+                        // paste into modern apps.
+                        using var ms = new System.IO.MemoryStream();
+                        var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                        enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bs));
+                        enc.Save(ms);
+                        AddPngWithAlpha(data, ms.ToArray());
+                    }
                     break;
             }
             // copy: true → clipboard survives this process exiting; required so the user can
@@ -651,6 +692,42 @@ public partial class EditorWindow : FluentWindow
         catch (System.Runtime.InteropServices.COMException) { /* clipboard contention — drop */ }
 
         if (cut) _vm.RemoveShapes(sels);
+    }
+
+    /// <summary>Attach <paramref name="pngBytes"/> to <paramref name="data"/> in the
+    /// alpha-preserving "PNG" registered clipboard format (preferred by Telegram / Discord /
+    /// browsers / modern Office). The legacy CF_BITMAP fallback is added <em>only</em> when
+    /// the PNG is opaque — otherwise some apps (Telegram in particular) prefer CF_BITMAP and
+    /// paste the cut-out with a flat white background instead of the transparent PNG.</summary>
+    private static void AddPngWithAlpha(DataObject data, byte[] pngBytes)
+    {
+        if (pngBytes.Length == 0) return;
+        // PNG-format payload (alpha preserved). MemoryStream is safe to leave alive — clipboard
+        // SetDataObject(copy:true) downstream serialises the data so the stream can be GC'd.
+        data.SetData("PNG", new System.IO.MemoryStream(pngBytes));
+        // PNG IHDR colour type sits at byte 25; types 3/4/6 carry alpha. Skip the CF_BITMAP
+        // fallback for those since modern consumers preferring it would render alpha=0 pixels
+        // as white — defeating the point of the cut-out / shadow. Fully-opaque PNGs (types 0/2)
+        // still emit CF_BITMAP for Paint / older Word.
+        if (pngBytes.Length >= 26)
+        {
+            var colorType = pngBytes[25];
+            if (colorType == 3 || colorType == 4 || colorType == 6) return;
+        }
+        try
+        {
+            using var ms = new System.IO.MemoryStream(pngBytes);
+            var decoder = System.Windows.Media.Imaging.BitmapFrame.Create(
+                ms,
+                System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat,
+                System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+            data.SetImage(decoder);
+        }
+        catch
+        {
+            // If the bitmap fallback fails (decoder couldn't read the PNG for whatever reason)
+            // the PNG payload is still on the data object — modern apps paste correctly.
+        }
     }
 
     /// <summary>Render the bounding rect of <paramref name="shapes"/> to a transparent

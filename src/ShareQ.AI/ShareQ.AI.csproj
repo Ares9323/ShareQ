@@ -7,5 +7,18 @@
   <ItemGroup>
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <!-- ONNX Runtime for U2NetP background removal. DirectML provides GPU acceleration on
+         Win10/11 with any DX12 GPU; the implementation falls back to CPU when DirectML
+         init fails (older driver, headless CI, etc.). Versions live in Directory.Packages.props
+         (Central Package Management is enabled at the repo root). -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- ~4.5 MB binary embedded into the assembly so we don't need a side-channel download
+         on first run. Bumps assembly size accordingly; acceptable for a feature this useful.
+         If the file is missing the inference falls back gracefully (caller gets the input
+         bytes back unchanged). -->
+    <EmbeddedResource Include="Models\u2netp.onnx" Condition="Exists('Models\u2netp.onnx')" />
   </ItemGroup>
 </Project>
