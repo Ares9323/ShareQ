@@ -1,6 +1,6 @@
 # AresToys
 
-> Modern clipboard + screenshot tool for Windows, unifying the strengths of CopyQ and ShareX into a single app.
+> Modern productivity suite for Windows — unifies CopyQ (clipboard), ShareX (capture + upload), and MaxLauncher (keyboard launcher) into one app, plus tools none of them ship.
 
 **Status:** Alpha. Builds and runs. Velopack packaging is green (installer + portable + delta updates) — the public v0.1.0 release tag is the only thing still pending.
 
@@ -8,9 +8,17 @@
 
 ## What AresToys is
 
-AresToys is a Windows desktop application that brings together two of the most-used productivity tools in the screenshot/clipboard space — [CopyQ](https://github.com/hluk/CopyQ) and [ShareX](https://github.com/ShareX/ShareX) — under a single modern UI built on .NET 10 and WPF.
+AresToys is a Windows desktop application that brings together three of the most-used productivity tools — [CopyQ](https://github.com/hluk/CopyQ) (clipboard manager), [ShareX](https://github.com/ShareX/ShareX) (screenshot + uploader), and [MaxLauncher](https://maxlauncher.sourceforge.io/) (keyboard-centric app launcher) — under a single modern UI built on .NET 10 and WPF.
 
 The core idea: **everything you copy or capture is part of the same searchable history**. A clipboard text entry, a screenshot, and a freshly-generated share link all live as items in one timeline — same store, same search, same browser.
+
+On top of feature parity with the upstreams, AresToys adds tools none of them ship:
+
+- **AI background removal** ("Magic eraser") — local U2NetP saliency model via ONNX Runtime with DirectML acceleration, brush-based touch-up (Add / Remove with hardness control), feather + edge offset post-processing. No upload, no API key, runs offline on any DX12 GPU.
+- **Raster-to-SVG tracer** — Illustrator-style trace panel with 12 stock presets, live WebView2 SVG preview, full parameter dock (paths / corners / noise / smoothing / pre-blur / overlap radius), and a manual palette picker that lets you sample colours directly from the source image with the on-screen eyedropper — related tones (e.g. white + light grey) collapse into the nearest pick instead of getting an arbitrary auto-quantized palette.
+- **QR codes** — generator with live preview, multiline editor, error-correction picker, PNG / SVG export; decoder via region select; right-click any clipboard text item to pre-fill the generator. Each generated QR enters the unified history like any other capture.
+- **`.sxie` + `.sxcu` round-trip** — full ShareX preset compatibility, both ways. 60+ ported image effects and the custom-uploader engine read and write ShareX's exact JSON schema, so presets move between the two apps without translation.
+- **Pipeline / workflow editor** — every capture, clipboard, and upload action is a composable chain of pipeline tasks (capture → effect preset → upload → notify → copy URL → …) the user edits, reorders, or disables in Settings. Hotkey-driven and pluggable.
 
 ## What it aims to fix
 
