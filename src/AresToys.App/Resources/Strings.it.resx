@@ -1,0 +1,846 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+
+  <!-- Italian translations. Common verbs / labels mined from ShareX's
+       Resources.it-IT.resx (GPL-3, compatible). UI-specific entries are written for AresToys
+       — the upstream keys don't map 1:1 because of the different surface. -->
+  <data name="Common_Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>Annulla</value></data>
+  <data name="Common_Save" xml:space="preserve"><value>Salva</value></data>
+  <data name="Common_Apply" xml:space="preserve"><value>Applica</value></data>
+  <data name="Common_Close" xml:space="preserve"><value>Chiudi</value></data>
+  <data name="Common_Yes" xml:space="preserve"><value>Sì</value></data>
+  <data name="Common_No" xml:space="preserve"><value>No</value></data>
+  <data name="Common_Reset" xml:space="preserve"><value>Reimposta</value></data>
+  <data name="Common_Browse" xml:space="preserve"><value>Sfoglia…</value></data>
+  <data name="Common_Add" xml:space="preserve"><value>Aggiungi</value></data>
+  <data name="Common_Remove" xml:space="preserve"><value>Rimuovi</value></data>
+  <data name="Common_Edit" xml:space="preserve"><value>Modifica</value></data>
+  <data name="Common_Delete" xml:space="preserve"><value>Elimina</value></data>
+  <data name="Common_Copy" xml:space="preserve"><value>Copia</value></data>
+  <data name="Common_Paste" xml:space="preserve"><value>Incolla</value></data>
+  <data name="Common_Open" xml:space="preserve"><value>Apri</value></data>
+  <data name="Common_Settings" xml:space="preserve"><value>Impostazioni</value></data>
+  <data name="Common_Search" xml:space="preserve"><value>Cerca…</value></data>
+  <data name="Common_Configure" xml:space="preserve"><value>Configura…</value></data>
+  <data name="Common_Duplicate" xml:space="preserve"><value>Duplica</value></data>
+  <data name="Common_ResetAll" xml:space="preserve"><value>Reimposta tutto</value></data>
+  <data name="Common_ResetToDefaults" xml:space="preserve"><value>Ripristina predefiniti</value></data>
+  <data name="Common_Import" xml:space="preserve"><value>Importa…</value></data>
+  <data name="Common_Export" xml:space="preserve"><value>Esporta…</value></data>
+  <data name="Common_OpenFolder" xml:space="preserve"><value>Apri cartella</value></data>
+  <data name="Common_ImportSxcu" xml:space="preserve"><value>Importa .sxcu…</value></data>
+
+  <data name="Tray_Capture" xml:space="preserve"><value>Cattura</value></data>
+  <data name="Tray_Upload" xml:space="preserve"><value>Carica</value></data>
+  <data name="Tray_Tools" xml:space="preserve"><value>Strumenti</value></data>
+  <data name="Tray_Fullscreen" xml:space="preserve"><value>Schermo intero</value></data>
+  <data name="Tray_Monitor" xml:space="preserve"><value>Monitor</value></data>
+  <data name="Tray_ActiveWindow" xml:space="preserve"><value>Finestra attiva</value></data>
+  <data name="Tray_Region" xml:space="preserve"><value>Regione</value></data>
+  <data name="Tray_LastRegion" xml:space="preserve"><value>Ultima regione</value></data>
+  <data name="Tray_Webpage" xml:space="preserve"><value>Pagina web…</value></data>
+  <data name="Tray_WebpageInstallRuntime" xml:space="preserve"><value>Pagina web… (installa WebView2 Runtime)</value></data>
+  <data name="Tray_ScreenRecording" xml:space="preserve"><value>Registrazione schermo</value></data>
+  <data name="Tray_ScreenRecordingGif" xml:space="preserve"><value>Registrazione schermo (GIF)</value></data>
+  <data name="Tray_ColorSampler" xml:space="preserve"><value>Campiona colore</value></data>
+  <data name="Tray_ColorPicker" xml:space="preserve"><value>Selettore colore…</value></data>
+  <data name="Tray_PinToScreen" xml:space="preserve"><value>Aggancia a schermo…</value></data>
+  <data name="Tray_QrGenerator" xml:space="preserve"><value>Generatore QR…</value></data>
+  <data name="Tray_UploadFile" xml:space="preserve"><value>Upload file…</value></data>
+  <data name="Tray_UploadFromClipboard" xml:space="preserve"><value>Upload dagli appunti</value></data>
+  <data name="Tray_OpenClipboard" xml:space="preserve"><value>Apri appunti</value></data>
+  <data name="Tray_OpenLauncher" xml:space="preserve"><value>Apri launcher</value></data>
+  <data name="Tray_ToggleIncognito" xml:space="preserve"><value>Attiva/disattiva incognito</value></data>
+  <data name="Tray_AppTheme" xml:space="preserve"><value>Tema app</value></data>
+  <data name="Tray_Hotkeys" xml:space="preserve"><value>Scorciatoie</value></data>
+  <data name="Tray_CaptureSettings" xml:space="preserve"><value>Impostazioni cattura</value></data>
+  <data name="Tray_OpenScreenshotFolder" xml:space="preserve"><value>Apri cartella screenshot</value></data>
+  <data name="Tray_AppSettings" xml:space="preserve"><value>Impostazioni app</value></data>
+  <data name="Tray_Quit" xml:space="preserve"><value>Esci</value></data>
+
+  <data name="Sidebar_HotkeysWorkflows" xml:space="preserve"><value>Scorciatoie e workflow</value></data>
+  <data name="Sidebar_Uploaders" xml:space="preserve"><value>Uploaders</value></data>
+  <data name="Sidebar_ClipboardCategories" xml:space="preserve"><value>Categorie appunti</value></data>
+  <data name="Sidebar_CaptureSettings" xml:space="preserve"><value>Impostazioni cattura</value></data>
+  <data name="Sidebar_AppSettings" xml:space="preserve"><value>Impostazioni app</value></data>
+  <data name="Sidebar_AppTheme" xml:space="preserve"><value>Tema app</value></data>
+  <data name="Sidebar_DebugConsole" xml:space="preserve"><value>Console debug</value></data>
+  <data name="Sidebar_About" xml:space="preserve"><value>Informazioni</value></data>
+
+  <data name="Settings_Language" xml:space="preserve"><value>Lingua</value></data>
+  <data name="Settings_LanguageHint" xml:space="preserve"><value>Riavvio non necessario — la maggior parte delle superfici cambia subito. Alcune (sottomenu tray già aperti) si aggiornano alla prossima interazione.</value></data>
+  <data name="Settings_LanguageSystemDefault" xml:space="preserve"><value>Predefinito di sistema</value></data>
+  <data name="Settings_LanguageRestart" xml:space="preserve"><value>Riavvia AresToys</value></data>
+
+  <data name="HotkeyCapture_ResetToDefault" xml:space="preserve"><value>Ripristina predefinito</value></data>
+  <data name="HotkeyCapture_ClearBinding" xml:space="preserve"><value>Rimuovi associazione</value></data>
+
+  <data name="Clipboard_Title" xml:space="preserve"><value>AresToys - Appunti</value></data>
+  <data name="Clipboard_SearchPlaceholder" xml:space="preserve"><value>🔍 Cerca…</value></data>
+  <data name="Clipboard_MenuPinUnpin" xml:space="preserve"><value>Spilla / rimuovi spillo</value></data>
+  <data name="Clipboard_MenuMoveTo" xml:space="preserve"><value>Sposta in</value></data>
+  <data name="Clipboard_MenuCopyTo" xml:space="preserve"><value>Copia in</value></data>
+  <data name="Clipboard_MenuGenerateQr" xml:space="preserve"><value>Genera codice QR…</value></data>
+  <data name="Clipboard_TooltipPaste" xml:space="preserve"><value>Incolla (Invio)</value></data>
+  <data name="Clipboard_TooltipPin" xml:space="preserve"><value>Spilla / rimuovi spillo (Ctrl+P)</value></data>
+  <data name="Clipboard_TooltipCopyPath" xml:space="preserve"><value>Copia path del file negli appunti</value></data>
+  <data name="Clipboard_TooltipQr" xml:space="preserve"><value>Genera codice QR…</value></data>
+  <data name="Clipboard_TooltipOpenEditor" xml:space="preserve"><value>Apri nell'editor immagini</value></data>
+  <data name="Clipboard_TooltipExtEditor" xml:space="preserve"><value>Modifica testo in editor esterno (VSCode / Notepad / …)</value></data>
+  <data name="Clipboard_TooltipShowExplorer" xml:space="preserve"><value>Mostra in Esplora risorse</value></data>
+  <data name="Clipboard_TooltipOpenUrl" xml:space="preserve"><value>Apri URL nel browser</value></data>
+  <data name="Clipboard_TooltipCaptureWebpage" xml:space="preserve"><value>Cattura pagina web (screenshot integrale dell'URL)</value></data>
+  <data name="Clipboard_TooltipDelete" xml:space="preserve"><value>Elimina (Canc)</value></data>
+  <data name="Clipboard_TooltipClearAll" xml:space="preserve"><value>Elimina tutti gli elementi non spillati (Ctrl+Maiusc+Canc)</value></data>
+  <data name="Clipboard_TooltipPinned" xml:space="preserve"><value>Attiva/disattiva modalità persistente — la finestra resta aperta dopo incolla / doppio click. Esc o Win+V chiudono comunque.</value></data>
+
+  <data name="Launcher_Title" xml:space="preserve"><value>AresToys - Launcher</value></data>
+  <data name="Launcher_DragMode" xml:space="preserve"><value>📥 Modalità trascinamento</value></data>
+  <data name="Launcher_DragModeOn" xml:space="preserve"><value>✓ Modalità trascinamento attiva</value></data>
+  <data name="Launcher_DragModeBanner" xml:space="preserve"><value>🎯 Modalità trascinamento — trascina file / cartelle / collegamenti sulle celle per associarli. Esc o clic sul toggle per uscire.</value></data>
+  <data name="Launcher_MenuOpenLocation" xml:space="preserve"><value>Apri posizione file</value></data>
+  <data name="Launcher_MenuEdit" xml:space="preserve"><value>Modifica…</value></data>
+  <data name="Launcher_MenuCopy" xml:space="preserve"><value>Copia</value></data>
+  <data name="Launcher_MenuPaste" xml:space="preserve"><value>Incolla</value></data>
+  <data name="Launcher_MenuDelete" xml:space="preserve"><value>Elimina</value></data>
+  <data name="LauncherCellEdit_Title" xml:space="preserve"><value>Modifica cella launcher</value></data>
+  <data name="LauncherCellEdit_Label" xml:space="preserve"><value>Etichetta</value></data>
+  <data name="LauncherCellEdit_Path" xml:space="preserve"><value>Percorso destinazione</value></data>
+  <data name="LauncherCellEdit_Browse" xml:space="preserve"><value>Sfoglia…</value></data>
+  <data name="LauncherCellEdit_Args" xml:space="preserve"><value>Argomenti</value></data>
+  <data name="LauncherCellEdit_RunAsAdmin" xml:space="preserve"><value>Esegui come amministratore</value></data>
+  <data name="LauncherCellEdit_WindowMode" xml:space="preserve"><value>Modalità finestra</value></data>
+  <data name="LauncherCellEdit_WindowModeNormal" xml:space="preserve"><value>Normale</value></data>
+  <data name="LauncherCellEdit_WindowModeMinimized" xml:space="preserve"><value>Minimizzata</value></data>
+  <data name="LauncherCellEdit_WindowModeMaximized" xml:space="preserve"><value>Massimizzata</value></data>
+  <data name="LauncherCellEdit_WindowModeHidden" xml:space="preserve"><value>Nascosta</value></data>
+  <data name="LauncherCellEdit_WindowTitle" xml:space="preserve"><value>Titolo finestra (opzionale)</value></data>
+  <data name="LauncherCellEdit_ProcessName" xml:space="preserve"><value>Nome processo (opzionale)</value></data>
+  <data name="LauncherCellEdit_Icon" xml:space="preserve"><value>Icona</value></data>
+  <data name="LauncherCellEdit_PickIcon" xml:space="preserve"><value>Scegli icona…</value></data>
+  <data name="LauncherCellEdit_Save" xml:space="preserve"><value>Salva</value></data>
+  <data name="LauncherCellEdit_Cancel" xml:space="preserve"><value>Annulla</value></data>
+  <data name="LauncherCellEdit_Clear" xml:space="preserve"><value>Svuota</value></data>
+  <data name="LauncherCellEdit_ClearTooltip" xml:space="preserve"><value>Svuota questa cella — rimuove l'associazione.</value></data>
+  <data name="LauncherCellEdit_LabelPlaceholder" xml:space="preserve"><value>(nome breve mostrato sulla cella)</value></data>
+  <data name="LauncherCellEdit_PathPlaceholder" xml:space="preserve"><value>exe / file / cartella / URL — qualsiasi cosa la shell sappia aprire</value></data>
+  <data name="LauncherCellEdit_PickFile" xml:space="preserve"><value>Scegli un file…</value></data>
+  <data name="LauncherCellEdit_PickFolder" xml:space="preserve"><value>Scegli una cartella…</value></data>
+  <data name="LauncherCellEdit_IconPlaceholder" xml:space="preserve"><value>(opzionale — .ico / .png / .jpg personalizzato che sovrascrive l'icona shell)</value></data>
+  <data name="LauncherCellEdit_IconIndexTooltip" xml:space="preserve"><value>Indice icona dentro un container multi-icona (.dll / .exe / .ico). 0 = prima.</value></data>
+  <data name="LauncherCellEdit_ClearIcon" xml:space="preserve"><value>Rimuove l'icona personalizzata (ripristina l'icona shell predefinita).</value></data>
+  <data name="LauncherCellEdit_ArgsPlaceholder" xml:space="preserve"><value>(argomenti command-line opzionali)</value></data>
+  <data name="LauncherCellEdit_Advanced" xml:space="preserve"><value>Avanzate</value></data>
+  <data name="LauncherCellEdit_RunAsAdminTooltip" xml:space="preserve"><value>Avvia con il verbo "runas" così Windows mostra il prompt UAC per l'elevazione. Usare con parsimonia — i processi admin possono modificare lo stato di sistema.</value></data>
+  <data name="LauncherCellEdit_WindowModeTooltip" xml:space="preserve"><value>Come appare la finestra all'avvio. La maggior parte delle app GUI rispetta Massimizzata/Minimizzata; alcune ignorano l'hint. Nascosta esegue il processo senza mostrare una finestra — utile per task headless.</value></data>
+  <data name="LauncherCellEdit_WindowTitlePlaceholder" xml:space="preserve"><value>(se una finestra con questo titolo è aperta, focalizzala invece di lanciare)</value></data>
+  <data name="LauncherCellEdit_PickWindow" xml:space="preserve"><value>Scegli tra le finestre aperte…</value></data>
+  <data name="LauncherCellEdit_ProcessNamePlaceholder" xml:space="preserve"><value>(se un processo con questo nome è in esecuzione, focalizzalo — es. notepad)</value></data>
+  <data name="LauncherCellEdit_AdvancedHint" xml:space="preserve"><value>Titolo finestra / nome processo: match per sottostringa (case-insensitive). Anche uno solo non vuoto attiva la modalità "attiva se in esecuzione" — la cella focalizza la finestra esistente invece di lanciare una nuova istanza. Lasciali entrambi vuoti per il comportamento "lancia sempre" predefinito.</value></data>
+  <data name="LauncherCellEdit_HeaderFunctionKey" xml:space="preserve"><value>Tasto funzione  {0}</value></data>
+  <data name="LauncherCellEdit_HeaderTabCell" xml:space="preserve"><value>Tab {0}  ·  Cella  {1}</value></data>
+  <data name="Launcher_TooltipSearch" xml:space="preserve"><value>Filtra le celle per etichetta o percorso. Le celle vuote e la riga F non sono influenzate; le tab senza risultati perdono il titolo.</value></data>
+  <data name="Launcher_TooltipDragMode" xml:space="preserve"><value>Attiva/disattiva modalità drag-and-drop — il launcher resta aperto e le celle accettano file / cartelle / collegamenti rilasciati.</value></data>
+  <data name="Launcher_TabRenameHint" xml:space="preserve"><value>Click destro per rinominare questa tab — rilascia un file per cambiare tab senza eseguire.</value></data>
+  <data name="Launcher_HelpHint" xml:space="preserve"><value>F1-F10 azione globale · 1-9,0 / frecce cambiano tab · QWERTY esegue cella tab · Esc chiude · click destro per modificare</value></data>
+  <data name="Launcher_LabelIcon" xml:space="preserve"><value>Icona</value></data>
+  <data name="Launcher_LabelLabel" xml:space="preserve"><value>Etichetta</value></data>
+
+  <data name="Uploaders_Blurb" xml:space="preserve"><value>Scegli quali uploader usare per ciascun tipo di contenuto. Selezioni multiple caricano lo stesso file su tutti; gli URL risultanti finiscono negli appunti, uno per riga.</value></data>
+  <data name="Hotkeys_Blurb" xml:space="preserve"><value>Clicca il nome del workflow per aprire la lista dei passaggi. Clicca la scorciatoia per impostarla / modificarla / rimuoverla.</value></data>
+  <data name="Hotkeys_StepEditorBlurb" xml:space="preserve"><value>Aggiungi azioni con il selettore sotto; trascina la maniglia ⋮⋮ per riordinare; usa il toggle per silenziare senza rimuovere; × rimuove. I passaggi tecnici vengono eseguiti automaticamente e non sono mostrati.</value></data>
+  <data name="Capture_Blurb" xml:space="preserve"><value>Predefiniti applicati alle catture lanciate dal menu tray o dalle scorciatoie. La pipeline eseguita dopo ogni cattura è configurata in Workflow.</value></data>
+  <data name="Theme_Blurb" xml:space="preserve"><value>Due colori che attraversano ovunque AresToys usi un accento: bottoni primari, toggle, bordo dell'immagine spillata, indicatori di drag-and-drop e voci selezionate nella sidebar. Modifica i valori hex per vedere il cambiamento in tempo reale.</value></data>
+  <data name="Categories_Blurb" xml:space="preserve"><value>Le categorie sono contenitori per gli elementi degli appunti. Click destro su un elemento del popup → Sposta in → … per archiviarlo. Gli elementi di categorie eliminate tornano al bucket predefinito 'Clipboard'; gli elementi spillati mantengono lo spillo.</value></data>
+  <data name="Settings_Blurb" xml:space="preserve"><value>Preferenze a livello applicazione. Cambia comportamenti che non appartengono a una pagina specifica.</value></data>
+
+  <data name="Uploaders_TabImage" xml:space="preserve"><value>Immagine</value></data>
+  <data name="Uploaders_TabFile" xml:space="preserve"><value>File</value></data>
+  <data name="Uploaders_TabText" xml:space="preserve"><value>Testo</value></data>
+  <data name="Uploaders_TabVideo" xml:space="preserve"><value>Video</value></data>
+  <data name="Uploaders_TabUrl" xml:space="preserve"><value>URL</value></data>
+  <data name="Uploaders_TabCustom" xml:space="preserve"><value>Personalizzati</value></data>
+
+  <data name="Workflow_OnClipboard" xml:space="preserve"><value>Negli appunti</value></data>
+  <data name="Workflow_RegionCapture" xml:space="preserve"><value>Cattura regione</value></data>
+  <data name="Workflow_ActiveWindowCapture" xml:space="preserve"><value>Cattura finestra attiva</value></data>
+  <data name="Workflow_ActiveMonitorCapture" xml:space="preserve"><value>Cattura monitor attivo</value></data>
+  <data name="Workflow_WebpageCapture" xml:space="preserve"><value>Cattura pagina web</value></data>
+  <data name="Workflow_ManualUpload" xml:space="preserve"><value>Upload manuale</value></data>
+  <data name="Workflow_UploadClipboardText" xml:space="preserve"><value>Upload testo dagli appunti</value></data>
+  <data name="Workflow_UploadSelectedFile" xml:space="preserve"><value>Upload file selezionato</value></data>
+  <data name="Workflow_ShortenClipboardUrl" xml:space="preserve"><value>Accorcia URL dagli appunti</value></data>
+  <data name="Workflow_ShowPopup" xml:space="preserve"><value>Mostra popup appunti</value></data>
+  <data name="Workflow_ToggleIncognito" xml:space="preserve"><value>Attiva/disattiva incognito</value></data>
+  <data name="Workflow_ColorSampler" xml:space="preserve"><value>Campiona colore</value></data>
+  <data name="Workflow_ColorPicker" xml:space="preserve"><value>Selettore colore</value></data>
+  <data name="Workflow_RecordScreenMp4" xml:space="preserve"><value>Registrazione schermo (mp4)</value></data>
+  <data name="Workflow_RecordScreenGif" xml:space="preserve"><value>Registrazione schermo (gif)</value></data>
+  <data name="Workflow_OpenScreenshotFolder" xml:space="preserve"><value>Apri cartella screenshot</value></data>
+  <data name="Workflow_QrReadFromRegion" xml:space="preserve"><value>QR — leggi da regione schermo</value></data>
+  <data name="Workflow_OpenLauncher" xml:space="preserve"><value>Apri launcher</value></data>
+  <data name="Workflow_OpenSettings" xml:space="preserve"><value>Apri impostazioni</value></data>
+  <data name="Workflow_SaveQrToHistory" xml:space="preserve"><value>Salva QR in cronologia</value></data>
+
+  <data name="WorkflowCategory_Capture" xml:space="preserve"><value>Cattura</value></data>
+  <data name="WorkflowCategory_Upload" xml:space="preserve"><value>Upload</value></data>
+  <data name="WorkflowCategory_Clipboard" xml:space="preserve"><value>Appunti</value></data>
+  <data name="WorkflowCategory_Tools" xml:space="preserve"><value>Strumenti</value></data>
+  <data name="WorkflowCategory_Other" xml:space="preserve"><value>Altro</value></data>
+
+  <data name="Settings_StartWithWindows" xml:space="preserve"><value>Avvia AresToys all'accensione di Windows</value></data>
+  <data name="Settings_StartWithWindowsTooltip" xml:space="preserve"><value>Aggiunge (o rimuove) AresToys dalla lista di avvio utente di Windows. Non servono permessi di amministratore.</value></data>
+  <data name="QrGenerator_Title" xml:space="preserve"><value>AresToys - Generatore QR</value></data>
+  <data name="QrGenerator_Content" xml:space="preserve"><value>Contenuto</value></data>
+  <data name="QrGenerator_PlaceholderInput" xml:space="preserve"><value>Incolla un URL, testo, vCard, credenziali Wi-Fi, …</value></data>
+  <data name="QrGenerator_CharactersFormat" xml:space="preserve"><value>{0} caratteri</value></data>
+  <data name="QrGenerator_Preview" xml:space="preserve"><value>Anteprima</value></data>
+  <data name="QrGenerator_ErrorCorrection" xml:space="preserve"><value>Correzione errori</value></data>
+  <data name="QrGenerator_EccL" xml:space="preserve"><value>L — recupera ~7%</value></data>
+  <data name="QrGenerator_EccM" xml:space="preserve"><value>M — recupera ~15%</value></data>
+  <data name="QrGenerator_EccQ" xml:space="preserve"><value>Q — recupera ~25%</value></data>
+  <data name="QrGenerator_EccH" xml:space="preserve"><value>H — recupera ~30%</value></data>
+  <data name="QrGenerator_ModuleSize" xml:space="preserve"><value>Dimensione modulo</value></data>
+  <data name="QrGenerator_PixelsFormat" xml:space="preserve"><value>{0} px</value></data>
+  <data name="QrGenerator_CopyImage" xml:space="preserve"><value>Copia immagine</value></data>
+  <data name="QrGenerator_SaveToHistory" xml:space="preserve"><value>Salva in cronologia</value></data>
+  <data name="QrGenerator_SavePng" xml:space="preserve"><value>Salva PNG…</value></data>
+  <data name="QrGenerator_SaveSvg" xml:space="preserve"><value>Salva SVG…</value></data>
+  <data name="QrGenerator_Close" xml:space="preserve"><value>Chiudi</value></data>
+  <data name="QrGenerator_TooltipCopyImage" xml:space="preserve"><value>Copia il PNG del QR negli appunti di Windows</value></data>
+  <data name="QrGenerator_TooltipSaveHistory" xml:space="preserve"><value>Salva il PNG del QR nella cartella screenshot + lo inserisce nella cronologia clipboard (stesso flusso delle catture)</value></data>
+  <data name="QrGenerator_TooltipSaveSvg" xml:space="preserve"><value>Salva come vettore scalabile — resta nitido a qualsiasi dimensione</value></data>
+  <data name="QrGenerator_StatusFail" xml:space="preserve"><value>Impossibile generare QR (il testo potrebbe essere troppo lungo per questo livello ECC).</value></data>
+  <data name="QrGenerator_StatusRenderFailCopy" xml:space="preserve"><value>Render fallito — niente copiato.</value></data>
+  <data name="QrGenerator_StatusCopied" xml:space="preserve"><value>Copiato negli appunti.</value></data>
+  <data name="QrGenerator_StatusCopyFail" xml:space="preserve"><value>Copia negli appunti fallita: {0}</value></data>
+  <data name="QrGenerator_StatusRenderFailSave" xml:space="preserve"><value>Render fallito — niente salvato.</value></data>
+  <data name="QrGenerator_StatusSaved" xml:space="preserve"><value>Salvato: {0}</value></data>
+  <data name="QrGenerator_StatusSaveFail" xml:space="preserve"><value>Salvataggio fallito: {0}</value></data>
+  <data name="QrGenerator_StatusSavedHistory" xml:space="preserve"><value>Salvato in cronologia.</value></data>
+  <data name="QrGenerator_StatusHistoryFail" xml:space="preserve"><value>Salvataggio in cronologia fallito: {0}</value></data>
+  <data name="QrGenerator_SavePngTitle" xml:space="preserve"><value>Salva QR come PNG</value></data>
+  <data name="QrGenerator_SaveSvgTitle" xml:space="preserve"><value>Salva QR come SVG</value></data>
+  <data name="QrGenerator_FilterPng" xml:space="preserve"><value>Immagine PNG|*.png|Tutti i file|*.*</value></data>
+  <data name="QrGenerator_FilterSvg" xml:space="preserve"><value>Immagine SVG|*.svg|Tutti i file|*.*</value></data>
+  <data name="Toast_OpenUrl" xml:space="preserve"><value>Apri URL</value></data>
+  <data name="Toast_CopyUrl" xml:space="preserve"><value>Copia URL</value></data>
+  <data name="Toast_CopyPathToClipboard" xml:space="preserve"><value>Copia path negli appunti</value></data>
+  <data name="Toast_OpenInEditor" xml:space="preserve"><value>Apri nell'editor</value></data>
+  <data name="Toast_ShowInFolder" xml:space="preserve"><value>Mostra in cartella</value></data>
+  <data name="Settings_StartMinimized" xml:space="preserve"><value>Avvia minimizzato</value></data>
+  <data name="Settings_StartMinimizedTooltip" xml:space="preserve"><value>All'avvio salta la finestra principale e resta nella tray. Clicca l'icona tray per aprire le Impostazioni quando serve.</value></data>
+  <data name="Settings_EditorStartMaximized" xml:space="preserve"><value>Avvia editor a schermo intero</value></data>
+  <data name="Settings_EditorStartMaximizedTooltip" xml:space="preserve"><value>Apre l'editor massimizzato sul monitor attivo quando viene lanciato fuori da un workflow (clic su toast, history). Le task di workflow hanno il proprio toggle fullscreen che ha la precedenza su questo.</value></data>
+  <data name="Settings_TrayClicksTitle" xml:space="preserve"><value>Click sull'icona tray</value></data>
+  <data name="Settings_TrayClicksHint" xml:space="preserve"><value>Scegli cosa deve fare ogni click sull'icona tray. Il click destro apre sempre il menu.</value></data>
+  <data name="Settings_TrayLeftClick" xml:space="preserve"><value>Click sinistro</value></data>
+  <data name="Settings_TrayDoubleClick" xml:space="preserve"><value>Doppio click</value></data>
+  <data name="Settings_TrayMiddleClick" xml:space="preserve"><value>Click centrale</value></data>
+  <data name="Settings_TrayDoNothing" xml:space="preserve"><value>(nessuna azione)</value></data>
+  <data name="Settings_ImageEffectsTitle" xml:space="preserve"><value>Effetti immagine</value></data>
+  <data name="Settings_ImageEffectsHint" xml:space="preserve"><value>Definisci catene di regolazioni, filtri e disegni (compatibili ShareX). Apri l'editor per aggiungere effetti a un preset e visualizzare l'anteprima su un'immagine campione. Importa direttamente i preset .sxie di ShareX.</value></data>
+  <data name="Settings_ImageEffectsOpen" xml:space="preserve"><value>Apri editor effetti immagine…</value></data>
+  <data name="Settings_SxieAssociation" xml:space="preserve"><value>Imposta AresToys come app predefinita per i file .sxie</value></data>
+  <data name="Settings_SxieAssociationHint" xml:space="preserve"><value>Quando attivo, il doppio click su un file .sxie in Esplora apre l'editor effetti immagine con il preset già importato — stesso flusso di ShareX. Solo per utente — non modifica impostazioni di sistema né richiede permessi di amministratore.</value></data>
+  <data name="Settings_BackupTitle" xml:space="preserve"><value>Backup e ripristino</value></data>
+  <data name="Settings_BackupHint" xml:space="preserve"><value>Esporta ogni impostazione AresToys non sensibile (tema, scorciatoie, celle launcher, passaggi workflow, predefiniti cattura, selezione plugin) in un singolo file JSON sincronizzabile tra macchine. I valori sensibili (token OAuth, credenziali) non sono inclusi — sarebbero comunque inutilizzabili su un'altra macchina.</value></data>
+
+  <data name="Hotkeys_WorkflowName" xml:space="preserve"><value>Nome workflow</value></data>
+  <data name="Hotkeys_Hotkey" xml:space="preserve"><value>Scorciatoia</value></data>
+  <data name="Hotkeys_BackToList" xml:space="preserve"><value>Torna alla lista delle scorciatoie</value></data>
+  <data name="Hotkeys_DuplicateTooltip" xml:space="preserve"><value>Clona questo workflow in una nuova copia modificabile</value></data>
+  <data name="Hotkeys_RemoveTooltip" xml:space="preserve"><value>Elimina questo workflow (i predefiniti non possono essere eliminati)</value></data>
+  <data name="Hotkeys_ResetTooltip" xml:space="preserve"><value>Ripristina i passaggi e la scorciatoia originali di questo workflow predefinito.</value></data>
+
+  <data name="Categories_NewNamePlaceholder" xml:space="preserve"><value>Nome (es. Code)</value></data>
+
+  <data name="Capture_SaveFolder" xml:space="preserve"><value>Cartella di salvataggio</value></data>
+  <data name="Capture_SubFolderPattern" xml:space="preserve"><value>Pattern sottocartella (opzionale)</value></data>
+  <data name="Capture_SubFolderPlaceholder" xml:space="preserve"><value>es. %y-%mo  →  sottocartella 2026-04 sotto la cartella di salvataggio</value></data>
+  <data name="Capture_SubFolderHint" xml:space="preserve"><value>Token: %y / %yy anno a 4 / 2 cifre, %mo mese (01–12), %mon nome mese, %d giorno, %h ora, %mi minuto, %s secondo, %pm AM/PM. Lascia vuoto per nessuna sottocartella.</value></data>
+  <data name="Capture_DelaySeconds" xml:space="preserve"><value>Ritardo screenshot (secondi)</value></data>
+  <data name="Capture_ImageFormat" xml:space="preserve"><value>Formato immagine</value></data>
+  <data name="Capture_JpegQuality" xml:space="preserve"><value>Qualità JPEG</value></data>
+  <data name="Capture_AutoJpeg" xml:space="preserve"><value>Passa automaticamente a JPEG quando l'output supera la soglia</value></data>
+  <data name="Capture_ThresholdKb" xml:space="preserve"><value>Soglia (KB)</value></data>
+  <data name="Capture_AutoJpegHint" xml:space="preserve"><value>Attivo solo quando il formato è PNG. Il contenuto fotografico (gradienti, frame video) si comprime in modo molto più efficiente come JPEG; gli screenshot grandi vengono convertiti automaticamente senza che tu te ne accorga.</value></data>
+  <data name="Capture_ExternalEditor" xml:space="preserve"><value>Editor di testo esterno</value></data>
+  <data name="Capture_ExternalEditorPlaceholder" xml:space="preserve"><value>(vuoto = predefinito Windows per .txt — es. notepad)</value></data>
+  <data name="Capture_ExternalEditorHint" xml:space="preserve"><value>Usato dal pulsante Modifica del popup appunti sulle righe di testo. Esempi: code (VSCode), code.cmd, notepad++.exe, notepad. Le modifiche vengono sincronizzate automaticamente quando salvi il file.</value></data>
+
+  <data name="Theme_PresetPicker" xml:space="preserve"><value>Preset</value></data>
+  <data name="Theme_ForegroundLight" xml:space="preserve"><value>Primo piano chiaro</value></data>
+  <data name="Theme_ForegroundDark" xml:space="preserve"><value>Primo piano scuro</value></data>
+  <data name="Theme_AccentBackgroundLight" xml:space="preserve"><value>Sfondo accento chiaro</value></data>
+  <data name="Theme_AccentBackgroundDark" xml:space="preserve"><value>Sfondo accento scuro</value></data>
+  <data name="Theme_AccentDanger" xml:space="preserve"><value>Accento pericolo</value></data>
+  <data name="Theme_Surface1" xml:space="preserve"><value>Superficie 1 (più scura)</value></data>
+  <data name="Theme_Surface2" xml:space="preserve"><value>Superficie 2 (media)</value></data>
+  <data name="Theme_Surface3" xml:space="preserve"><value>Superficie 3 (più chiara)</value></data>
+  <data name="Theme_SurfacesHint" xml:space="preserve"><value>Superficie 1 → campi di input e righe di lista. Superficie 2 → corpo della finestra principale. Superficie 3 → pannelli in primo piano e maniglie di drag.</value></data>
+  <data name="Theme_TooltipSwatch" xml:space="preserve"><value>Click per aprire il selettore colore</value></data>
+  <data name="Theme_ForegroundLightHint" xml:space="preserve"><value>Colore di testo / icone disegnato sopra lo sfondo accento — scegli un valore con contrasto sufficiente (es. bianco su accento scuro, quasi-nero su accento chiaro).</value></data>
+  <data name="Theme_ForegroundDarkHint" xml:space="preserve"><value>Colore del sottotesto — didascalie, età / tipo / sorgente nelle righe degli appunti, descrizioni in questa pagina. Modificalo per ammorbidire o intensificare il testo secondario in tutta l'app.</value></data>
+  <data name="Theme_AccentBackgroundDarkHint" xml:space="preserve"><value>Usato dall'overlay launcher (sfondo celle, header tab inattive). Scegli una tonalità a bassa luminosità così l'accento principale risalta sopra di essa.</value></data>
+  <data name="Theme_AccentDangerHint" xml:space="preserve"><value>Colora i pulsanti di cestino / eliminazione in tutta l'app (toolbar appunti, rimozione categorie, 'Pulisci tutto'). Scegli una tonalità che contrasti bene col tuo colore accento.</value></data>
+
+  <data name="Debug_CopyAll" xml:space="preserve"><value>Copia tutto</value></data>
+  <data name="Debug_CopyAllTooltip" xml:space="preserve"><value>Copia il log visibile negli appunti per incollarlo in una segnalazione bug</value></data>
+  <data name="Debug_Clear" xml:space="preserve"><value>Pulisci</value></data>
+  <data name="Debug_ClearTooltip" xml:space="preserve"><value>Rimuovi ogni voce nel buffer</value></data>
+  <data name="Debug_AutoScroll" xml:space="preserve"><value>Scroll automatico all'ultima voce</value></data>
+  <data name="Debug_AutoScrollTooltip" xml:space="preserve"><value>Blocca la vista sull'ultima voce. Deselezionalo mentre scorri verso l'alto per leggere le righe precedenti.</value></data>
+
+  <data name="About_Tagline" xml:space="preserve"><value>Gestore appunti · strumento screenshot e condivisione</value></data>
+  <data name="About_Version" xml:space="preserve"><value>Versione </value></data>
+  <data name="About_InspiredBy" xml:space="preserve"><value>Ispirato da</value></data>
+  <data name="About_CheckForUpdates" xml:space="preserve"><value>Cerca aggiornamenti</value></data>
+
+  <data name="ThemePreset_Custom" xml:space="preserve"><value>Personalizzato (valori attuali)</value></data>
+  <data name="ThemePreset_Default" xml:space="preserve"><value>Predefinito AresToys</value></data>
+  <data name="ThemePreset_WizardBlue" xml:space="preserve"><value>Blu Mago</value></data>
+  <data name="ThemePreset_SorcererPurple" xml:space="preserve"><value>Viola Stregone</value></data>
+  <data name="ThemePreset_DruidGreen" xml:space="preserve"><value>Verde Druido</value></data>
+  <data name="ThemePreset_WarlockRed" xml:space="preserve"><value>Rosso Warlock</value></data>
+  <data name="ThemePreset_ClericGold" xml:space="preserve"><value>Oro Chierico</value></data>
+  <data name="ThemePreset_BardRouge" xml:space="preserve"><value>Rosa Bardo</value></data>
+  <data name="ThemePreset_BurnMyEyes" xml:space="preserve"><value>Accecami</value></data>
+
+  <data name="Categories_AddNew" xml:space="preserve"><value>Aggiungi una nuova categoria</value></data>
+  <data name="Hotkeys_AddCustomWorkflow" xml:space="preserve"><value>+ Aggiungi workflow personalizzato</value></data>
+  <data name="Hotkeys_AddStep" xml:space="preserve"><value>+ Aggiungi azione</value></data>
+  <data name="Hotkeys_NoCustomYet" xml:space="preserve"><value>(nessuno ancora — clicca + Aggiungi workflow personalizzato qui sotto per crearne uno)</value></data>
+
+  <data name="ColorPicker_Title" xml:space="preserve"><value>AresToys - Selettore colore</value></data>
+  <data name="ColorPicker_Recent" xml:space="preserve"><value>Recenti</value></data>
+  <data name="ColorPicker_Sampler" xml:space="preserve"><value>Campiona</value></data>
+  <data name="ColorPicker_Wheel" xml:space="preserve"><value>Ruota</value></data>
+  <data name="ColorPicker_Square" xml:space="preserve"><value>Quadrato</value></data>
+  <data name="ColorPicker_CopyAll" xml:space="preserve"><value>Copia tutto</value></data>
+  <data name="ColorPicker_CopyRgb" xml:space="preserve"><value>Copia RGB</value></data>
+  <data name="ColorPicker_CopyCmyk" xml:space="preserve"><value>Copia CMYK</value></data>
+  <data name="ColorPicker_CopyHsb" xml:space="preserve"><value>Copia HSB</value></data>
+  <data name="ColorPicker_CopyLinear" xml:space="preserve"><value>Copia Linear</value></data>
+  <data name="ColorPicker_CopyBgra" xml:space="preserve"><value>Copia BGRA</value></data>
+  <data name="ColorPicker_CopyHex" xml:space="preserve"><value>📋 HEX</value></data>
+  <data name="ColorPicker_CopyDec" xml:space="preserve"><value>📋 DEC</value></data>
+
+  <data name="ImageEffects_Title" xml:space="preserve"><value>AresToys - Effetti Immagine</value></data>
+  <data name="ImageEffects_Presets" xml:space="preserve"><value>Preset</value></data>
+  <data name="ImageEffects_TooltipNewPreset" xml:space="preserve"><value>Nuovo preset</value></data>
+  <data name="ImageEffects_TooltipDeletePreset" xml:space="preserve"><value>Elimina preset</value></data>
+  <data name="ImageEffects_TooltipDuplicate" xml:space="preserve"><value>Duplica</value></data>
+  <data name="ImageEffects_TooltipRename" xml:space="preserve"><value>Rinomina (F2)</value></data>
+  <data name="ImageEffects_TooltipGetEffects" xml:space="preserve"><value>Scarica effetti (apre il browser)</value></data>
+  <data name="ImageEffects_TooltipImport" xml:space="preserve"><value>Importa preset .sxie o .json</value></data>
+  <data name="ImageEffects_EffectsInPreset" xml:space="preserve"><value>Effetti nel preset</value></data>
+  <data name="ImageEffects_TooltipAddEffect" xml:space="preserve"><value>Aggiungi un nuovo effetto</value></data>
+  <data name="ImageEffects_TooltipMoveUp" xml:space="preserve"><value>Sposta su — l'ordine conta: ogni effetto viene applicato all'output del precedente.</value></data>
+  <data name="ImageEffects_TooltipMoveDown" xml:space="preserve"><value>Sposta giù</value></data>
+  <data name="ImageEffects_TooltipRemoveEffect" xml:space="preserve"><value>Rimuovi effetto selezionato</value></data>
+  <data name="ImageEffects_TooltipRemoveAll" xml:space="preserve"><value>Rimuovi tutto</value></data>
+  <data name="ImageEffects_Sides" xml:space="preserve"><value>Lati</value></data>
+  <data name="ImageEffects_SideTop" xml:space="preserve"><value>Alto</value></data>
+  <data name="ImageEffects_SideLeft" xml:space="preserve"><value>Sinistra</value></data>
+  <data name="ImageEffects_SideRight" xml:space="preserve"><value>Destra</value></data>
+  <data name="ImageEffects_SideBottom" xml:space="preserve"><value>Basso</value></data>
+  <data name="ImageEffects_TooltipPickColor" xml:space="preserve"><value>Click per cambiare colore</value></data>
+  <data name="ImageEffects_TooltipEditGradient" xml:space="preserve"><value>Click per modificare il gradiente</value></data>
+  <data name="ImageEffects_UseGradient" xml:space="preserve"><value>Usa gradiente</value></data>
+  <data name="ImageEffects_Uniform" xml:space="preserve"><value>Uniforme</value></data>
+  <data name="ImageEffects_TooltipUniform" xml:space="preserve"><value>Quando attivo, modificando un lato si aggiornano tutti e quattro</value></data>
+  <data name="ImageEffects_TooltipPickImage" xml:space="preserve"><value>Scegli un file immagine…</value></data>
+  <data name="ImageEffects_TooltipBold" xml:space="preserve"><value>Grassetto</value></data>
+  <data name="ImageEffects_TooltipItalic" xml:space="preserve"><value>Corsivo</value></data>
+  <data name="ImageEffects_Preview" xml:space="preserve"><value>Anteprima</value></data>
+  <data name="ImageEffects_LiveUpdate" xml:space="preserve"><value>Aggiornamento live</value></data>
+  <data name="ImageEffects_TooltipLiveUpdate" xml:space="preserve"><value>Ricalcola l'anteprima durante il drag dello slider (~30 fps) invece di aspettare il rilascio.</value></data>
+  <data name="ImageEffects_LoadImage" xml:space="preserve"><value>Carica immagine…</value></data>
+  <data name="ImageEffects_TooltipLoadImage" xml:space="preserve"><value>Sostituisci l'immagine campione</value></data>
+  <data name="ImageEffects_ResetSample" xml:space="preserve"><value>Ripristina campione</value></data>
+  <data name="ImageEffects_ExportPreset" xml:space="preserve"><value>Esporta preset…</value></data>
+  <data name="ImageEffects_ApplyToEditor" xml:space="preserve"><value>Applica all'editor</value></data>
+  <data name="ImageEffects_TooltipApplyToEditor" xml:space="preserve"><value>Renderizza il preset corrente sull'immagine dell'editor e la invia come nuova canvas (annullabile).</value></data>
+  <data name="ImageEffects_OverridePreset" xml:space="preserve"><value>Sovrascrivi preset</value></data>
+  <data name="ImageEffects_TooltipOverridePreset" xml:space="preserve"><value>Salva le modifiche correnti di slider / parametri nel preset. Di default in modalità editor le modifiche sono one-shot — toccano solo questo screenshot senza modificare il preset salvato.</value></data>
+  <data name="ImageEffects_StatusOverrideSaved" xml:space="preserve"><value>Preset "{0}" salvato.</value></data>
+  <data name="Update_StatusNotInstalled" xml:space="preserve"><value>Gli aggiornamenti funzionano solo da una copia installata (build corrente è dev / portable estratta).</value></data>
+  <data name="Update_StatusLatest" xml:space="preserve"><value>Sei già all'ultima versione.</value></data>
+  <data name="Update_StatusFoundFormat" xml:space="preserve"><value>Versione {0} disponibile — apro la conferma…</value></data>
+  <data name="Update_StatusFailedFormat" xml:space="preserve"><value>Controllo fallito: {0}</value></data>
+  <data name="Update_StatusUnknown" xml:space="preserve"><value>Risultato sconosciuto.</value></data>
+
+  <data name="EffectCategory_Adjustments" xml:space="preserve"><value>Regolazioni</value></data>
+  <data name="EffectCategory_Filters" xml:space="preserve"><value>Filtri</value></data>
+  <data name="EffectCategory_Manipulations" xml:space="preserve"><value>Manipolazioni</value></data>
+  <data name="EffectCategory_Drawings" xml:space="preserve"><value>Disegni</value></data>
+
+  <data name="Effect_alpha" xml:space="preserve"><value>Alfa</value></data>
+  <data name="Effect_auto_contrast" xml:space="preserve"><value>Contrasto automatico</value></data>
+  <data name="Effect_black_and_white" xml:space="preserve"><value>Bianco e nero</value></data>
+  <data name="Effect_brightness" xml:space="preserve"><value>Luminosità</value></data>
+  <data name="Effect_channel_swap" xml:space="preserve"><value>Scambio canali</value></data>
+  <data name="Effect_clarity" xml:space="preserve"><value>Nitidezza</value></data>
+  <data name="Effect_color_balance" xml:space="preserve"><value>Bilanciamento colore</value></data>
+  <data name="Effect_color_matrix" xml:space="preserve"><value>Matrice colore</value></data>
+  <data name="Effect_colorize" xml:space="preserve"><value>Colora</value></data>
+  <data name="Effect_contrast" xml:space="preserve"><value>Contrasto</value></data>
+  <data name="Effect_cross_process" xml:space="preserve"><value>Cross process</value></data>
+  <data name="Effect_dehaze" xml:space="preserve"><value>Rimuovi foschia</value></data>
+  <data name="Effect_duotone_gradient_map" xml:space="preserve"><value>Bicromia</value></data>
+  <data name="Effect_exposure" xml:space="preserve"><value>Esposizione</value></data>
+  <data name="Effect_film_emulation" xml:space="preserve"><value>Emulazione pellicola</value></data>
+  <data name="Effect_gamma" xml:space="preserve"><value>Gamma</value></data>
+  <data name="Effect_grayscale" xml:space="preserve"><value>Scala di grigi</value></data>
+  <data name="Effect_hue" xml:space="preserve"><value>Tonalità</value></data>
+  <data name="Effect_invert" xml:space="preserve"><value>Inverti</value></data>
+  <data name="Effect_levels" xml:space="preserve"><value>Livelli</value></data>
+  <data name="Effect_lomo" xml:space="preserve"><value>Lomo</value></data>
+  <data name="Effect_polaroid" xml:space="preserve"><value>Polaroid</value></data>
+  <data name="Effect_posterize" xml:space="preserve"><value>Posterizza</value></data>
+  <data name="Effect_replace_color" xml:space="preserve"><value>Sostituisci colore</value></data>
+  <data name="Effect_saturation" xml:space="preserve"><value>Saturazione</value></data>
+  <data name="Effect_sepia" xml:space="preserve"><value>Seppia</value></data>
+  <data name="Effect_shadows_highlights" xml:space="preserve"><value>Ombre / luci</value></data>
+  <data name="Effect_solarize" xml:space="preserve"><value>Solarizza</value></data>
+  <data name="Effect_split_toning" xml:space="preserve"><value>Tonalità divisa</value></data>
+  <data name="Effect_temperature_tint" xml:space="preserve"><value>Temperatura / Tinta</value></data>
+  <data name="Effect_threshold" xml:space="preserve"><value>Soglia</value></data>
+  <data name="Effect_vibrance" xml:space="preserve"><value>Vivacità</value></data>
+  <data name="Effect_draw_background" xml:space="preserve"><value>Sfondo</value></data>
+  <data name="Effect_draw_border" xml:space="preserve"><value>Bordo</value></data>
+  <data name="Effect_draw_checkerboard" xml:space="preserve"><value>Scacchiera</value></data>
+  <data name="Effect_draw_image" xml:space="preserve"><value>Immagine</value></data>
+  <data name="Effect_draw_particles" xml:space="preserve"><value>Particelle</value></data>
+  <data name="Effect_draw_text_ex" xml:space="preserve"><value>Testo</value></data>
+  <data name="Effect_draw_text" xml:space="preserve"><value>Filigrana di testo</value></data>
+  <data name="Effect_gradient_overlay" xml:space="preserve"><value>Sovrapposizione gradiente</value></data>
+  <data name="Effect_add_noise" xml:space="preserve"><value>Aggiungi rumore</value></data>
+  <data name="Effect_blur" xml:space="preserve"><value>Sfocatura</value></data>
+  <data name="Effect_color_halftone" xml:space="preserve"><value>Mezzitoni colore</value></data>
+  <data name="Effect_edge_detect" xml:space="preserve"><value>Rileva bordi</value></data>
+  <data name="Effect_emboss" xml:space="preserve"><value>Rilievo</value></data>
+  <data name="Effect_glow" xml:space="preserve"><value>Bagliore</value></data>
+  <data name="Effect_motion_blur" xml:space="preserve"><value>Sfocatura movimento</value></data>
+  <data name="Effect_pixelate" xml:space="preserve"><value>Pixel</value></data>
+  <data name="Effect_sharpen" xml:space="preserve"><value>Nitidezza</value></data>
+  <data name="Effect_torn_edge" xml:space="preserve"><value>Bordo strappato</value></data>
+  <data name="Effect_vignette" xml:space="preserve"><value>Vignettatura</value></data>
+  <data name="Effect_auto_crop" xml:space="preserve"><value>Ritaglio automatico</value></data>
+  <data name="Effect_canvas" xml:space="preserve"><value>Tela</value></data>
+  <data name="Effect_crop" xml:space="preserve"><value>Ritaglia</value></data>
+  <data name="Effect_flip_horizontal" xml:space="preserve"><value>Capovolgi orizzontalmente</value></data>
+  <data name="Effect_flip_vertical" xml:space="preserve"><value>Capovolgi verticalmente</value></data>
+  <data name="Effect_rotate_90_cw" xml:space="preserve"><value>Ruota 90° orario</value></data>
+  <data name="Effect_rotate_90_ccw" xml:space="preserve"><value>Ruota 90° antiorario</value></data>
+  <data name="Effect_rotate_180" xml:space="preserve"><value>Ruota 180°</value></data>
+  <data name="Effect_resize" xml:space="preserve"><value>Ridimensiona</value></data>
+  <data name="Effect_rotate" xml:space="preserve"><value>Ruota</value></data>
+  <data name="Effect_rounded_corners" xml:space="preserve"><value>Angoli arrotondati</value></data>
+  <data name="Effect_shadow" xml:space="preserve"><value>Ombra</value></data>
+  <data name="Effect_skew" xml:space="preserve"><value>Inclina</value></data>
+
+  <data name="Param_Amount" xml:space="preserve"><value>Quantità</value></data>
+  <data name="Param_Strength" xml:space="preserve"><value>Intensità</value></data>
+  <data name="Param_Size" xml:space="preserve"><value>Dimensione</value></data>
+  <data name="Param_Opacity" xml:space="preserve"><value>Opacità</value></data>
+  <data name="Param_Angle" xml:space="preserve"><value>Angolo</value></data>
+  <data name="Param_Threshold" xml:space="preserve"><value>Soglia</value></data>
+  <data name="Param_Width" xml:space="preserve"><value>Larghezza</value></data>
+  <data name="Param_Height" xml:space="preserve"><value>Altezza</value></data>
+  <data name="Param_Color" xml:space="preserve"><value>Colore</value></data>
+  <data name="Param_Padding" xml:space="preserve"><value>Margine</value></data>
+  <data name="Param_OffsetX" xml:space="preserve"><value>Offset X</value></data>
+  <data name="Param_OffsetY" xml:space="preserve"><value>Offset Y</value></data>
+  <data name="Param_CornerRadius" xml:space="preserve"><value>Raggio angoli</value></data>
+  <data name="Param_Radius" xml:space="preserve"><value>Raggio</value></data>
+  <data name="Param_Quality" xml:space="preserve"><value>Qualità</value></data>
+  <data name="Param_Vertical" xml:space="preserve"><value>Verticale</value></data>
+  <data name="Param_Horizontal" xml:space="preserve"><value>Orizzontale</value></data>
+
+  <data name="Clipboard_ClearAll" xml:space="preserve"><value>Pulisci tutto</value></data>
+  <data name="Clipboard_FilterImageTitle" xml:space="preserve"><value>Filtro immagini</value></data>
+  <data name="Clipboard_FilterTextTitle" xml:space="preserve"><value>Filtro testo</value></data>
+  <data name="Clipboard_FilterIncludes" xml:space="preserve"><value>Quando attivo, la lista include:</value></data>
+  <data name="Clipboard_FilterClickToHide" xml:space="preserve"><value>Click per nasconderli tutti.</value></data>
+  <data name="Clipboard_FilterImageBullet1" xml:space="preserve"><value>• Immagini (PNG, JPEG, BMP, GIF, screenshot)</value></data>
+  <data name="Clipboard_FilterImageBullet2" xml:space="preserve"><value>• Copie di file (Esplora Ctrl+C / drag-drop, .sxie ecc.)</value></data>
+  <data name="Clipboard_FilterImageBullet3" xml:space="preserve"><value>• Registrazioni video / GIF (.mp4, .gif)</value></data>
+  <data name="Clipboard_FilterTextBullet1" xml:space="preserve"><value>• Testo semplice (tutto ciò che copi come testo)</value></data>
+  <data name="Clipboard_FilterTextBullet2" xml:space="preserve"><value>• HTML (Copia link / Copia indirizzo immagine dei browser)</value></data>
+  <data name="Clipboard_FilterTextBullet3" xml:space="preserve"><value>• RTF (testo formattato da Word / Outlook / ecc.)</value></data>
+  <data name="Clipboard_PinnedMode" xml:space="preserve"><value>📌 Modalità persistente</value></data>
+  <data name="Clipboard_PinnedOn" xml:space="preserve"><value>✓ Modalità persistente attiva</value></data>
+  <data name="Clipboard_FooterHint" xml:space="preserve"><value>↑↓ naviga · 1-9 focus · Invio incolla · Ctrl+1-9 incolla rapido · ←→ cambia categoria · Ctrl+F cerca · Ctrl+P spilla · Ctrl+Maiusc+Canc pulisci tutto · Esc chiudi</value></data>
+  <data name="Clipboard_DefaultCategory" xml:space="preserve"><value>Appunti</value></data>
+
+  <data name="ImageEffects_PropertiesHeader" xml:space="preserve"><value>Proprietà — {0}</value></data>
+  <data name="ImageEffects_PropertiesEmpty" xml:space="preserve"><value>Proprietà — (nessuna selezione)</value></data>
+  <data name="ImageEffects_StatusRendered" xml:space="preserve"><value>Anteprima renderizzata ({0}×{1}, {2} effetto/i)</value></data>
+  <data name="ImageEffects_StatusRenameOk" xml:space="preserve"><value>Rinominato in '{0}'.</value></data>
+  <data name="ImageEffects_StatusLoadFail" xml:space="preserve"><value>Caricamento preset fallito: {0}</value></data>
+  <data name="ImageEffects_StatusSaveFail" xml:space="preserve"><value>Salvataggio fallito: {0}</value></data>
+  <data name="ImageEffects_StatusImported" xml:space="preserve"><value>Importati {0} effetto/i da {1}</value></data>
+  <data name="ImageEffects_StatusImportFail" xml:space="preserve"><value>Importazione fallita: {0}</value></data>
+  <data name="ImageEffects_StatusExported" xml:space="preserve"><value>Esportato '{0}' in {1}</value></data>
+  <data name="ImageEffects_StatusExportFail" xml:space="preserve"><value>Esportazione fallita: {0}</value></data>
+  <data name="ImageEffects_StatusDecodeFail" xml:space="preserve"><value>Impossibile decodificare l'immagine.</value></data>
+  <data name="ImageEffects_StatusLoadedSample" xml:space="preserve"><value>Caricato {0} come sorgente di anteprima.</value></data>
+  <data name="ImageEffects_StatusLoadFailSample" xml:space="preserve"><value>Caricamento fallito: {0}</value></data>
+  <data name="ImageEffects_StatusSampleReset" xml:space="preserve"><value>Immagine campione ripristinata.</value></data>
+  <data name="ImageEffects_StatusRenderFail" xml:space="preserve"><value>Rendering fallito: {0}</value></data>
+
+  <data name="Param_Type" xml:space="preserve"><value>Tipo</value></data>
+  <data name="Param_DashStyle" xml:space="preserve"><value>Stile tratteggio</value></data>
+  <data name="Param_SizeMode" xml:space="preserve"><value>Modalità dimensione</value></data>
+  <data name="Param_AutoHide" xml:space="preserve"><value>Nascondi automaticamente se fuori bordi</value></data>
+  <data name="Param_RotateFlip" xml:space="preserve"><value>Rotazione/capovolgimento</value></data>
+  <data name="Param_Placement" xml:space="preserve"><value>Posizione</value></data>
+  <data name="Param_CompositingMode" xml:space="preserve"><value>Modalità di composizione</value></data>
+
+  <data name="EnumValue_Horizontal" xml:space="preserve"><value>Orizzontale</value></data>
+  <data name="EnumValue_Vertical" xml:space="preserve"><value>Verticale</value></data>
+  <data name="EnumValue_ForwardDiagonal" xml:space="preserve"><value>Diagonale avanti</value></data>
+  <data name="EnumValue_BackwardDiagonal" xml:space="preserve"><value>Diagonale indietro</value></data>
+  <data name="EnumValue_Outside" xml:space="preserve"><value>Esterno</value></data>
+  <data name="EnumValue_Inside" xml:space="preserve"><value>Interno</value></data>
+  <data name="EnumValue_Solid" xml:space="preserve"><value>Solido</value></data>
+  <data name="EnumValue_Dash" xml:space="preserve"><value>Tratteggio</value></data>
+  <data name="EnumValue_Dot" xml:space="preserve"><value>Punto</value></data>
+  <data name="EnumValue_DashDot" xml:space="preserve"><value>Tratto-punto</value></data>
+  <data name="EnumValue_DashDotDot" xml:space="preserve"><value>Tratto-punto-punto</value></data>
+  <data name="EnumValue_DontResize" xml:space="preserve"><value>Non ridimensionare</value></data>
+  <data name="EnumValue_AbsoluteSize" xml:space="preserve"><value>Dimensione assoluta</value></data>
+  <data name="EnumValue_PercentageOfWatermark" xml:space="preserve"><value>Percentuale della filigrana</value></data>
+  <data name="EnumValue_PercentageOfCanvas" xml:space="preserve"><value>Percentuale della tela</value></data>
+  <data name="EnumValue_SourceOver" xml:space="preserve"><value>Sorgente sopra (alpha blend)</value></data>
+  <data name="EnumValue_SourceCopy" xml:space="preserve"><value>Sorgente sostituisci (sovrascrivi)</value></data>
+  <data name="EnumValue_TopLeft" xml:space="preserve"><value>Alto sinistra</value></data>
+  <data name="EnumValue_TopCenter" xml:space="preserve"><value>Alto centro</value></data>
+  <data name="EnumValue_TopRight" xml:space="preserve"><value>Alto destra</value></data>
+  <data name="EnumValue_MiddleLeft" xml:space="preserve"><value>Centro sinistra</value></data>
+  <data name="EnumValue_MiddleCenter" xml:space="preserve"><value>Centro</value></data>
+  <data name="EnumValue_MiddleRight" xml:space="preserve"><value>Centro destra</value></data>
+  <data name="EnumValue_BottomLeft" xml:space="preserve"><value>Basso sinistra</value></data>
+  <data name="EnumValue_BottomCenter" xml:space="preserve"><value>Basso centro</value></data>
+  <data name="EnumValue_BottomRight" xml:space="preserve"><value>Basso destra</value></data>
+
+  <data name="GradientEditor_Title" xml:space="preserve"><value>Editor gradiente</value></data>
+  <data name="GradientEditor_TitleFull" xml:space="preserve"><value>AresToys - Editor gradiente</value></data>
+  <data name="GradientEditor_Stops" xml:space="preserve"><value>Stop</value></data>
+  <data name="GradientEditor_TooltipAddStop" xml:space="preserve"><value>Aggiungi stop</value></data>
+  <data name="GradientEditor_TooltipRemoveStop" xml:space="preserve"><value>Rimuovi stop selezionato</value></data>
+  <data name="GradientEditor_TooltipChangeColor" xml:space="preserve"><value>Click per cambiare colore</value></data>
+  <data name="GradientEditor_Distribute" xml:space="preserve"><value>Distribuisci</value></data>
+  <data name="GradientEditor_TooltipDistribute" xml:space="preserve"><value>Distribuisci uniformemente gli stop su 0..100%</value></data>
+  <data name="GradientEditor_Reverse" xml:space="preserve"><value>Inverti</value></data>
+  <data name="GradientEditor_TooltipReverse" xml:space="preserve"><value>Specchia le posizioni degli stop 0↔100</value></data>
+  <data name="GradientEditor_PickColor" xml:space="preserve"><value>Scegli colore per lo stop selezionato…</value></data>
+  <data name="GradientEditor_Preview" xml:space="preserve"><value>Anteprima</value></data>
+  <data name="GradientEditor_Direction" xml:space="preserve"><value>Direzione</value></data>
+  <data name="GradientEditor_Presets" xml:space="preserve"><value>Preset</value></data>
+
+  <data name="CustomUploaders_Blurb" xml:space="preserve"><value>Uploader dichiarativi compatibili con ShareX. Ogni file .sxcu diventa una destinazione separata — abilitali/disabilitali nelle tab di categoria dopo un riavvio.</value></data>
+  <data name="CustomUploaders_NoneYet" xml:space="preserve"><value>Nessun uploader personalizzato caricato.</value></data>
+  <data name="CustomUploaders_SxcuAssociation" xml:space="preserve"><value>Imposta AresToys come app predefinita per i file .sxcu</value></data>
+  <data name="CustomUploaders_SxcuAssociationHint" xml:space="preserve"><value>Quando attivo, il doppio click su un file .sxcu in Esplora apre AresToys e chiede di installarlo. Solo per utente — non modifica impostazioni di sistema né richiede permessi di amministratore.</value></data>
+  <data name="CustomUploaders_ExplorerVerb" xml:space="preserve"><value>Mostra 'Upload con AresToys' nel menu contestuale di Esplora</value></data>
+  <data name="CustomUploaders_ExplorerVerbHint" xml:space="preserve"><value>Aggiunge una voce 'Upload con AresToys' al menu contestuale di ogni file. Su Windows 11 si trova sotto 'Mostra altre opzioni'. La voce è sempre visibile — il click inoltra il file a un'istanza AresToys in esecuzione, o ne avvia una in modalità solo tray se non è attiva.</value></data>
+  <data name="CustomUploaders_RunWorkflow" xml:space="preserve"><value>Esegui workflow:</value></data>
+
+  <data name="WorkflowActionCategory_Capture" xml:space="preserve"><value>Cattura</value></data>
+  <data name="WorkflowActionCategory_Recording" xml:space="preserve"><value>Registrazione</value></data>
+  <data name="WorkflowActionCategory_Color" xml:space="preserve"><value>Colore</value></data>
+  <data name="WorkflowActionCategory_Editor" xml:space="preserve"><value>Editor</value></data>
+  <data name="WorkflowActionCategory_File" xml:space="preserve"><value>File</value></data>
+  <data name="WorkflowActionCategory_Pipeline" xml:space="preserve"><value>Pipeline</value></data>
+  <data name="WorkflowActionCategory_Upload" xml:space="preserve"><value>Upload</value></data>
+  <data name="WorkflowActionCategory_Clipboard" xml:space="preserve"><value>Appunti</value></data>
+  <data name="WorkflowActionCategory_Tools" xml:space="preserve"><value>Strumenti</value></data>
+  <data name="WorkflowActionCategory_QR" xml:space="preserve"><value>QR</value></data>
+  <data name="WorkflowActionCategory_System" xml:space="preserve"><value>Sistema</value></data>
+  <data name="WorkflowActionCategory_Launcher" xml:space="preserve"><value>Launcher</value></data>
+
+  <data name="WorkflowAction_arestoys_capture_region" xml:space="preserve"><value>Cattura regione</value></data>
+  <data name="WorkflowAction_arestoys_capture_active_window" xml:space="preserve"><value>Cattura finestra attiva</value></data>
+  <data name="WorkflowAction_arestoys_capture_active_monitor" xml:space="preserve"><value>Cattura monitor attivo</value></data>
+  <data name="WorkflowAction_arestoys_capture_webpage" xml:space="preserve"><value>Cattura pagina web</value></data>
+  <data name="WorkflowAction_arestoys_record_screen" xml:space="preserve"><value>Registrazione schermo</value></data>
+  <data name="WorkflowAction_arestoys_record_screen_mp4" xml:space="preserve"><value>Avvia/ferma registrazione schermo (mp4)</value></data>
+  <data name="WorkflowAction_arestoys_record_screen_gif" xml:space="preserve"><value>Avvia/ferma registrazione schermo (gif)</value></data>
+  <data name="WorkflowAction_arestoys_press_key_enter" xml:space="preserve"><value>Premi Invio</value></data>
+  <data name="WorkflowAction_arestoys_press_key_tab" xml:space="preserve"><value>Premi Tab</value></data>
+  <data name="WorkflowAction_arestoys_upload_image" xml:space="preserve"><value>Carica su uploader immagine</value></data>
+  <data name="WorkflowAction_arestoys_upload_file" xml:space="preserve"><value>Carica su uploader file</value></data>
+  <data name="WorkflowAction_arestoys_upload_text" xml:space="preserve"><value>Carica su uploader testo</value></data>
+  <data name="WorkflowAction_arestoys_upload_video" xml:space="preserve"><value>Carica su uploader video</value></data>
+  <data name="WorkflowAction_arestoys_upload_url" xml:space="preserve"><value>Accorcia URL con shortener</value></data>
+  <data name="WorkflowActionDesc_arestoys_record_screen_mp4" xml:space="preserve"><value>Avvia/ferma la registrazione schermo via FFmpeg in formato mp4. La prima invocazione avvia, la seconda ferma e produce il file.</value></data>
+  <data name="WorkflowActionDesc_arestoys_record_screen_gif" xml:space="preserve"><value>Avvia/ferma la registrazione schermo via FFmpeg in formato GIF animato. La prima invocazione avvia, la seconda ferma e produce il file.</value></data>
+  <data name="WorkflowActionDesc_arestoys_press_key_enter" xml:space="preserve"><value>Invia un singolo Invio alla finestra in primo piano. Utile come separatore tra passi di incolla.</value></data>
+  <data name="WorkflowActionDesc_arestoys_press_key_tab" xml:space="preserve"><value>Invia un singolo Tab alla finestra in primo piano — comodo per spostarsi tra campi tra passi di incolla.</value></data>
+  <data name="WorkflowActionDesc_arestoys_upload_image" xml:space="preserve"><value>Esegue ogni uploader selezionato per la categoria immagine (Impostazioni → Plugin → immagine).</value></data>
+  <data name="WorkflowActionDesc_arestoys_upload_file" xml:space="preserve"><value>Esegue ogni uploader selezionato per la categoria file (Impostazioni → Plugin → file).</value></data>
+  <data name="WorkflowActionDesc_arestoys_upload_text" xml:space="preserve"><value>Esegue ogni uploader selezionato per la categoria testo (Impostazioni → Plugin → testo).</value></data>
+  <data name="WorkflowActionDesc_arestoys_upload_video" xml:space="preserve"><value>Esegue ogni uploader selezionato per la categoria video (Impostazioni → Plugin → video).</value></data>
+  <data name="WorkflowActionDesc_arestoys_upload_url" xml:space="preserve"><value>Esegue ogni shortener URL selezionato. L'input deve essere un URL assoluto valido.</value></data>
+  <data name="WorkflowAction_arestoys_color_sampler" xml:space="preserve"><value>Campionatore colore</value></data>
+  <data name="WorkflowAction_arestoys_color_picker" xml:space="preserve"><value>Selettore colore</value></data>
+  <data name="WorkflowAction_arestoys_copy_color_hex" xml:space="preserve"><value>Copia colore come hex</value></data>
+  <data name="WorkflowAction_arestoys_copy_color_rgb" xml:space="preserve"><value>Copia colore come RGB</value></data>
+  <data name="WorkflowAction_arestoys_copy_color_rgba" xml:space="preserve"><value>Copia colore come RGBA</value></data>
+  <data name="WorkflowAction_arestoys_copy_color_hsb" xml:space="preserve"><value>Copia colore come HSB</value></data>
+  <data name="WorkflowAction_arestoys_copy_color_cmyk" xml:space="preserve"><value>Copia colore come CMYK</value></data>
+  <data name="WorkflowAction_arestoys_copy_color_decimal" xml:space="preserve"><value>Copia colore come decimale</value></data>
+  <data name="WorkflowAction_arestoys_copy_color_linear" xml:space="preserve"><value>Copia colore come Linear</value></data>
+  <data name="WorkflowAction_arestoys_copy_color_bgra" xml:space="preserve"><value>Copia colore come BGRA</value></data>
+  <data name="WorkflowAction_arestoys_open_editor_before_upload" xml:space="preserve"><value>Apri editor</value></data>
+  <data name="WorkflowAction_arestoys_apply_image_effects_preset" xml:space="preserve"><value>Applica preset effetti immagine</value></data>
+  <data name="WorkflowAction_arestoys_save_to_file" xml:space="preserve"><value>Salva su file</value></data>
+  <data name="WorkflowAction_arestoys_add_to_history" xml:space="preserve"><value>Aggiungi alla cronologia appunti</value></data>
+  <data name="WorkflowAction_arestoys_copy_image_to_clipboard" xml:space="preserve"><value>Copia immagine negli appunti</value></data>
+  <data name="WorkflowAction_arestoys_paste_history_item" xml:space="preserve"><value>Incolla elemento dalla cronologia</value></data>
+  <data name="WorkflowAction_arestoys_press_key" xml:space="preserve"><value>Premi tasto</value></data>
+  <data name="WorkflowAction_arestoys_delay" xml:space="preserve"><value>Ritardo</value></data>
+  <data name="WorkflowAction_arestoys_copy_text_to_clipboard" xml:space="preserve"><value>Copia testo negli appunti</value></data>
+  <data name="WorkflowAction_arestoys_upload" xml:space="preserve"><value>Upload</value></data>
+  <data name="WorkflowAction_arestoys_upload_clipboard_text" xml:space="preserve"><value>Leggi testo dagli appunti</value></data>
+  <data name="WorkflowAction_arestoys_capture_selected_explorer_file" xml:space="preserve"><value>Cattura file selezionato in Esplora</value></data>
+  <data name="WorkflowAction_arestoys_qr_read" xml:space="preserve"><value>Leggi QR dall'immagine</value></data>
+  <data name="WorkflowAction_arestoys_notify_toast" xml:space="preserve"><value>Mostra notifica toast</value></data>
+  <data name="WorkflowAction_arestoys_open_popup" xml:space="preserve"><value>Apri popup appunti</value></data>
+  <data name="WorkflowAction_arestoys_toggle_incognito" xml:space="preserve"><value>Attiva/disattiva incognito</value></data>
+  <data name="WorkflowAction_arestoys_open_screenshot_folder" xml:space="preserve"><value>Apri cartella screenshot</value></data>
+  <data name="WorkflowAction_arestoys_show_in_explorer" xml:space="preserve"><value>Mostra in Esplora</value></data>
+  <data name="WorkflowAction_arestoys_save_as" xml:space="preserve"><value>Salva con nome…</value></data>
+  <data name="WorkflowAction_arestoys_open_url" xml:space="preserve"><value>Apri URL nel browser</value></data>
+  <data name="WorkflowAction_arestoys_show_qr_code" xml:space="preserve"><value>Mostra finestra codice QR</value></data>
+  <data name="WorkflowAction_arestoys_save_qr_as_image" xml:space="preserve"><value>Salva QR come immagine</value></data>
+  <data name="WorkflowAction_arestoys_save_qr_as_svg" xml:space="preserve"><value>Salva QR come SVG</value></data>
+  <data name="WorkflowAction_arestoys_copy_qr_to_clipboard" xml:space="preserve"><value>Copia QR negli appunti</value></data>
+  <data name="WorkflowAction_arestoys_pin_to_screen" xml:space="preserve"><value>Aggancia a schermo</value></data>
+  <data name="WorkflowAction_arestoys_launch_app" xml:space="preserve"><value>Avvia applicazione</value></data>
+  <data name="WorkflowAction_arestoys_open_file" xml:space="preserve"><value>Apri file</value></data>
+  <data name="WorkflowAction_arestoys_run_command" xml:space="preserve"><value>Esegui comando shell</value></data>
+  <data name="WorkflowAction_arestoys_open_launcher_menu" xml:space="preserve"><value>Apri launcher</value></data>
+  <data name="WorkflowAction_arestoys_open_settings" xml:space="preserve"><value>Apri impostazioni</value></data>
+  <data name="WorkflowAction_arestoys_open_launcher_drag_mode" xml:space="preserve"><value>Apri launcher (modalità drag)</value></data>
+
+  <data name="WorkflowActionParam_arestoys_open_editor_before_upload_fullscreen" xml:space="preserve"><value>Apri a schermo intero sul monitor attivo (fit to screen)</value></data>
+  <data name="WorkflowActionParam_arestoys_open_editor_before_upload_default_tool" xml:space="preserve"><value>Strumento predefinito</value></data>
+  <data name="WorkflowActionParam_arestoys_save_to_file_format" xml:space="preserve"><value>Formato</value></data>
+  <data name="WorkflowActionParam_arestoys_apply_image_effects_preset_keep_original" xml:space="preserve"><value>Mantieni l'originale nella cronologia appunti</value></data>
+  <data name="WorkflowActionParam_arestoys_apply_image_effects_preset_preset_name" xml:space="preserve"><value>Preset</value></data>
+  <data name="WorkflowActionParam_arestoys_copy_color_hex_alpha" xml:space="preserve"><value>Includi alpha (RRGGBBAA)</value></data>
+  <data name="WorkflowActionParam_arestoys_copy_color_hex_hash" xml:space="preserve"><value>Prefisso #</value></data>
+
+  <data name="WorkflowActionCategory_I_O" xml:space="preserve"><value>I/O</value></data>
+  <data name="WorkflowActionCategory_Flow" xml:space="preserve"><value>Flusso</value></data>
+  <data name="WorkflowActionCategory_Notify" xml:space="preserve"><value>Notifica</value></data>
+  <data name="WorkflowActionCategory_Launch" xml:space="preserve"><value>Avvio</value></data>
+
+  <data name="WorkflowActionDesc_arestoys_capture_region" xml:space="preserve"><value>Mostra l'overlay di selezione regione e cattura il rettangolo scelto. Saltato automaticamente se un payload è già nel bag.</value></data>
+  <data name="WorkflowActionDesc_arestoys_capture_active_window" xml:space="preserve"><value>Cattura la finestra attualmente in primo piano usando i bordi estesi DWM (senza padding del bordo di ridimensionamento). Rispetta il ritardo globale di cattura; le finestre dell'app stessa vengono saltate.</value></data>
+  <data name="WorkflowActionDesc_arestoys_capture_active_monitor" xml:space="preserve"><value>Cattura il monitor attualmente sotto il cursore — utile come scorciatoia su setup multi-monitor. Su singolo monitor cattura tutto lo schermo.</value></data>
+  <data name="WorkflowActionDesc_arestoys_capture_webpage" xml:space="preserve"><value>Renderizza un URL in un WebView2 nascosto e cattura un PNG full-page. Lascia URL vuoto per essere richiesto a runtime; impostalo per workflow automatici 'snapshot example.com'.</value></data>
+  <data name="WorkflowActionDesc_arestoys_record_screen" xml:space="preserve"><value>Avvia/ferma la registrazione schermo via FFmpeg. La prima invocazione avvia, la seconda ferma e produce il file.</value></data>
+  <data name="WorkflowActionDesc_arestoys_color_sampler" xml:space="preserve"><value>Apre il campionatore stile lente d'ingrandimento al cursore — preleva un pixel da qualunque punto dello schermo. Il colore campionato viene copiato negli appunti.</value></data>
+  <data name="WorkflowActionDesc_arestoys_color_picker" xml:space="preserve"><value>Apre il selettore colore HSB/RGB/CMYK in finestra (ruota + input numerici). Abbinalo a un passo Copia colore come… per scrivere il risultato negli appunti.</value></data>
+  <data name="WorkflowActionDesc_arestoys_copy_color_hex" xml:space="preserve"><value>Emette il colore del bag come RRGGBB (o RRGGBBAA con alpha). I toggle scelgono se includere alpha e se anteporre #.</value></data>
+  <data name="WorkflowActionDesc_arestoys_copy_color_rgb" xml:space="preserve"><value>Emette il colore del bag come rgb(R, G, B) negli appunti.</value></data>
+  <data name="WorkflowActionDesc_arestoys_copy_color_rgba" xml:space="preserve"><value>Emette il colore del bag come rgba(R, G, B, A) con alpha 0–1 negli appunti.</value></data>
+  <data name="WorkflowActionDesc_arestoys_copy_color_hsb" xml:space="preserve"><value>Emette il colore del bag come hsb(H°, S%, B%) negli appunti.</value></data>
+  <data name="WorkflowActionDesc_arestoys_copy_color_cmyk" xml:space="preserve"><value>Emette il colore del bag come cmyk(C%, M%, Y%, K%) negli appunti.</value></data>
+  <data name="WorkflowActionDesc_arestoys_copy_color_decimal" xml:space="preserve"><value>Emette il colore del bag come intero AARRGGBB negli appunti.</value></data>
+  <data name="WorkflowActionDesc_arestoys_copy_color_linear" xml:space="preserve"><value>Emette (R=…,G=…,B=…,A=…) — formato Unreal Engine FLinearColor — negli appunti.</value></data>
+  <data name="WorkflowActionDesc_arestoys_copy_color_bgra" xml:space="preserve"><value>Emette (B=…,G=…,R=…,A=…) — formato Unreal Engine FColor — negli appunti.</value></data>
+  <data name="WorkflowActionDesc_arestoys_open_editor_before_upload" xml:space="preserve"><value>Sospende la pipeline e apre l'editor di annotazione sui byte catturati. Al salvataggio, i passi successivi vedono l'immagine modificata.</value></data>
+  <data name="WorkflowActionDesc_arestoys_apply_image_effects_preset" xml:space="preserve"><value>Esegue una catena salvata di regolazioni / filtri sull'immagine (bordo, filigrana, vignettatura …). Configura i preset in Impostazioni → Effetti immagine.</value></data>
+  <data name="WorkflowActionDesc_arestoys_save_to_file" xml:space="preserve"><value>Scrive i byte correnti su disco nella cartella di cattura configurata (Impostazioni → Cattura). 'Formato' è opzionale: lascia vuoto per il formato corrente del bag.</value></data>
+  <data name="WorkflowActionDesc_arestoys_add_to_history" xml:space="preserve"><value>Indicizza l'elemento nella cronologia AresToys in modo che appaia in Win+V.</value></data>
+  <data name="WorkflowActionDesc_arestoys_copy_image_to_clipboard" xml:space="preserve"><value>Mette la bitmap sugli appunti di Windows (Ctrl+V in altre app la incolla). Distinto da 'Aggiungi alla cronologia appunti'.</value></data>
+  <data name="WorkflowActionDesc_arestoys_paste_history_item" xml:space="preserve"><value>Incolla automaticamente l'N-esimo elemento più recente della cronologia appunti nella finestra in primo piano. 1 = più recente.</value></data>
+  <data name="WorkflowActionDesc_arestoys_press_key" xml:space="preserve"><value>Invia un singolo tasto alla finestra in primo piano. Utile tra passi di incolla quando si concatenano elementi appunti su righe consecutive.</value></data>
+  <data name="WorkflowActionDesc_arestoys_delay" xml:space="preserve"><value>Mette in pausa il workflow per il numero di millisecondi configurato. Utile tra passi incolla/premi-tasto quando la finestra di destinazione è lenta a processare i tasti.</value></data>
+  <data name="WorkflowActionDesc_arestoys_copy_text_to_clipboard" xml:space="preserve"><value>Sostituisce il contenuto degli appunti di Windows con gli URL di upload restituiti dal passo di caricamento.</value></data>
+  <data name="WorkflowActionDesc_arestoys_upload" xml:space="preserve"><value>Esegue ogni uploader selezionato dall'utente per la categoria scelta (Impostazioni → Plugin).</value></data>
+  <data name="WorkflowActionDesc_arestoys_upload_clipboard_text" xml:space="preserve"><value>Preleva il testo corrente dagli appunti di sistema e lo prepara come payload del workflow (UTF-8). Abbinalo a un passo Carica (categoria testo) per pubblicarlo.</value></data>
+  <data name="WorkflowActionDesc_arestoys_capture_selected_explorer_file" xml:space="preserve"><value>Legge il file attualmente selezionato nella finestra Esplora in primo piano e prepara i suoi byte come payload del workflow. Si interrompe in silenzio se non è selezionato nulla.</value></data>
+  <data name="WorkflowActionDesc_arestoys_qr_read" xml:space="preserve"><value>Decodifica il primo codice QR trovato nell'immagine corrente. Sostituisce il payload con il testo UTF-8 decodificato. Interrompe il workflow se nessun QR viene trovato.</value></data>
+  <data name="WorkflowActionDesc_arestoys_update_item_url" xml:space="preserve"><value>Salva l'URL di upload sull'elemento di cronologia in modo che il popup lo mostri.</value></data>
+  <data name="WorkflowActionDesc_arestoys_notify_toast" xml:space="preserve"><value>Mostra un toast Windows che conferma l'operazione. Il click apre l'URL quando presente.</value></data>
+  <data name="WorkflowActionDesc_arestoys_open_popup" xml:space="preserve"><value>Apre la finestra appunti di AresToys (sostituto di Win+V). Premere la stessa scorciatoia mentre è aperta la chiude.</value></data>
+  <data name="WorkflowActionDesc_arestoys_toggle_incognito" xml:space="preserve"><value>Attiva/disattiva la modalità incognito — quando attiva, gli elementi degli appunti non vengono catturati nella cronologia.</value></data>
+  <data name="WorkflowActionDesc_arestoys_open_screenshot_folder" xml:space="preserve"><value>Apre la cartella di cattura configurata (Impostazioni → Cattura) in Esplora risorse.</value></data>
+  <data name="WorkflowActionDesc_arestoys_show_in_explorer" xml:space="preserve"><value>Apre Esplora risorse con il file appena salvato preselezionato. Richiede un passo Salva su file precedente.</value></data>
+  <data name="WorkflowActionDesc_arestoys_save_as" xml:space="preserve"><value>Apre una finestra Salva file in cui l'utente sceglie destinazione e nome. Il percorso scelto diventa il nuovo local_path per i passi successivi.</value></data>
+  <data name="WorkflowActionDesc_arestoys_open_url" xml:space="preserve"><value>Avvia il browser predefinito sull'URL di upload (o un URL esplicito via config). Utile subito dopo un passo Carica.</value></data>
+  <data name="WorkflowActionDesc_arestoys_show_qr_code" xml:space="preserve"><value>Genera un codice QR dall'URL di upload (o testo esplicito) e mostra una piccola finestra. Comodo per scansionare il link su un telefono.</value></data>
+  <data name="WorkflowActionDesc_arestoys_save_qr_as_image" xml:space="preserve"><value>Genera un PNG QR e lo scrive su disco. Salva automaticamente in config.path se impostato, altrimenti chiede con una finestra Salva.</value></data>
+  <data name="WorkflowActionDesc_arestoys_save_qr_as_svg" xml:space="preserve"><value>Come Salva QR come immagine ma produce un documento SVG scalabile — nitido a qualsiasi dimensione, ideale per stampa o slide.</value></data>
+  <data name="WorkflowActionDesc_arestoys_copy_qr_to_clipboard" xml:space="preserve"><value>Genera un PNG QR e lo mette negli appunti di Windows. Pronto da incollare in qualsiasi app che accetta immagini.</value></data>
+  <data name="WorkflowActionDesc_arestoys_pin_to_screen" xml:space="preserve"><value>Mostra l'immagine catturata in una finestra sempre in primo piano. Trascina per spostare, rotella per zoom, click destro o Esc per chiudere.</value></data>
+  <data name="WorkflowActionDesc_arestoys_launch_app" xml:space="preserve"><value>Avvia un eseguibile, collegamento o file batch. Il percorso supporta l'espansione %ENV%. Gli argomenti vengono passati alla destinazione.</value></data>
+  <data name="WorkflowActionDesc_arestoys_open_file" xml:space="preserve"><value>Apre un file o cartella con il gestore predefinito registrato nell'OS — come un doppio click in Esplora.</value></data>
+  <data name="WorkflowActionDesc_arestoys_run_command" xml:space="preserve"><value>Esegue una riga di comando shell via cmd /c — supporta PATH, pipe, redirect, comandi concatenati. Fire-and-forget.</value></data>
+  <data name="WorkflowActionDesc_arestoys_open_launcher_menu" xml:space="preserve"><value>Mostra l'overlay launcher — una griglia tastiera 3×10 in cui ogni tasto stampabile lancia un percorso / collegamento / target shell.</value></data>
+  <data name="WorkflowActionDesc_arestoys_open_settings" xml:space="preserve"><value>Mostra e attiva la finestra Impostazioni principale di AresToys.</value></data>
+  <data name="WorkflowActionDesc_arestoys_open_launcher_drag_mode" xml:space="preserve"><value>Mostra l'overlay launcher già in modalità drag-and-drop: trascina file / cartelle / collegamenti sulle celle per associarli.</value></data>
+
+  <!-- Editor (annotation surface) -->
+  <data name="Editor_TitleBar" xml:space="preserve"><value>AresToys - Editor</value></data>
+  <data name="Editor_PropertiesTitleFormat" xml:space="preserve"><value>Proprietà {0}</value></data>
+  <data name="Editor_SharedProperties" xml:space="preserve"><value>Proprietà condivise</value></data>
+  <data name="Editor_Properties" xml:space="preserve"><value>Proprietà</value></data>
+  <data name="Editor_NoSelection" xml:space="preserve"><value>Seleziona una forma per modificarne le proprietà (strumento V, poi clic).</value></data>
+  <data name="Editor_DefaultProperties" xml:space="preserve"><value>Proprietà predefinite</value></data>
+  <data name="Editor_Save" xml:space="preserve"><value>Salva</value></data>
+  <data name="Editor_SaveAs" xml:space="preserve"><value>Salva con nome…</value></data>
+  <data name="Editor_TooltipSave" xml:space="preserve"><value>Conferma / copia nella clipboard. Aggiunge l'immagine modificata come nuovo elemento della cronologia e la mette nella clipboard di Windows pronta per l'incolla. L'originale viene preservato.</value></data>
+  <data name="Editor_TooltipSaveAs" xml:space="preserve"><value>Esporta su un file scelto da te. Il formato dipende dal filtro del dialogo (PNG / JPEG / BMP / GIF). Non tocca la cronologia.</value></data>
+  <data name="Editor_TooltipCancel" xml:space="preserve"><value>Annulla le modifiche e chiudi. L'originale resta in cronologia; la clipboard di Windows non viene modificata.</value></data>
+  <data name="Editor_Outline" xml:space="preserve"><value>Contorno</value></data>
+  <data name="Editor_Fill" xml:space="preserve"><value>Riempimento</value></data>
+  <data name="Editor_Text" xml:space="preserve"><value>Testo</value></data>
+  <data name="Editor_Stroke" xml:space="preserve"><value>Spessore</value></data>
+  <data name="Editor_TextColor" xml:space="preserve"><value>Colore testo</value></data>
+  <data name="Editor_Font" xml:space="preserve"><value>Carattere</value></data>
+  <data name="Editor_Size" xml:space="preserve"><value>Dimensione</value></data>
+  <data name="Editor_Bold" xml:space="preserve"><value>Grassetto</value></data>
+  <data name="Editor_Italic" xml:space="preserve"><value>Corsivo</value></data>
+  <data name="Editor_Alignment" xml:space="preserve"><value>Allineamento</value></data>
+  <data name="Editor_Rotation" xml:space="preserve"><value>Rotazione</value></data>
+  <data name="Editor_Effect" xml:space="preserve"><value>Effetto</value></data>
+  <data name="Editor_BlurRadius" xml:space="preserve"><value>Raggio sfocatura (px)</value></data>
+  <data name="Editor_PixelBlockSize" xml:space="preserve"><value>Dimensione blocco pixel</value></data>
+  <data name="Editor_SpotlightDim" xml:space="preserve"><value>Oscuramento riflettore (%)</value></data>
+  <data name="Editor_SpotlightBlur" xml:space="preserve"><value>Sfocatura riflettore (px)</value></data>
+  <data name="Editor_EdgeBlur" xml:space="preserve"><value>Sfocatura bordi (px)</value></data>
+  <data name="Editor_SmoothStroke" xml:space="preserve"><value>Tratto fluido</value></data>
+  <data name="Editor_EndArrow" xml:space="preserve"><value>Punta freccia</value></data>
+  <data name="Editor_TooltipSmoothStroke" xml:space="preserve"><value>Applica il taglio degli angoli Chaikin + il rendering Catmull-Rom per rimuovere il tremolio della mano da questo tratto.</value></data>
+  <data name="Editor_TooltipEndArrow" xml:space="preserve"><value>Termina il tratto con una punta di freccia tangente all'ultimo segmento (mano libera stile ShareX).</value></data>
+  <data name="Editor_ApplyToSelected" xml:space="preserve"><value>Applica a selezione</value></data>
+  <data name="Editor_TooltipApplyToSelected" xml:space="preserve"><value>Applica i contorno / riempimento / spessore predefiniti qui sopra alla selezione</value></data>
+  <data name="Editor_SetAsDefault" xml:space="preserve"><value>Imposta come predefinito</value></data>
+  <data name="Editor_TooltipSetAsDefault" xml:space="preserve"><value>Usa contorno/riempimento/spessore della forma selezionata come valori correnti della toolbar</value></data>
+  <data name="Editor_Undo" xml:space="preserve"><value>Annulla</value></data>
+  <data name="Editor_Redo" xml:space="preserve"><value>Ripeti</value></data>
+  <data name="Editor_Tool_Select" xml:space="preserve"><value>V Seleziona</value></data>
+  <data name="Editor_Tool_Rectangle" xml:space="preserve"><value>R Rettangolo</value></data>
+  <data name="Editor_Tool_Ellipse" xml:space="preserve"><value>E Ellisse</value></data>
+  <data name="Editor_Tool_Line" xml:space="preserve"><value>L Linea</value></data>
+  <data name="Editor_Tool_Arrow" xml:space="preserve"><value>A Freccia</value></data>
+  <data name="Editor_Tool_Freehand" xml:space="preserve"><value>F Mano libera</value></data>
+  <data name="Editor_Tool_Text" xml:space="preserve"><value>T Testo</value></data>
+  <data name="Editor_Tool_Step" xml:space="preserve"><value>N Contatore</value></data>
+  <data name="Editor_Tool_Image" xml:space="preserve"><value>I Immagine</value></data>
+  <data name="Editor_Tool_Blur" xml:space="preserve"><value>B Sfocatura</value></data>
+  <data name="Editor_Tool_Pixelate" xml:space="preserve"><value>X Pixel</value></data>
+  <data name="Editor_Tool_Spotlight" xml:space="preserve"><value>O Riflettore</value></data>
+  <data name="Editor_Tool_SmartEraser" xml:space="preserve"><value>K Gomma intelligente — riempie il riquadro con un gradiente bilineare dei 4 colori d'angolo</value></data>
+  <data name="Editor_Tool_Crop" xml:space="preserve"><value>C Ritaglia</value></data>
+  <data name="Editor_Tool_Resize" xml:space="preserve"><value>Ridimensiona…</value></data>
+  <data name="Editor_Tool_Trace" xml:space="preserve"><value>Vettorizza in SVG…</value></data>
+  <data name="Editor_Tool_MagicEraser" xml:space="preserve"><value>Rimuovi sfondo…</value></data>
+  <data name="BgRemover_WindowTitle" xml:space="preserve"><value>AresToys - Rimuovi sfondo</value></data>
+  <data name="BgRemover_ParamThreshold" xml:space="preserve"><value>Soglia</value></data>
+  <data name="BgRemover_ParamFeather" xml:space="preserve"><value>Sfumatura</value></data>
+  <data name="BgRemover_ParamEdgeOffset" xml:space="preserve"><value>Offset bordo</value></data>
+  <data name="BgRemover_ParamBackgroundOpacity" xml:space="preserve"><value>Opacità sfondo</value></data>
+  <data name="BgRemover_BrushLabel" xml:space="preserve"><value>Pennello:</value></data>
+  <data name="BgRemover_BrushOff" xml:space="preserve"><value>Off</value></data>
+  <data name="BgRemover_BrushAdd" xml:space="preserve"><value>Aggiungi</value></data>
+  <data name="BgRemover_BrushRemove" xml:space="preserve"><value>Rimuovi</value></data>
+  <data name="BgRemover_BrushSize" xml:space="preserve"><value>Dim.</value></data>
+  <data name="BgRemover_BrushHardness" xml:space="preserve"><value>Durezza</value></data>
+  <data name="BgRemover_BrushReset" xml:space="preserve"><value>Reset pennello</value></data>
+  <data name="BgRemover_ResetView" xml:space="preserve"><value>Reset vista</value></data>
+  <data name="BgRemover_Apply" xml:space="preserve"><value>Applica</value></data>
+  <data name="BgRemover_StatusRunning" xml:space="preserve"><value>Esecuzione AI…</value></data>
+  <data name="BgRemover_StatusReady" xml:space="preserve"><value>Pronto. Regola gli slider o usa il pennello per perfezionare il ritaglio.</value></data>
+  <data name="BgRemover_StatusModelUnavailable" xml:space="preserve"><value>Modello non disponibile. Annulla e riprova, oppure chiudi per tenere l'immagine originale.</value></data>
+  <data name="BgRemover_StatusDecodeFailed" xml:space="preserve"><value>Impossibile decodificare l'immagine sorgente.</value></data>
+  <data name="Trace_SaveDialogTitle" xml:space="preserve"><value>Salva SVG vettorizzato</value></data>
+  <data name="Trace_FilterSvg" xml:space="preserve"><value>Immagine SVG|*.svg|Tutti i file|*.*</value></data>
+  <data name="Trace_FailMessage" xml:space="preserve"><value>Vettorizzazione fallita — potrace.exe potrebbe mancare dall'installazione. Controlla il log.</value></data>
+  <data name="Trace_WindowTitle" xml:space="preserve"><value>Vettorizza in SVG</value></data>
+  <data name="Trace_SaveButton" xml:space="preserve"><value>Salva come…</value></data>
+  <data name="Trace_PresetLabel" xml:space="preserve"><value>Preset:</value></data>
+  <data name="Trace_PresetSave" xml:space="preserve"><value>Salva preset…</value></data>
+  <data name="Trace_PresetDelete" xml:space="preserve"><value>Elimina</value></data>
+  <data name="Trace_ViewLabel" xml:space="preserve"><value>Vista:</value></data>
+  <data name="Trace_ModeLabel" xml:space="preserve"><value>Modalità:</value></data>
+  <data name="Trace_ModeColor" xml:space="preserve"><value>Colore</value></data>
+  <data name="Trace_ModeGrayscale" xml:space="preserve"><value>Scala di grigi</value></data>
+  <data name="Trace_ModeBlackAndWhite" xml:space="preserve"><value>Bianco e nero</value></data>
+  <data name="Trace_PaletteLabel" xml:space="preserve"><value>Tavolozza:</value></data>
+  <data name="Trace_ParamColors" xml:space="preserve"><value>Colori</value></data>
+  <data name="Trace_ParamThreshold" xml:space="preserve"><value>Soglia</value></data>
+  <data name="Trace_ParamPaths" xml:space="preserve"><value>Tracciati</value></data>
+  <data name="Trace_ParamCorners" xml:space="preserve"><value>Angoli</value></data>
+  <data name="Trace_ParamNoise" xml:space="preserve"><value>Rumore</value></data>
+  <data name="Trace_ParamSmoothing" xml:space="preserve"><value>Smoothing</value></data>
+  <data name="Trace_ParamPreBlur" xml:space="preserve"><value>Pre-blur</value></data>
+  <data name="Trace_ParamOverlap" xml:space="preserve"><value>Overlap</value></data>
+  <data name="Trace_ParamMethod" xml:space="preserve"><value>Metodo</value></data>
+  <data name="Trace_MethodOverlapping" xml:space="preserve"><value>Sovrapposto</value></data>
+  <data name="Trace_MethodAbutting" xml:space="preserve"><value>Adiacente</value></data>
+  <data name="Trace_ParamSnapCurves" xml:space="preserve"><value>Aggancia curve a linee</value></data>
+  <data name="Trace_ParamTransparency" xml:space="preserve"><value>Trasparenza</value></data>
+  <data name="Trace_ParamAutoGrouping" xml:space="preserve"><value>Raggruppamento automatico</value></data>
+  <data name="Trace_ParamIgnoreColor" xml:space="preserve"><value>Ignora colore</value></data>
+  <data name="Trace_ParamPickIgnore" xml:space="preserve"><value>Scegli un colore…</value></data>
+  <data name="Trace_ParamPickFromScreen" xml:space="preserve"><value>Campiona colore dallo schermo</value></data>
+  <data name="Trace_ParamTolerance" xml:space="preserve"><value>Tolleranza</value></data>
+  <data name="Trace_PreviewToggle" xml:space="preserve"><value>Anteprima realtime</value></data>
+  <data name="Trace_TraceNow" xml:space="preserve"><value>Vettorizza manualmente</value></data>
+  <data name="Trace_InfoLabel" xml:space="preserve"><value>Info</value></data>
+  <data name="Editor_Shape_Rectangle" xml:space="preserve"><value>Rettangolo</value></data>
+  <data name="Editor_Shape_Ellipse" xml:space="preserve"><value>Ellisse</value></data>
+  <data name="Editor_Shape_Arrow" xml:space="preserve"><value>Freccia</value></data>
+  <data name="Editor_Shape_Line" xml:space="preserve"><value>Linea</value></data>
+  <data name="Editor_Shape_Freehand" xml:space="preserve"><value>Mano libera</value></data>
+  <data name="Editor_Shape_Text" xml:space="preserve"><value>Testo</value></data>
+  <data name="Editor_Shape_StepCounter" xml:space="preserve"><value>Contatore</value></data>
+  <data name="Editor_Shape_Image" xml:space="preserve"><value>Immagine</value></data>
+  <data name="Editor_Shape_Blur" xml:space="preserve"><value>Sfocatura</value></data>
+  <data name="Editor_Shape_Pixelate" xml:space="preserve"><value>Pixel</value></data>
+  <data name="Editor_Shape_Spotlight" xml:space="preserve"><value>Riflettore</value></data>
+  <data name="Editor_Shape_SmartEraser" xml:space="preserve"><value>Gomma intelligente</value></data>
+</root>

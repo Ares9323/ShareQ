@@ -28,13 +28,13 @@ jobs:
           restore-keys: ${{ runner.os }}-nuget-
 
       - name: Restore
-        run: dotnet restore ShareQ.sln
+        run: dotnet restore AresToys.sln
 
       - name: Build
-        run: dotnet build ShareQ.sln --configuration Release --no-restore
+        run: dotnet build AresToys.sln --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test ShareQ.sln --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
+        run: dotnet test AresToys.sln --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
 
       - name: Upload test results
         if: always()

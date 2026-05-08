@@ -2,7 +2,7 @@
 # placeholder values (so CI / fresh clones build); maintainers create Secrets.Local.cs in the
 # same folder with the real Client IDs / Secrets, and the .csproj swaps them in via a
 # conditional Compile Remove on Secrets.cs when the Local file exists.
-src/ShareQ.Uploaders/Secrets.Local.cs
+src/AresToys.Uploaders/Secrets.Local.cs
 
 # Build output
 [Bb]in/
@@ -62,4 +62,3 @@ $RECYCLE.BIN/
 
 # Internal design docs / brainstorming notes — kept local only
 docs/
-src/ShareQ.App/*.csproj

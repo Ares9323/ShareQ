@@ -4,7 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>ShareQ.IconBuilder</RootNamespace>
+    <RootNamespace>AresToys.IconBuilder</RootNamespace>
     <UseWindowsForms>false</UseWindowsForms>
     <!-- One-shot tool: opt out of central package management to avoid touching the root .props. -->
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>

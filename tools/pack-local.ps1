@@ -10,9 +10,9 @@
 #   pwsh tools/pack-local.ps1 -KeepReleases       # don't wipe existing artifacts (preserves delta baseline)
 #
 # After it finishes:
-#   - Releases\ShareQ-<channel>-Setup.exe       → run to install into %LocalAppData%\ShareQ
-#   - Releases\ShareQ-<channel>-Portable.zip    → unzip anywhere and run ShareQ.exe directly
-#   - Releases\ShareQ-<ver>-full.nupkg          → Velopack catalog file (the in-app updater fetches it)
+#   - Releases\AresToys-<channel>-Setup.exe       → run to install into %LocalAppData%\AresToys
+#   - Releases\AresToys-<channel>-Portable.zip    → unzip anywhere and run AresToys.exe directly
+#   - Releases\AresToys-<ver>-full.nupkg          → Velopack catalog file (the in-app updater fetches it)
 #
 # The script exits on the first failed step so a broken publish doesn't leave you with a stale
 # Releases\ that still references the previous good build.
@@ -54,7 +54,7 @@ Set-Location $repoRoot
 # the clean SemVer; the same convention CI's release.yml follows when it gets a workflow
 # input like '0.1.0'.
 if (-not $Version) {
-    $csprojPath = Join-Path $repoRoot 'src/ShareQ.App/ShareQ.App.csproj'
+    $csprojPath = Join-Path $repoRoot 'src/AresToys.App/AresToys.App.csproj'
     if (Test-Path $csprojPath) {
         [xml]$csprojXml = Get-Content $csprojPath
         $projVersion = $csprojXml.Project.PropertyGroup |
@@ -80,11 +80,11 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet tool restore failed" }
 
 if (-not $SkipBuild) {
     Write-Host "==> Restoring solution" -ForegroundColor Cyan
-    dotnet restore ShareQ.sln | Out-Host
+    dotnet restore AresToys.sln | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed" }
 
     Write-Host "==> Building (Release)" -ForegroundColor Cyan
-    dotnet build ShareQ.sln --configuration Release --no-restore | Out-Host
+    dotnet build AresToys.sln --configuration Release --no-restore | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "dotnet build failed" }
 }
 else {
@@ -92,11 +92,11 @@ else {
 }
 
 if (-not $SkipPublish) {
-    Write-Host "==> Publishing ShareQ.App ($Runtime, self-contained)" -ForegroundColor Cyan
-    # Self-contained ships the .NET runtime alongside ShareQ so end users don't need the SDK
+    Write-Host "==> Publishing AresToys.App ($Runtime, self-contained)" -ForegroundColor Cyan
+    # Self-contained ships the .NET runtime alongside AresToys so end users don't need the SDK
     # installed. -p:Version is what Settings → About reads via Assembly.GetName().Version.
     # Velopack uses --packVersion below for its own metadata; we keep them in lockstep.
-    dotnet publish src/ShareQ.App/ShareQ.App.csproj `
+    dotnet publish src/AresToys.App/AresToys.App.csproj `
         --configuration Release `
         --runtime $Runtime `
         --self-contained true `
@@ -116,8 +116,8 @@ else {
 # delta-pack baseline.
 if (-not $KeepReleases) {
     $patterns = @(
-        "ShareQ-*.nupkg"                # full + delta payloads (all channels share the dir)
-        "ShareQ-$Channel-*"             # Setup.exe + Portable.zip + per-channel installer assets
+        "AresToys-*.nupkg"                # full + delta payloads (all channels share the dir)
+        "AresToys-$Channel-*"             # Setup.exe + Portable.zip + per-channel installer assets
         "RELEASES*"                     # legacy + per-channel catalog files
         "releases*.json"                # JSON catalog
         "assets*.json"                  # JSON asset manifest
@@ -138,18 +138,18 @@ else {
 
 Write-Host "==> Packing with Velopack ($Version, channel=$Channel)" -ForegroundColor Cyan
 # vpk pack output layout:
-#   Releases\ShareQ-<channel>-Setup.exe       (installer)
-#   Releases\ShareQ-<channel>-Portable.zip    (unzip-anywhere build)
-#   Releases\ShareQ-<ver>-full.nupkg          (full update payload)
-#   Releases\ShareQ-<ver>-delta.nupkg         (delta vs. previous, if a prior pack exists)
+#   Releases\AresToys-<channel>-Setup.exe       (installer)
+#   Releases\AresToys-<channel>-Portable.zip    (unzip-anywhere build)
+#   Releases\AresToys-<ver>-full.nupkg          (full update payload)
+#   Releases\AresToys-<ver>-delta.nupkg         (delta vs. previous, if a prior pack exists)
 #   Releases\RELEASES                         (Velopack catalog the in-app updater fetches)
 dotnet vpk pack `
-    --packId ShareQ `
+    --packId AresToys `
     --packVersion $Version `
     --packDir publish `
-    --mainExe ShareQ.exe `
-    --packTitle "ShareQ" `
-    --packAuthors "ShareQ contributors" `
+    --mainExe AresToys.exe `
+    --packTitle "AresToys" `
+    --packAuthors "AresToys contributors" `
     --channel $Channel | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "vpk pack failed" }
 
@@ -158,8 +158,8 @@ Write-Host "==> Done. Artifacts under Releases\:" -ForegroundColor Green
 Get-ChildItem Releases -File | Sort-Object Length -Descending | Format-Table Name, @{Label = 'Size'; Expression = { '{0,8:N0} KB' -f ($_.Length / 1KB) } } -AutoSize
 
 Write-Host ""
-Write-Host "Install with: .\Releases\ShareQ-$Channel-Setup.exe" -ForegroundColor Gray
-Write-Host "Or unzip:     .\Releases\ShareQ-$Channel-Portable.zip" -ForegroundColor Gray
+Write-Host "Install with: .\Releases\AresToys-$Channel-Setup.exe" -ForegroundColor Gray
+Write-Host "Or unzip:     .\Releases\AresToys-$Channel-Portable.zip" -ForegroundColor Gray
 
 # Pop Explorer at the artifacts so a double-click to install is one less step.
 $releasesPath = Join-Path $repoRoot 'Releases'

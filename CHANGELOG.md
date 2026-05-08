@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to ShareQ. Format loosely follows [Keep a Changelog](https://keepachangelog.com/),
+All notable changes to AresToys. Format loosely follows [Keep a Changelog](https://keepachangelog.com/),
 versions follow [SemVer](https://semver.org/).
 
 ## [0.1.2] — 2026-05-08
@@ -62,7 +62,7 @@ that bit anyone who ran a 0.1.1 self-update.
 - Pixel coordinates readout (X / Y in physical pixels) joins the existing hex + RGB row.
 
 ### Storage + update flow
-- Settings folder migrated from %LocalAppData%\ShareQ\ to %LocalAppData%\ShareQ-Data\.
+- Settings folder migrated from %LocalAppData%\AresToys\ to %LocalAppData%\AresToys-Data\.
   The previous path collided with Velopack's install root, so every self-update wiped
   the user's settings and clipboard history. A one-shot migration on first launch copies
   the existing data over and updates the active path.
@@ -96,7 +96,7 @@ polish across capture, clipboard, launcher and effects.
   hardness core). Stays at screen-size regardless of zoom level. Centres on the cursor
   even after slider tweaks (the ring re-flashes at the canvas centre when sliders are
   driven from outside the preview).
-- Pipeline task `shareq.remove-background` exposes the same operation to workflows.
+- Pipeline task `arestoys.remove-background` exposes the same operation to workflows.
 
 ### New — Image trace (raster → SVG)
 - New "Trace" button in the editor toolbar opens an Illustrator-style preview window:
@@ -194,7 +194,7 @@ polish across capture, clipboard, launcher and effects.
 ### Image effects
 - ShareX `.sxie` round-trip: DrawTextEx placeholder expansion (`%y / %mo / %d / %h / %width
   / %height / %un / %hn`) — Polaroid-style date stamps now render correctly.
-- ShareQ `Apply effects preset` pipeline task gains an editor-mode handoff (open effects
+- AresToys `Apply effects preset` pipeline task gains an editor-mode handoff (open effects
   with the editor's bytes, return rendered result as an undoable swap).
 - Color picker theme now follows the active app accent.
 
@@ -258,7 +258,7 @@ on Windows; OAuth uploaders only sign in when bundled credentials are configured
 - Gradient picker (multi-stop with per-stop alpha + 9 ShareX presets) and font picker
   (filterable family list + size slider + bold/italic chips).
 - ShareX-compatible `.sxie` import + export — preserves PascalCase + `$type` schema so
-  presets round-trip between ShareX and ShareQ. Exports bundle DrawImage assets into the
+  presets round-trip between ShareX and AresToys. Exports bundle DrawImage assets into the
   `.sxie` ZIP.
 - File-association toggle for `.sxie` (mirrors `.sxcu`).
 - Pipeline task `Apply effects preset` lets the user attach any preset to capture / clipboard
@@ -288,7 +288,7 @@ on Windows; OAuth uploaders only sign in when bundled credentials are configured
 - 10 bundled: Catbox, Uguu.se, paste.rs, Imgur (anonymous), ImgBB, Pastebin, GitHub Gist,
   OneDrive, Google Drive, Dropbox.
 - `.sxcu` engine that loads ShareX-compatible custom uploader files dropped into
-  `%LOCALAPPDATA%\ShareQ\custom-uploaders\`.
+  `%LOCALAPPDATA%\AresToys\custom-uploaders\`.
 - File-association toggle for `.sxcu`.
 
 ### Pipeline and workflows
