@@ -179,19 +179,61 @@ public sealed partial class TraceWindow : Wpf.Ui.Controls.FluentWindow
 
     private void OnTraceNowClicked(object sender, RoutedEventArgs e) => SchedulePreview();
 
-    private void OnSaveClicked(object sender, RoutedEventArgs e)
+    /// <summary>Save-as: opens the file picker, writes the current SVG, then KEEPS the
+    /// window open so the user can continue tweaking parameters and save additional
+    /// variants. Previously the window closed on save, which forced a full reopen if the
+    /// user wanted to try different settings — confusing UX since there's no other place
+    /// the SVG ends up (no editor re-import path).</summary>
+    private async void OnSaveClicked(object sender, RoutedEventArgs e)
     {
-        // Use the most recent preview SVG if Preview is on; otherwise force a sync trace.
+        // Force a sync trace if no preview SVG yet (Realtime preview off + no manual trace yet).
         if (string.IsNullOrEmpty(_lastSvg))
         {
             _previewCts?.Cancel();
-            _lastSvg = _tracer.TraceAsync(_sourcePng, _params.ToOptions(), CancellationToken.None).GetAwaiter().GetResult();
+            try
+            {
+                _lastSvg = await _tracer.TraceAsync(_sourcePng, _params.ToOptions(), CancellationToken.None)
+                    .ConfigureAwait(true);
+            }
+            catch
+            {
+                // Tracer failed — nothing to save. Stay open so the user can adjust params.
+                return;
+            }
         }
-        ResultSvg = _lastSvg;
-        Close();
+        if (string.IsNullOrEmpty(_lastSvg)) return;
+
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = LocalizedString("Trace_SaveDialogTitle"),
+            Filter = LocalizedString("Trace_FilterSvg"),
+            FileName = $"shareq-trace-{DateTime.Now:yyyyMMdd-HHmmss}.svg",
+            DefaultExt = ".svg",
+            AddExtension = true,
+        };
+        if (dlg.ShowDialog(this) != true) return;
+        try
+        {
+            await System.IO.File.WriteAllTextAsync(dlg.FileName, _lastSvg).ConfigureAwait(true);
+        }
+        catch
+        {
+            // I/O failure on disk write — best-effort, no toast yet. User can retry.
+        }
+        // Note: NO Close() here — the user might want to save another variant after tweaking.
     }
 
     private void OnCancelClicked(object sender, RoutedEventArgs e) => Close();
+
+    private static string LocalizedString(string key)
+    {
+        try
+        {
+            return ShareQ.App.Resources.Strings.ResourceManager.GetString(key,
+                System.Globalization.CultureInfo.CurrentUICulture) ?? key;
+        }
+        catch { return key; }
+    }
 
     /// <summary>Click on the IgnoreColor swatch opens ShareQ's <see cref="ColorPickerWindow"/>
     /// (same picker used by image effects + theme + editor swatches). Includes the in-window

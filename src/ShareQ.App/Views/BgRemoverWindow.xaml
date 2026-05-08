@@ -191,11 +191,15 @@
                     <TextBlock Text="{markup:Loc BgRemover_BrushSize}" VerticalAlignment="Center" Margin="0,0,8,0" />
                     <Slider Width="140" Value="{Binding BrushSizePx}" Minimum="5" Maximum="200"
                             IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" />
-                    <TextBox Text="{Binding BrushSizePx}" Width="40" Margin="8,0,16,0" />
+                    <!-- Width 56 instead of 40: 3-digit values (e.g. 100, 200) need ~50 px
+                         to fit comfortably with the textbox padding; 40 was clipping the
+                         trailing digit so "100" rendered as "10". Same fix for Hardness
+                         which can also reach the 3-digit range at 100. -->
+                    <TextBox Text="{Binding BrushSizePx}" Width="56" Margin="8,0,16,0" />
                     <TextBlock Text="{markup:Loc BgRemover_BrushHardness}" VerticalAlignment="Center" Margin="0,0,8,0" />
                     <Slider Width="120" Value="{Binding BrushHardness}" Minimum="0" Maximum="100"
                             IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" />
-                    <TextBox Text="{Binding BrushHardness}" Width="40" Margin="8,0,0,0" />
+                    <TextBox Text="{Binding BrushHardness}" Width="56" Margin="8,0,0,0" />
                     <ui:Button x:Name="ResetBrushBtn" Content="{markup:Loc BgRemover_BrushReset}"
                                Margin="16,0,0,0" Click="OnResetBrushClicked" Focusable="False" />
                     <ui:Button x:Name="ResetViewBtn" Content="{markup:Loc BgRemover_ResetView}"

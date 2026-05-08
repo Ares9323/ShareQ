@@ -148,10 +148,14 @@ public sealed class EditorLauncher
     /// <see cref="OpenEffectsAsync"/> — keeps the rest of the app interactive while the user
     /// dials in trace parameters. Failure modes (potrace missing, tracer crash) surface inline
     /// in the preview window's "(no output)" placeholder, so the legacy MessageBox is gone.</summary>
+    /// <summary>Open the TraceWindow and await its closure. The window handles its own
+    /// "Save as…" file dialog inline (no launcher coordination needed), which lets the
+    /// user save multiple variants without the window closing after each save. We just
+    /// keep the editor's Trace button disabled until the trace window goes away.</summary>
     private async Task TraceToSvgAsync(byte[] sourceBytes, System.Windows.Window? owner)
     {
         var dispatcher = System.Windows.Application.Current.Dispatcher;
-        var tcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         await dispatcher.InvokeAsync(() =>
         {
@@ -163,43 +167,17 @@ public sealed class EditorLauncher
                 {
                     Owner = owner
                 };
-                window.Closed += (_, _) =>
-                {
-                    // ResultSvg is non-null only when the user clicked Save inside TraceWindow;
-                    // closing via X / Esc leaves it null, which the caller treats as cancel.
-                    tcs.TrySetResult(window.ResultSvg);
-                };
+                window.Closed += (_, _) => tcs.TrySetResult(true);
                 window.Show();
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "EditorLauncher: opening trace window failed");
-                tcs.TrySetResult(null);
+                tcs.TrySetResult(false);
             }
-        }).Task.ConfigureAwait(false);
+        });
 
-        var svg = await tcs.Task.ConfigureAwait(true);
-        if (string.IsNullOrEmpty(svg)) return;
-
-        var dlg = new Microsoft.Win32.SaveFileDialog
-        {
-            Title = LocStatic("Trace_SaveDialogTitle"),
-            Filter = LocStatic("Trace_FilterSvg"),
-            FileName = $"shareq-trace-{DateTime.Now:yyyyMMdd-HHmmss}.svg",
-            DefaultExt = ".svg",
-            AddExtension = true,
-        };
-        if (dlg.ShowDialog(owner) != true) return;
-
-        try
-        {
-            await System.IO.File.WriteAllTextAsync(dlg.FileName, svg).ConfigureAwait(false);
-            _logger.LogInformation("EditorLauncher: traced {Path}", dlg.FileName);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "EditorLauncher: writing traced SVG failed");
-        }
+        await tcs.Task.ConfigureAwait(false);
     }
 
     public async Task OpenAsync(long itemId, CancellationToken cancellationToken)

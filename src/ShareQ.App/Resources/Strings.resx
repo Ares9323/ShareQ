@@ -861,7 +861,7 @@
   <data name="Trace_FilterSvg" xml:space="preserve"><value>SVG image|*.svg|All files|*.*</value></data>
   <data name="Trace_FailMessage" xml:space="preserve"><value>Tracing failed — potrace.exe may be missing from the install. Check the log.</value></data>
   <data name="Trace_WindowTitle" xml:space="preserve"><value>Trace to SVG</value></data>
-  <data name="Trace_SaveButton" xml:space="preserve"><value>Save…</value></data>
+  <data name="Trace_SaveButton" xml:space="preserve"><value>Save as…</value></data>
   <data name="Trace_PresetLabel" xml:space="preserve"><value>Preset:</value></data>
   <data name="Trace_PresetSave" xml:space="preserve"><value>Save preset…</value></data>
   <data name="Trace_PresetDelete" xml:space="preserve"><value>Delete</value></data>
@@ -889,8 +889,8 @@
   <data name="Trace_ParamPickIgnore" xml:space="preserve"><value>Pick a colour…</value></data>
   <data name="Trace_ParamPickFromScreen" xml:space="preserve"><value>Sample colour from screen</value></data>
   <data name="Trace_ParamTolerance" xml:space="preserve"><value>Tolerance</value></data>
-  <data name="Trace_PreviewToggle" xml:space="preserve"><value>Preview</value></data>
-  <data name="Trace_TraceNow" xml:space="preserve"><value>Trace</value></data>
+  <data name="Trace_PreviewToggle" xml:space="preserve"><value>Realtime preview</value></data>
+  <data name="Trace_TraceNow" xml:space="preserve"><value>Manual trace</value></data>
   <data name="Trace_InfoLabel" xml:space="preserve"><value>Info</value></data>
   <!-- Shape kind names — used for the dynamic Properties title ("{0} Properties") and tool
        category headers when the panel shows defaults for the active tool. -->

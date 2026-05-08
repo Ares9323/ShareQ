@@ -281,6 +281,29 @@
                 </UniformGrid>
                 <Border Height="1" Background="#333" Margin="0,0,0,12" />
 
+                <!-- Crop properties — visible only when the Crop tool is active and there are
+                     pending crop rectangles. Hosts the global "Apply all crops" action so the
+                     user has a discoverable button beyond the keyboard shortcut (Enter). -->
+                <StackPanel x:Name="CropPropertiesSection" Visibility="Collapsed" Margin="0,0,0,12">
+                    <TextBlock Text="Crop properties" Foreground="White" FontSize="14"
+                               FontWeight="SemiBold" Margin="0,0,0,8" />
+                    <TextBlock x:Name="CropCountLabel" Foreground="#AAA" FontSize="12"
+                               Margin="0,0,0,8" />
+                    <ui:Button x:Name="ApplyCropsButton" Appearance="Primary"
+                               HorizontalAlignment="Stretch"
+                               Click="OnApplyCropsClicked"
+                               ToolTip="Apply all pending crop rectangles as a composite (Enter)">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xf00c;" FontFamily="{DynamicResource IconFont}"
+                                       FontSize="13" Foreground="White" Margin="0,0,8,0"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="Apply all crops" Foreground="White"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ui:Button>
+                    <Border Height="1" Background="#333" Margin="0,12,0,0" />
+                </StackPanel>
+
                 <!-- Default properties: Outline / Fill / Stroke for the NEXT shape to draw.
                      Used to live on the top toolbar; moved here so all "what affects my next
                      stroke" controls are in one column with the live Properties below.

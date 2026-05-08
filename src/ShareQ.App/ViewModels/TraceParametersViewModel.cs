@@ -114,6 +114,12 @@ public sealed partial class TraceParametersViewModel : ObservableObject
     [ObservableProperty] private bool _autoGrouping = true;
     [ObservableProperty] private bool _previewEnabled = true;
 
+    /// <summary>True when the Realtime Preview checkbox is OFF — the Manual Trace button
+    /// is shown only in that case. With realtime preview on, every parameter change auto-
+    /// re-traces via the 150 ms debounce, so the button would be a no-op visual clutter.</summary>
+    public bool ManualTraceVisible => !PreviewEnabled;
+    partial void OnPreviewEnabledChanged(bool value) => OnPropertyChanged(nameof(ManualTraceVisible));
+
     // Quality knobs — exposed because previously hardcoded constants were either too
     // weak (1-pass smoothing left visible saw-tooth on heavy AA sources) or too strong
     // (always-on box blur softened sharp logos that didn't need it). Defaults match the

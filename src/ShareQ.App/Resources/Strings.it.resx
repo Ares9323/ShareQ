@@ -800,7 +800,7 @@
   <data name="Trace_FilterSvg" xml:space="preserve"><value>Immagine SVG|*.svg|Tutti i file|*.*</value></data>
   <data name="Trace_FailMessage" xml:space="preserve"><value>Vettorizzazione fallita — potrace.exe potrebbe mancare dall'installazione. Controlla il log.</value></data>
   <data name="Trace_WindowTitle" xml:space="preserve"><value>Vettorizza in SVG</value></data>
-  <data name="Trace_SaveButton" xml:space="preserve"><value>Salva…</value></data>
+  <data name="Trace_SaveButton" xml:space="preserve"><value>Salva come…</value></data>
   <data name="Trace_PresetLabel" xml:space="preserve"><value>Preset:</value></data>
   <data name="Trace_PresetSave" xml:space="preserve"><value>Salva preset…</value></data>
   <data name="Trace_PresetDelete" xml:space="preserve"><value>Elimina</value></data>
@@ -828,8 +828,8 @@
   <data name="Trace_ParamPickIgnore" xml:space="preserve"><value>Scegli un colore…</value></data>
   <data name="Trace_ParamPickFromScreen" xml:space="preserve"><value>Campiona colore dallo schermo</value></data>
   <data name="Trace_ParamTolerance" xml:space="preserve"><value>Tolleranza</value></data>
-  <data name="Trace_PreviewToggle" xml:space="preserve"><value>Anteprima</value></data>
-  <data name="Trace_TraceNow" xml:space="preserve"><value>Vettorizza</value></data>
+  <data name="Trace_PreviewToggle" xml:space="preserve"><value>Anteprima realtime</value></data>
+  <data name="Trace_TraceNow" xml:space="preserve"><value>Vettorizza manualmente</value></data>
   <data name="Trace_InfoLabel" xml:space="preserve"><value>Info</value></data>
   <data name="Editor_Shape_Rectangle" xml:space="preserve"><value>Rettangolo</value></data>
   <data name="Editor_Shape_Ellipse" xml:space="preserve"><value>Ellisse</value></data>

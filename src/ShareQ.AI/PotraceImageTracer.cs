@@ -328,15 +328,19 @@ public sealed class PotraceImageTracer : IImageTracer
     /// below the share threshold are dropped after the top-n cut.</summary>
     private static List<SKColor> QuantizePalette(SKBitmap src, int n, double minSharePercent)
     {
-        var stride = Math.Max(1, src.Width * src.Height / 10000);
+        // Full pixel scan (no stride). Earlier the code sampled only ~10K pixels regardless
+        // of source size, which on a 1080p input meant every 207th pixel. Small accent
+        // regions (e.g. 20-px-square cyan robot eyes on a logo) had < 15 % chance of
+        // landing in the sample set and got dropped from the palette entirely — even with
+        // Colors=14 the user saw only 3-4 dominant buckets. Full sampling on 1080p costs
+        // ~150 ms in a tight loop and is a one-shot per trace, so it's a clear win for
+        // colour fidelity at the expense of a barely-noticeable startup tick.
         const int bucketsPerChannel = 16;
         var hist = new Dictionary<int, (int Count, int R, int G, int B)>();
-        var idx = 0;
         for (var y = 0; y < src.Height; y++)
         {
-            for (var x = 0; x < src.Width; x++, idx++)
+            for (var x = 0; x < src.Width; x++)
             {
-                if (idx % stride != 0) continue;
                 var c = src.GetPixel(x, y);
                 if (c.Alpha < 16) continue;
                 var br = c.Red   * bucketsPerChannel / 256;
@@ -877,21 +881,15 @@ public sealed class PotraceImageTracer : IImageTracer
     private static string BuildPotraceArgs(TraceOptions o)
     {
         var alphamax = 1.3 * (1.0 - o.CornersPercent / 100.0);
-        // Paths → potrace -O (opttolerance). Illustrator: low Paths = tight fit (more
-        // anchors, follows pixels), high Paths = looser fit (fewer anchors, smoother).
-        // potrace -O matches that direction: low = no merging, high = aggressive merging.
-        // Previously the mapping was inverted (1 - p/100), so high Paths sent the LOWER
-        // tolerance — which together with potrace's silent "opttolerance ≤ alphamax" cap
-        // (default Corners=75 → alphamax=0.325) made the slider feel completely dead:
-        // most of its travel landed above the cap and got clamped to the same value.
-        // 0-100 → 0.0-1.5 gives a real range when Corners is low/moderate; at high Corners
-        // (sharp corners → low alphamax) Paths' effective range compresses, but that
-        // coupling is intrinsic to potrace and the user can dial Corners down to recover.
-        var opttolerance = o.PathsPercent / 100.0 * 1.5;
+        // -O (opttolerance) intentionally NOT passed: potrace clamps it internally to alphamax
+        // and on the simple binary masks our multi-colour pipeline produces it has near-zero
+        // visible effect across its meaningful range. The Paths slider was removed from the
+        // UI for the same reason — see TraceWindow.xaml's note. potrace falls back to its
+        // built-in default (0.2) which is a reasonable mid-point. Reintroduce -O if a real
+        // Douglas-Peucker post-process replaces this with a meaningfully-visible knob.
         var args = new System.Text.StringBuilder("--svg --output - ");
         args.Append(System.Globalization.CultureInfo.InvariantCulture, $"-t {o.NoisePx} ");
         args.Append(System.Globalization.CultureInfo.InvariantCulture, $"-a {alphamax:F3} ");
-        args.Append(System.Globalization.CultureInfo.InvariantCulture, $"-O {opttolerance:F3} ");
         if (o.Mode == TraceMode.BlackAndWhite)
             args.Append(System.Globalization.CultureInfo.InvariantCulture, $"-k {o.Threshold / 255.0:F3} ");
         if (!o.SnapCurvesToLines)

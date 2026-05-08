@@ -143,11 +143,20 @@
                         <Slider Value="{Binding Threshold}" Minimum="0" Maximum="255" IsSnapToTickEnabled="True" TickFrequency="1" />
                     </DockPanel>
 
-                    <DockPanel Grid.Column="0" Grid.Row="1" LastChildFill="True" Margin="0,0,12,8">
-                        <TextBlock Text="{markup:Loc Trace_ParamPaths}" Width="120" />
-                        <TextBox Text="{Binding PathsPercent}" Width="48" DockPanel.Dock="Right" />
-                        <Slider Value="{Binding PathsPercent}" Minimum="0" Maximum="100" IsSnapToTickEnabled="True" TickFrequency="1" />
-                    </DockPanel>
+                    <!-- Paths slider removed — its underlying potrace -O parameter is bounded
+                         by alphamax (Corners) AND has imperceptible visual effect on the
+                         simple binary masks our multi-colour pipeline feeds it. Three
+                         attempts to make it visibly responsive (range expansion, alphamax-
+                         scaled mapping, etc.) all left users with a "slider does nothing"
+                         experience. The PathsPercent field stays in TraceOptions / VM for
+                         preset round-trip but no longer surfaces in UI; potrace gets its
+                         built-in default (0.2). Re-add a meaningful knob later if a real
+                         Douglas-Peucker post-process lands.
+                         Corners + Noise stay at their original row indices (2 and 3) so
+                         column 1 (SnapCurves at row 1, Transparency at row 2, AutoGrouping
+                         at row 3) still aligns horizontally with column 0 — the now-empty
+                         row 1 in column 0 is fine since SnapCurves there reads as a
+                         standalone toggle next to "no slider above". -->
 
                     <DockPanel Grid.Column="0" Grid.Row="2" LastChildFill="True" Margin="0,0,12,8">
                         <TextBlock Text="{markup:Loc Trace_ParamCorners}" Width="120" />
@@ -252,25 +261,39 @@
                 </StackPanel>
             </Border>
 
-            <!-- Footer: Preview toggle + manual Trace + Cancel + Save. -->
+            <!-- Footer: left = Realtime preview + (conditional) Manual Trace; right = Cancel
+                 / Save. Splitting the action types visually (preview controls vs window
+                 disposition) reduces the "what does this button do?" confusion users hit
+                 with the older single-strip layout. -->
             <Border Grid.Row="6" Style="{StaticResource PanelStyle}" Margin="12,4,12,12" Padding="12">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <CheckBox Content="{markup:Loc Trace_PreviewToggle}"
-                              IsChecked="{Binding PreviewEnabled, Mode=TwoWay}"
-                              VerticalAlignment="Center" Margin="0,0,16,0" />
-                    <!-- Manual "Trace now" button — only enabled when Preview is OFF. With
-                         Preview on, every parameter change auto-runs the trace via the 150ms
-                         debounce, so the button would be a redundant no-op. Matches
-                         Illustrator's convention: Preview ↔ Trace are mutually exclusive
-                         drivers of the right pane. -->
-                    <ui:Button Content="{markup:Loc Trace_TraceNow}"
-                               Click="OnTraceNowClicked" Margin="0,0,16,0"
-                               IsEnabled="{Binding PreviewEnabled, Converter={StaticResource InverseBool}}" />
-                    <ui:Button Content="{markup:Loc Common_Cancel}"
-                               Click="OnCancelClicked" Margin="0,0,8,0" />
-                    <ui:Button x:Name="SaveBtn" Content="{markup:Loc Trace_SaveButton}"
-                               Appearance="Primary" Click="OnSaveClicked" />
-                </StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left">
+                        <CheckBox Content="{markup:Loc Trace_PreviewToggle}"
+                                  IsChecked="{Binding PreviewEnabled, Mode=TwoWay}"
+                                  VerticalAlignment="Center" Margin="0,0,16,0" />
+                        <!-- Manual Trace button only appears when Realtime Preview is OFF.
+                             With Preview on it'd be a redundant no-op (every param change
+                             auto-re-traces via the 150 ms debounce); hiding entirely is
+                             clearer than the previous "always shown but greyed out" UX. -->
+                        <ui:Button Content="{markup:Loc Trace_TraceNow}"
+                                   Click="OnTraceNowClicked"
+                                   Visibility="{Binding ManualTraceVisible, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <!-- "Close" instead of "Cancel" — saving doesn't close the window
+                             anymore, so this is the explicit "I'm done" button rather than
+                             a destructive cancel. The Save-as button stays primary because
+                             it's the action the user came to perform. -->
+                        <ui:Button Content="{markup:Loc Common_Close}"
+                                   Click="OnCancelClicked" Margin="0,0,8,0" />
+                        <ui:Button x:Name="SaveBtn" Content="{markup:Loc Trace_SaveButton}"
+                                   Appearance="Primary" Click="OnSaveClicked" />
+                    </StackPanel>
+                </Grid>
             </Border>
         </Grid>
     </Border>

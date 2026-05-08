@@ -33,6 +33,26 @@ public partial class EditorWindow : FluentWindow
     private System.Windows.Shapes.Rectangle? _marqueeRect;
     private double _marqueeStartX, _marqueeStartY;
 
+    // Pending-crop interactive editing: lets the user resize / move the dimmed crop rect via
+    // 8 grip handles (corners + edge midpoints) and inside-rect drag-to-move. _cropDragMode
+    // identifies which gesture is active; _cropDragStart is the mouse-down point in canvas
+    // coords; _cropDragOriginal is the rect as it was at mouse-down so deltas are computed
+    // against a stable baseline (vs. integrating frame-to-frame drift).
+    private CropDragMode _cropDragMode = CropDragMode.None;
+    private int _cropDragIndex = -1;
+    private System.Windows.Point _cropDragStart;
+    private CropRect? _cropDragOriginal;
+
+    /// <summary>Marching-ants animation: a dispatcher timer ticks every ~50 ms and bumps
+    /// <see cref="_antsPhase"/>; <see cref="UpdateMarchingAntsPhase"/> applies the new offset
+    /// to every dashed pending-crop rect on the canvas. Cheap (4-8 children at 20 Hz) and
+    /// keeps the visual flair ShareX uses for region preview without the per-rect Storyboard
+    /// gymnastics. Stops when no pending crops exist so we don't tick forever.</summary>
+    private System.Windows.Threading.DispatcherTimer? _antsTimer;
+    private double _antsPhase;
+
+    private enum CropDragMode { None, Move, ResizeNW, ResizeN, ResizeNE, ResizeE, ResizeSE, ResizeS, ResizeSW, ResizeW }
+
     // Move-drag state (Select tool): _moveStartShape captures the shape at mouse-down,
     // _moveOriginalShape captures the shape as it was when first selected (for undo span).
     private Shape? _moveStartShape;
@@ -121,6 +141,12 @@ public partial class EditorWindow : FluentWindow
             if (e.PropertyName == nameof(EditorViewModel.PreviewShape)) RedrawPreview();
             if (e.PropertyName == nameof(EditorViewModel.SourcePngBytes)) LoadSourceImage();
             if (e.PropertyName == nameof(EditorViewModel.SelectedShape)) OnSelectedShapeChanged();
+            if (e.PropertyName == nameof(EditorViewModel.PendingCrops)
+             || e.PropertyName == nameof(EditorViewModel.SelectedPendingCropIndex))
+            {
+                RedrawPendingCrop();
+                RefreshCropPropertiesSection();
+            }
             if (e.PropertyName == nameof(EditorViewModel.CurrentTool))
             {
                 CommitInlineTextEdit();
@@ -129,6 +155,12 @@ public partial class EditorWindow : FluentWindow
                 // Crop magnifier is tool-specific — switching to anything else means we need to
                 // pull it off the canvas, otherwise it sticks at its last position forever.
                 if (_vm.CurrentTool != EditorTool.Crop) HideCropMagnifier();
+                // Pending crops survive a tool switch (they behave like blur/pixelate effect
+                // shapes — non-destructive previews that persist until the user explicitly
+                // applies or discards). With Select tool active, click on a rect selects it
+                // for Delete; with another drawing tool, the user can keep annotating with
+                // the dim overlay still visible. Apply / Cancel / Esc / Enter all still
+                // work, plus the canvas Apply All button stays clickable across tools.
             }
             if (e.PropertyName == nameof(EditorViewModel.CurrentTextStyle))
             {
@@ -488,6 +520,24 @@ public partial class EditorWindow : FluentWindow
     private void OnPixelateToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Pixelate;
     private void OnSpotlightToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Spotlight;
     private void OnCropToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.Crop;
+
+    private void OnApplyCropsClicked(object sender, RoutedEventArgs e) => _vm.ConfirmAllPendingCrops();
+
+    /// <summary>Show / hide the Crop properties section based on whether there are pending
+    /// crops. The label updates to "1 region" or "N regions" so the user has a quick visual
+    /// confirm of what Apply All would commit. Called whenever PendingCrops or
+    /// CurrentTool changes — both can affect visibility.</summary>
+    private void RefreshCropPropertiesSection()
+    {
+        if (CropPropertiesSection is null) return; // before InitializeComponent
+        var visible = _vm.HasPendingCrops;
+        CropPropertiesSection.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        if (visible)
+        {
+            var count = _vm.PendingCrops.Count;
+            CropCountLabel.Text = count == 1 ? "1 region pending" : $"{count} regions pending";
+        }
+    }
     private void OnSmartEraserToolClicked(object sender, RoutedEventArgs e) => _vm.CurrentTool = EditorTool.SmartEraser;
     private void OnResizeClicked(object sender, RoutedEventArgs e) => OpenResizeDialog();
     private void OnImageClicked(object sender, RoutedEventArgs e) => InsertImageFromFile();
@@ -1041,6 +1091,10 @@ public partial class EditorWindow : FluentWindow
         ZoomLabel.Text = $"{_zoom * 100:F0}%";
         // Grips are sized in screen pixels via inverse zoom; refresh so the new factor applies.
         RefreshSelectionAdorner();
+        // Same trick for the pending-crop overlay grips — without redraw on zoom change they
+        // stay sized to whatever zoom they were rendered at, which means a 14-px grip becomes
+        // 28-px after a 2× zoom-in (and microscopic after zoom-out).
+        RedrawPendingCrop();
     }
 
     /// <summary>Zoom anchored at a canvas-space point (typically the mouse cursor). Applies the
@@ -1059,6 +1113,9 @@ public partial class EditorWindow : FluentWindow
         _zoom = clamped;
         CanvasHost.LayoutTransform = new ScaleTransform(_zoom, _zoom);
         ZoomLabel.Text = $"{_zoom * 100:F0}%";
+        // Refresh adorner + pending-crop overlay so their counter-zoom sizing applies.
+        RefreshSelectionAdorner();
+        RedrawPendingCrop();
         var afterX = canvasPoint.X * _zoom;
         var afterY = canvasPoint.Y * _zoom;
         // Defer the scroll adjustment until layout has flushed the new ScaleTransform — without
@@ -1207,6 +1264,22 @@ public partial class EditorWindow : FluentWindow
         // they're editing a single field.
         if (e.OriginalSource is System.Windows.Controls.TextBox) return;
 
+        // Pending crop(s) intercept Enter/Esc/Delete BEFORE the editor-level Save/Cancel
+        // and shape-Delete. Enter applies all pending crops as a composite; Esc discards
+        // them all; Delete removes only the selected rect (per-rect close ✗ via keyboard).
+        if (_vm.HasPendingCrops)
+        {
+            if (e.Key == Key.Enter)  { _vm.ConfirmAllPendingCrops(); e.Handled = true; return; }
+            if (e.Key == Key.Escape) { _vm.CancelAllPendingCrops();  e.Handled = true; return; }
+            if (e.Key == Key.Delete && _vm.SelectedPendingCropIndex >= 0)
+            {
+                _vm.RemovePendingCrop(_vm.SelectedPendingCropIndex);
+                _vm.SelectedPendingCropIndex = -1;
+                e.Handled = true;
+                return;
+            }
+        }
+
         // Editor-level shortcuts: Enter = Save (matches the Save button), Esc = Cancel (matches
         // the Cancel button — the OnClosing handler already prompts for unsaved changes, so we
         // don't need to gate this).
@@ -1262,7 +1335,63 @@ public partial class EditorWindow : FluentWindow
         // (DrawingCanvas with Transparent Background only hit-tests within Width×Height).
         // Filter out clicks on scrollbar parts and on the inline TextBox editor.
         if (IsScrollBarOrInputControl(e.OriginalSource as DependencyObject)) return;
+
+        // Pending-crop overlay buttons (per-rect ✗) handle their own routing — early-return
+        // before taking capture. Grips live in the overlay too but DO need our dispatch (we
+        // initiate a resize drag here, parameterised by the grip's encoded rect index +
+        // direction). Format: cropgrip_<index>_<CropDragMode>.
+        if (e.OriginalSource is DependencyObject src)
+        {
+            var grip = FindCropGripAncestor(src);
+            if (grip is not null && _vm.PendingCrops.Count > 0)
+            {
+                var raw = grip.Name?["cropgrip_".Length..] ?? string.Empty;
+                var sep = raw.IndexOf('_');
+                if (sep > 0
+                    && int.TryParse(raw[..sep], out var idx)
+                    && Enum.TryParse<CropDragMode>(raw[(sep + 1)..], out var mode)
+                    && idx >= 0 && idx < _vm.PendingCrops.Count)
+                {
+                    _cropDragMode = mode;
+                    _cropDragIndex = idx;
+                    _cropDragStart = e.GetPosition(DrawingCanvas);
+                    _cropDragOriginal = _vm.PendingCrops[idx];
+                    _vm.SelectedPendingCropIndex = idx;
+                    DrawingCanvas.CaptureMouse();
+                    e.Handled = true;
+                    return;
+                }
+            }
+            // Per-rect ✗ button, dashed border, dim path → let WPF route normally.
+            if (IsPendingCropElement(src)) return;
+        }
+
         var p = e.GetPosition(DrawingCanvas);
+
+        // Click INSIDE one of the pending crop rects (not on a grip / button) selects it
+        // AND starts a move-drag. Walk the list top-down so the most-recently-added rect
+        // wins on overlap (Z-order intuition). Click outside every rect falls through to
+        // the normal canvas gesture path — with the Crop tool active that means a fresh
+        // BeginGesture which appends a new rect on commit.
+        if (_vm.PendingCrops.Count > 0)
+        {
+            for (var i = _vm.PendingCrops.Count - 1; i >= 0; i--)
+            {
+                var pcr = _vm.PendingCrops[i];
+                if (!PointInsideCropRect(p, pcr)) continue;
+                _cropDragMode = CropDragMode.Move;
+                _cropDragIndex = i;
+                _cropDragStart = p;
+                _cropDragOriginal = pcr;
+                _vm.SelectedPendingCropIndex = i;
+                DrawingCanvas.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+            // Click landed outside every rect → clear selection (Delete now no-ops, the
+            // overlay border on the previously-selected rect goes back to dashed).
+            _vm.SelectedPendingCropIndex = -1;
+        }
 
         if (_eyedropperContinuation is not null)
         {
@@ -1386,6 +1515,21 @@ public partial class EditorWindow : FluentWindow
             var dy = current.Y - _panStartCursor.Y;
             CanvasScrollViewer.ScrollToHorizontalOffset(_panStartScrollH - dx);
             CanvasScrollViewer.ScrollToVerticalOffset(_panStartScrollV - dy);
+            e.Handled = true;
+            return;
+        }
+
+        // Pending-crop drag (move or resize-from-grip) takes precedence over every other
+        // mouse handling — mouse is captured to the DrawingCanvas and we just feed the
+        // current position into ApplyCropDrag. Also keep the pixel-zoom magnifier alive so
+        // the user can land an edge precisely on a sub-pixel feature without losing the
+        // visual reference (without this, the magnifier disappeared the moment a drag
+        // started — exactly when you needed it most).
+        if (_cropDragMode != CropDragMode.None && e.LeftButton == MouseButtonState.Pressed)
+        {
+            var dragPos = e.GetPosition(DrawingCanvas);
+            ApplyCropDrag(dragPos);
+            if (_vm.CurrentTool == EditorTool.Crop) UpdateCropMagnifier(dragPos);
             e.Handled = true;
             return;
         }
@@ -1556,6 +1700,20 @@ public partial class EditorWindow : FluentWindow
 
     private void OnCanvasMouseUp(object sender, MouseButtonEventArgs e)
     {
+        // End a pending-crop move/resize drag. Mouse capture is released; the new rect is
+        // already committed to the VM (ApplyCropDrag set it on every move), so there's
+        // nothing to flush here — the user can immediately keep dragging another grip
+        // without going through a "commit" step.
+        if (_cropDragMode != CropDragMode.None)
+        {
+            _cropDragMode = CropDragMode.None;
+            _cropDragIndex = -1;
+            _cropDragOriginal = null;
+            if (DrawingCanvas.IsMouseCaptured) DrawingCanvas.ReleaseMouseCapture();
+            e.Handled = true;
+            return;
+        }
+
         if (_isDrawingTextFrame)
         {
             FinishTextFrameDraw(e.GetPosition(DrawingCanvas));
@@ -2716,6 +2874,280 @@ public partial class EditorWindow : FluentWindow
 
     private void OnShapesChanged(object? sender, NotifyCollectionChangedEventArgs e) => RedrawAll();
 
+    /// <summary>Render the non-destructive pending-crop overlay for ALL pending rects.
+    /// Multi-region: each rect renders its own border + 8 grips + ✗ close button; the dim
+    /// overlay is computed as ONE union path (even-odd fill) so areas inside ANY rect stay
+    /// bright while everything else is uniformly dimmed. Apply All is the global confirmation
+    /// hosted in the Crop properties panel; per-rect close lives on each rect.</summary>
+    private void RedrawPendingCrop()
+    {
+        for (var i = DrawingCanvas.Children.Count - 1; i >= 0; i--)
+        {
+            if (DrawingCanvas.Children[i] is FrameworkElement fe && (fe.Tag as string) == "pendingcrop")
+                DrawingCanvas.Children.RemoveAt(i);
+        }
+        if (_vm.PendingCrops.Count == 0)
+        {
+            _antsTimer?.Stop();
+            return;
+        }
+        EnsureMarchingAntsTimer();
+
+        // Combined dim overlay via even-odd Path: outer = canvas bounds + each crop rect as
+        // a sub-figure. Even-odd fill: pixels covered by an even number of subpaths stay
+        // unfilled, so anything inside any rect is bright; outside-every-rect → dimmed.
+        // Necessary for multi-rect (overlap of dim-tiles would double-darken inside one
+        // rect that intersects another); single-rect collapses to the same behaviour.
+        var canvasW = DrawingCanvas.Width > 0 ? DrawingCanvas.Width : DrawingCanvas.ActualWidth;
+        var canvasH = DrawingCanvas.Height > 0 ? DrawingCanvas.Height : DrawingCanvas.ActualHeight;
+        var dimGeometry = new PathGeometry { FillRule = FillRule.EvenOdd };
+        dimGeometry.Figures.Add(MakeRectFigure(0, 0, canvasW, canvasH));
+        foreach (var c in _vm.PendingCrops)
+            dimGeometry.Figures.Add(MakeRectFigure(c.X, c.Y, c.Width, c.Height));
+        var dimPath = new System.Windows.Shapes.Path
+        {
+            Data = dimGeometry,
+            Fill = new SolidColorBrush(Color.FromArgb(140, 0, 0, 0)),
+            IsHitTestVisible = false,
+            Tag = "pendingcrop",
+        };
+        DrawingCanvas.Children.Add(dimPath);
+        for (var idx = 0; idx < _vm.PendingCrops.Count; idx++)
+        {
+            DrawCropRectBorderGripsAndCloseButton(_vm.PendingCrops[idx], idx, idx == _vm.SelectedPendingCropIndex);
+        }
+
+        // Global Apply All button — positioned just outside the bounding box of all rects
+        // (top-right). Always visible whenever ≥ 1 pending crop exists, so the user has a
+        // mouse path to confirm without remembering the Enter shortcut. Per-rect ✗ buttons
+        // handle individual close; this is the global ✓.
+        double bboxR = double.MinValue, bboxT = double.MaxValue;
+        foreach (var c in _vm.PendingCrops)
+        {
+            if (c.X + c.Width > bboxR) bboxR = c.X + c.Width;
+            if (c.Y < bboxT) bboxT = c.Y;
+        }
+        DrawingCanvas.Children.Add(MakeApplyAllButton(bboxR + 8, bboxT, 36));
+    }
+
+    private FrameworkElement MakeApplyAllButton(double x, double y, double size)
+    {
+        var btn = new Wpf.Ui.Controls.Button
+        {
+            Width = size, Height = size,
+            Padding = new Thickness(0),
+            Background = new SolidColorBrush(Color.FromArgb(255, 36, 154, 86)),
+            Foreground = Brushes.White,
+            BorderThickness = new Thickness(0),
+            Tag = "pendingcrop",
+            ToolTip = "Apply all crops (Enter)",
+        };
+        var glyphTb = new System.Windows.Controls.TextBlock
+        {
+            Text = "",   // FontAwesome check
+            FontFamily = (FontFamily?)Application.Current.TryFindResource("IconFont"),
+            FontSize = 16,
+            Foreground = Brushes.White,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        btn.Content = glyphTb;
+        Canvas.SetLeft(btn, x);
+        Canvas.SetTop(btn, y);
+        btn.Click += (_, _) => _vm.ConfirmAllPendingCrops();
+        return btn;
+    }
+
+    private static PathFigure MakeRectFigure(double x, double y, double w, double h)
+    {
+        var f = new PathFigure { StartPoint = new System.Windows.Point(x, y), IsClosed = true };
+        f.Segments.Add(new LineSegment(new System.Windows.Point(x + w, y), false));
+        f.Segments.Add(new LineSegment(new System.Windows.Point(x + w, y + h), false));
+        f.Segments.Add(new LineSegment(new System.Windows.Point(x, y + h), false));
+        return f;
+    }
+
+    private void DrawCropRectBorderGripsAndCloseButton(CropRect c, int index, bool isSelected)
+    {
+        // Two-pass dashed border for legibility on any background. Selected = yellow+black,
+        // unselected = white+black. Both animated via the marching-ants timer (offsets
+        // bumped each tick) — the second pass uses a half-period phase shift so the dash
+        // gaps interlock, reading like a continuously-scrolling line. Stroke thickness is
+        // counter-zoomed so the line stays 1 px on screen at any zoom level.
+        const double dashOn = 4;
+        const double dashOff = 4;
+        var primary = isSelected
+            ? new SolidColorBrush(Color.FromArgb(255, 255, 196, 0)) // amber
+            : System.Windows.Media.Brushes.White;
+        var dark = System.Windows.Media.Brushes.Black;
+        var darkRect = new System.Windows.Shapes.Rectangle
+        {
+            Width = c.Width, Height = c.Height,
+            Stroke = dark,
+            StrokeThickness = (isSelected ? 1.5 : 1) / _zoom,
+            StrokeDashArray = [dashOn, dashOff],
+            StrokeDashOffset = _antsPhase + dashOn,  // half-period phase = interlock with primary
+            IsHitTestVisible = false,
+            Tag = "pendingcrop",
+        };
+        darkRect.SetValue(FrameworkElement.NameProperty, "ants_dark");
+        Canvas.SetLeft(darkRect, c.X);
+        Canvas.SetTop(darkRect, c.Y);
+        DrawingCanvas.Children.Add(darkRect);
+        var primaryRect = new System.Windows.Shapes.Rectangle
+        {
+            Width = c.Width, Height = c.Height,
+            Stroke = primary,
+            StrokeThickness = (isSelected ? 1.5 : 1) / _zoom,
+            StrokeDashArray = [dashOn, dashOff],
+            StrokeDashOffset = _antsPhase,
+            IsHitTestVisible = false,
+            Tag = "pendingcrop",
+        };
+        primaryRect.SetValue(FrameworkElement.NameProperty, "ants_primary");
+        Canvas.SetLeft(primaryRect, c.X);
+        Canvas.SetTop(primaryRect, c.Y);
+        DrawingCanvas.Children.Add(primaryRect);
+
+        AddCropGrip(c.X,                  c.Y,                  index, CropDragMode.ResizeNW);
+        AddCropGrip(c.X + c.Width / 2,    c.Y,                  index, CropDragMode.ResizeN);
+        AddCropGrip(c.X + c.Width,        c.Y,                  index, CropDragMode.ResizeNE);
+        AddCropGrip(c.X + c.Width,        c.Y + c.Height / 2,   index, CropDragMode.ResizeE);
+        AddCropGrip(c.X + c.Width,        c.Y + c.Height,       index, CropDragMode.ResizeSE);
+        AddCropGrip(c.X + c.Width / 2,    c.Y + c.Height,       index, CropDragMode.ResizeS);
+        AddCropGrip(c.X,                  c.Y + c.Height,       index, CropDragMode.ResizeSW);
+        AddCropGrip(c.X,                  c.Y + c.Height / 2,   index, CropDragMode.ResizeW);
+
+        // Per-rect close button intentionally REMOVED — the user removes individual rects
+        // by selecting (click on rect body) and pressing Delete, same as any other shape.
+        // Treating crops as "shapes you can select and delete" is what ShareX does and it
+        // unifies the mental model: only the global Apply All button is special.
+    }
+
+
+    /// <summary>Lazy-init the marching-ants timer; idempotent across redraws. Only starts
+    /// ticking when there are pending crops; <see cref="RedrawPendingCrop"/> stops it on the
+    /// transition back to zero rects.</summary>
+    private void EnsureMarchingAntsTimer()
+    {
+        if (_antsTimer is not null)
+        {
+            if (!_antsTimer.IsEnabled) _antsTimer.Start();
+            return;
+        }
+        _antsTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(50),  // 20 Hz — smooth without burning CPU
+        };
+        _antsTimer.Tick += (_, _) =>
+        {
+            // Bump phase by half a unit per tick → 4 px / 0.4 s = comfortable scroll speed.
+            _antsPhase = (_antsPhase + 0.5) % 8.0;  // period = dashOn (4) + dashOff (4)
+            UpdateMarchingAntsPhase();
+        };
+        _antsTimer.Start();
+    }
+
+    /// <summary>Apply the current <see cref="_antsPhase"/> to every dashed pending-crop
+    /// rect on the canvas. The two-pass rendering tags rects with Name "ants_primary" or
+    /// "ants_dark"; primary is offset by phase, dark by phase + half-period (so the gaps
+    /// interlock visually). Cheap: at most ~16 children to update per tick (8 rects × 2
+    /// passes).</summary>
+    private void UpdateMarchingAntsPhase()
+    {
+        foreach (var child in DrawingCanvas.Children)
+        {
+            if (child is not System.Windows.Shapes.Rectangle r) continue;
+            if (r.Name == "ants_primary") r.StrokeDashOffset = _antsPhase;
+            else if (r.Name == "ants_dark") r.StrokeDashOffset = _antsPhase + 4;
+        }
+    }
+
+    private void AddCropGrip(double cx, double cy, int rectIndex, CropDragMode mode)
+    {
+        // Screen-space size: a counter-zoom factor keeps the grip at a constant on-screen
+        // footprint regardless of zoom level. Without this, grips become microscopic at
+        // high zoom and giant at low zoom — opposite of what an interactive handle wants.
+        const double screenSize = 10;          // 30% smaller than the previous 14 — user request
+        const double strokeScreen = 1.5;
+        var canvasSize = screenSize / _zoom;
+        var grip = new System.Windows.Shapes.Rectangle
+        {
+            Width = canvasSize, Height = canvasSize,
+            Fill = Brushes.White,
+            Stroke = new SolidColorBrush(Color.FromArgb(255, 80, 200, 255)),
+            StrokeThickness = strokeScreen / _zoom,
+            Tag = "pendingcrop",
+            Cursor = ResizeCursorFor(mode),
+        };
+        // Encode rect index + drag mode in Name so OnCanvasMouseDown can dispatch directly
+        // off the OriginalSource without a coordinate-based hit-test pass. Format
+        // "cropgrip_<index>_<mode>" lets a tiny string split recover both parts.
+        grip.SetValue(FrameworkElement.NameProperty, $"cropgrip_{rectIndex}_{mode}");
+        Canvas.SetLeft(grip, cx - canvasSize / 2);
+        Canvas.SetTop(grip, cy - canvasSize / 2);
+        DrawingCanvas.Children.Add(grip);
+    }
+
+    private static Cursor ResizeCursorFor(CropDragMode mode) => mode switch
+    {
+        CropDragMode.ResizeNW or CropDragMode.ResizeSE => Cursors.SizeNWSE,
+        CropDragMode.ResizeNE or CropDragMode.ResizeSW => Cursors.SizeNESW,
+        CropDragMode.ResizeN  or CropDragMode.ResizeS  => Cursors.SizeNS,
+        CropDragMode.ResizeE  or CropDragMode.ResizeW  => Cursors.SizeWE,
+        _ => Cursors.Arrow,
+    };
+
+    private static bool IsPendingCropElement(DependencyObject? source)
+    {
+        while (source is not null)
+        {
+            if (source is FrameworkElement fe && (fe.Tag as string) == "pendingcrop") return true;
+            source = System.Windows.Media.VisualTreeHelper.GetParent(source);
+        }
+        return false;
+    }
+
+    private static FrameworkElement? FindCropGripAncestor(DependencyObject? source)
+    {
+        while (source is not null)
+        {
+            if (source is FrameworkElement fe && fe.Name?.StartsWith("cropgrip_", StringComparison.Ordinal) == true)
+                return fe;
+            source = System.Windows.Media.VisualTreeHelper.GetParent(source);
+        }
+        return null;
+    }
+
+    private static bool PointInsideCropRect(System.Windows.Point p, CropRect c) =>
+        p.X >= c.X && p.X <= c.X + c.Width && p.Y >= c.Y && p.Y <= c.Y + c.Height;
+
+    /// <summary>Apply the active drag (move or resize-from-grip) to <see cref="_cropDragOriginal"/>
+    /// and push the resulting rect into the VM. Clamping to a 1-px minimum width/height
+    /// happens inside <see cref="EditorViewModel.SetPendingCrop"/>; here we just compute the
+    /// raw rect for each drag mode.</summary>
+    private void ApplyCropDrag(System.Windows.Point current)
+    {
+        if (_cropDragOriginal is not { } o) return;
+        if (_cropDragIndex < 0) return;
+        var dx = current.X - _cropDragStart.X;
+        var dy = current.Y - _cropDragStart.Y;
+        double x = o.X, y = o.Y, w = o.Width, h = o.Height;
+        switch (_cropDragMode)
+        {
+            case CropDragMode.Move:     x += dx; y += dy; break;
+            case CropDragMode.ResizeNW: x += dx; y += dy; w -= dx; h -= dy; break;
+            case CropDragMode.ResizeN:           y += dy;          h -= dy; break;
+            case CropDragMode.ResizeNE:          y += dy; w += dx; h -= dy; break;
+            case CropDragMode.ResizeE:                    w += dx;          break;
+            case CropDragMode.ResizeSE:                   w += dx; h += dy; break;
+            case CropDragMode.ResizeS:                             h += dy; break;
+            case CropDragMode.ResizeSW: x += dx;          w -= dx; h += dy; break;
+            case CropDragMode.ResizeW:  x += dx;          w -= dx;          break;
+        }
+        _vm.UpdatePendingCrop(_cropDragIndex, x, y, w, h);
+    }
+
     private void RedrawAll()
     {
         DrawingCanvas.Children.Clear();
@@ -2741,6 +3173,10 @@ public partial class EditorWindow : FluentWindow
         }
         RedrawPreview();
         RefreshSelectionAdorner();
+        // Pending-crop overlay sits on TOP of shapes + adorners + preview so the dim shading
+        // applies uniformly and the action buttons are clickable. Redrawn after the standard
+        // pass so it survives a full RedrawAll (e.g. after a shape edit while a crop is pending).
+        RedrawPendingCrop();
         if (_activeTextBox is not null) DrawingCanvas.Children.Add(_activeTextBox);
     }
 

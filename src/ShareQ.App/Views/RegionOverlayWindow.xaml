@@ -55,41 +55,103 @@
                            FontSize="16" />
             </Border>
 
-            <!-- Magnifier panel near the cursor: zoomed preview + cursor coords underneath -->
-            <Border x:Name="MagnifierBorder"
-                    Background="{DynamicResource Surface2Brush}"
+            <!-- Screen-edge crosshair (ShareX-style): 2 lines extending from cursor to canvas
+                 bounds with marching-ants animation. Helps the user judge alignment of
+                 distant features against the cursor. RenderOptions.EdgeMode = Aliased so the
+                 1-px line stays crisp without sub-pixel anti-alias smearing. -->
+            <Line x:Name="CrosshairH" Stroke="White" StrokeThickness="1"
+                  StrokeDashArray="4,4" IsHitTestVisible="False" Visibility="Collapsed"
+                  RenderOptions.EdgeMode="Aliased" />
+            <Line x:Name="CrosshairHDark" Stroke="Black" StrokeThickness="1"
+                  StrokeDashArray="4,4" StrokeDashOffset="4"
+                  IsHitTestVisible="False" Visibility="Collapsed"
+                  RenderOptions.EdgeMode="Aliased" />
+            <Line x:Name="CrosshairV" Stroke="White" StrokeThickness="1"
+                  StrokeDashArray="4,4" IsHitTestVisible="False" Visibility="Collapsed"
+                  RenderOptions.EdgeMode="Aliased" />
+            <Line x:Name="CrosshairVDark" Stroke="Black" StrokeThickness="1"
+                  StrokeDashArray="4,4" StrokeDashOffset="4"
+                  IsHitTestVisible="False" Visibility="Collapsed"
+                  RenderOptions.EdgeMode="Aliased" />
+
+            <!-- Round pixel-picker (ShareX-style): an Ellipse filled with an ImageBrush of
+                 the zoomed source crop. Centred crosshair marks the exact target pixel.
+                 Coords / size labels are drawn separately just below. -->
+            <Grid x:Name="MagnifierGroup" Visibility="Collapsed">
+                <Ellipse x:Name="MagnifierCircle"
+                         Width="160" Height="160"
+                         Stroke="#80FFFFFF" StrokeThickness="1.5">
+                    <Ellipse.Fill>
+                        <ImageBrush x:Name="MagnifierBrush"
+                                    Stretch="Fill"
+                                    RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                    </Ellipse.Fill>
+                </Ellipse>
+                <Rectangle x:Name="MagnifierCrosshair"
+                           Stroke="Red" StrokeThickness="1.5"
+                           Fill="Transparent"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           IsHitTestVisible="False" />
+            </Grid>
+            <Border x:Name="MagnifierCoordsBorder"
+                    Background="#222"
                     BorderBrush="#80FFFFFF"
                     BorderThickness="1"
-                    CornerRadius="4"
+                    Padding="6,3"
+                    CornerRadius="3"
                     Visibility="Collapsed">
-                <StackPanel>
-                    <Border BorderBrush="#888" BorderThickness="1" ClipToBounds="True">
-                        <Grid>
-                            <Image x:Name="MagnifierImage"
-                                   RenderOptions.BitmapScalingMode="NearestNeighbor"
-                                   Stretch="Fill" />
-                            <Rectangle x:Name="MagnifierCrosshair"
-                                       Stroke="Red" StrokeThickness="1.5"
-                                       Fill="Transparent"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                                       IsHitTestVisible="False" />
-                        </Grid>
-                    </Border>
-                    <TextBlock x:Name="MagnifierCoords"
-                               Foreground="White"
-                               FontFamily="Consolas"
-                               FontWeight="SemiBold"
-                               FontSize="14"
-                               HorizontalAlignment="Center"
-                               Margin="0,4,0,4" />
+                <TextBlock x:Name="MagnifierCoords"
+                           Foreground="White"
+                           FontFamily="Consolas"
+                           FontWeight="SemiBold"
+                           FontSize="14" />
+            </Border>
+            <!-- Single unified popup: hint row + status / zoom / Apply / Cancel below. The
+                 user can drag it anywhere on the overlay (handled in code-behind, position
+                 persisted across sessions). Background is the explicit drag handle — only
+                 the Buttons inside opt out of the drag, so any background pixel grabs it. -->
+            <Border x:Name="Toolbar"
+                    Background="#222"
+                    BorderBrush="#80FFFFFF"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="12,8"
+                    Cursor="SizeAll"
+                    Canvas.ZIndex="200"
+                    Canvas.Left="0" Canvas.Top="0">
+                <StackPanel Orientation="Vertical">
+                    <TextBlock Foreground="#BBB" FontSize="11"
+                               Margin="0,0,0,6"
+                               Text="Drag to add region · Click to select · Del to remove · Wheel to zoom · Drag this popup to move it" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="StatusLabel"
+                                   Foreground="White" FontSize="13" FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,16,0"
+                                   Text="No regions yet — drag to start" />
+                        <Border Width="1" Background="#80FFFFFF" Margin="0,0,16,0" />
+                        <TextBlock x:Name="ZoomLabel"
+                                   Foreground="#AAA" FontSize="12"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,16,0"
+                                   Text="Zoom: 17px" />
+                        <Border Width="1" Background="#80FFFFFF" Margin="0,0,16,0" />
+                        <Button x:Name="ToolbarApplyButton"
+                                Content="Apply (Enter)"
+                                Click="OnToolbarApplyClicked"
+                                Background="#249A56" Foreground="White"
+                                BorderBrush="#249A56" BorderThickness="0"
+                                Padding="10,4" Margin="0,0,8,0"
+                                IsEnabled="False" />
+                        <Button x:Name="ToolbarCancelButton"
+                                Content="Cancel (Esc)"
+                                Click="OnToolbarCancelClicked"
+                                Background="#C54747" Foreground="White"
+                                BorderBrush="#C54747" BorderThickness="0"
+                                Padding="10,4" />
+                    </StackPanel>
                 </StackPanel>
             </Border>
         </Canvas>
-        <TextBlock HorizontalAlignment="Center"
-                   VerticalAlignment="Top"
-                   Margin="0,12,0,0"
-                   Foreground="White"
-                   FontSize="13"
-                   Text="Drag to select region · Esc to cancel" />
     </Grid>
 </Window>

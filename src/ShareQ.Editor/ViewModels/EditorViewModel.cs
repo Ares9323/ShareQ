@@ -34,7 +34,16 @@ public sealed partial class EditorViewModel : ObservableObject
         };
         _activeTool = _tools[EditorTool.Rectangle];
         Shapes = [];
+        PendingCrops.CollectionChanged += OnPendingCropsCollectionChanged;
     }
+
+    /// <summary>Index into <see cref="PendingCrops"/> of the currently-selected rect, or
+    /// -1 when nothing is selected. Multi-region semantics: clicking a rect in the overlay
+    /// selects it; pressing Delete removes only the selected one; clicking outside any
+    /// rect (in the canvas) clears the selection. Tracking selection here (vs. on the
+    /// view) keeps the Delete-key handler stateless w.r.t. mouse history.</summary>
+    [ObservableProperty]
+    private int _selectedPendingCropIndex = -1;
 
     public ObservableCollection<Shape> Shapes { get; }
 
@@ -207,6 +216,10 @@ public sealed partial class EditorViewModel : ObservableObject
             var maxN = Shapes.OfType<StepCounterShape>().Select(s => s.Number).DefaultIfEmpty(0).Max();
             sct.SetNext(maxN + 1);
         }
+        // Multi-region semantics: the new drag will APPEND another rect to the existing
+        // PendingCrops list (no clear). The window dispatcher only routes to BeginGesture
+        // when the click lands outside every existing rect / grip, so we don't accidentally
+        // start a new rect when the user meant to drag an existing one.
         _activeTool.Begin(x, y, OutlineColor, FillColor, StrokeWidth);
         OnPropertyChanged(nameof(PreviewShape));
     }
@@ -222,8 +235,15 @@ public sealed partial class EditorViewModel : ObservableObject
         var committed = _activeTool.Commit(x, y);
         if (_activeTool is CropTool ct && ct.LastRect is { } cropRect)
         {
-            ApplyCrop((int)Math.Round(cropRect.X), (int)Math.Round(cropRect.Y),
-                      (int)Math.Round(cropRect.Width), (int)Math.Round(cropRect.Height));
+            // Non-destructive multi-region: APPEND the new rect to the pending list rather
+            // than replace. The user can stack multiple crop rects, select / delete any of
+            // them, then trigger one global Apply that composites them all (matches ShareX's
+            // multi-region capture). Single-rect workflows are unaffected — the list ends up
+            // with one item.
+            AddPendingCrop(cropRect.X, cropRect.Y, cropRect.Width, cropRect.Height);
+            // Auto-select the just-drawn rect so a subsequent Delete key removes it without
+            // requiring a separate select-then-delete click sequence.
+            SelectedPendingCropIndex = PendingCrops.Count - 1;
         }
         else if (committed is not null)
         {
@@ -234,6 +254,70 @@ public sealed partial class EditorViewModel : ObservableObject
             SetSelection([committed]);
         }
         OnPropertyChanged(nameof(PreviewShape));
+    }
+
+    /// <summary>List of pending crop rectangles (zero or more). Multi-region: each new
+    /// drag with the Crop tool APPENDS a rectangle, the user can move / resize / remove
+    /// any of them, then a single global Apply All command bakes a composite — the source
+    /// becomes the bounding box of all rects with everything outside any rect rendered
+    /// transparent (matches ShareX's region-capture multi-region behaviour).
+    /// Empty list = no overlay, no dim, no buttons. Use <see cref="PendingCrops"/>.Count
+    /// instead of "is non-null" for visibility checks.</summary>
+    public ObservableCollection<CropRect> PendingCrops { get; } = [];
+
+    /// <summary>True when at least one pending crop rect exists. Surfaces as a property
+    /// for XAML bindings (e.g. the Crop properties panel's Apply All button visibility);
+    /// raised on every list mutation via <see cref="OnPendingCropsCollectionChanged"/>.</summary>
+    public bool HasPendingCrops => PendingCrops.Count > 0;
+
+    /// <summary>Append a new pending crop to the list. Called by the CropTool commit path
+    /// after a fresh drag — multi-region semantics: doesn't replace the existing rects.</summary>
+    public void AddPendingCrop(double x, double y, double w, double h)
+    {
+        if (w < 0) { x += w; w = -w; }
+        if (h < 0) { y += h; h = -h; }
+        if (w < 1 || h < 1) return;
+        PendingCrops.Add(new CropRect(x, y, w, h));
+    }
+
+    /// <summary>Replace the rect at <paramref name="index"/> with a new one (used by grip
+    /// resize / inside-rect move drags). Out-of-range / degenerate rects are silently
+    /// dropped — better than throwing on a fast-firing mouse-move event.</summary>
+    public void UpdatePendingCrop(int index, double x, double y, double w, double h)
+    {
+        if (index < 0 || index >= PendingCrops.Count) return;
+        if (w < 0) { x += w; w = -w; }
+        if (h < 0) { y += h; h = -h; }
+        if (w < 1 || h < 1) { PendingCrops.RemoveAt(index); return; }
+        PendingCrops[index] = new CropRect(x, y, w, h);
+    }
+
+    /// <summary>Remove a single pending crop (the per-rect ✗ button calls this).</summary>
+    public void RemovePendingCrop(int index)
+    {
+        if (index < 0 || index >= PendingCrops.Count) return;
+        PendingCrops.RemoveAt(index);
+    }
+
+    /// <summary>Bake every pending crop into the source bitmap as a composite: bbox = union
+    /// of all rects, output image keeps pixels inside any rect, everything else transparent.
+    /// Single rect collapses to the original simple-crop behaviour. Undoable via Ctrl+Z.</summary>
+    public void ConfirmAllPendingCrops()
+    {
+        if (PendingCrops.Count == 0) return;
+        SetSelection([]);
+        var snapshot = PendingCrops.ToList();
+        _commands.Execute(new MultiCropCommand(this, snapshot), Shapes);
+        PendingCrops.Clear();
+    }
+
+    /// <summary>Discard every pending crop without touching the source bitmap.</summary>
+    public void CancelAllPendingCrops() => PendingCrops.Clear();
+
+    private void OnPendingCropsCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(HasPendingCrops));
+        OnPropertyChanged(nameof(PendingCrops));   // fire a change event so view-side listeners (RedrawPendingCrop) re-render
     }
 
     public void ApplyCrop(int cropX, int cropY, int cropW, int cropH)
