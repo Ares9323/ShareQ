@@ -271,13 +271,17 @@ public sealed partial class EditorViewModel : ObservableObject
     public bool HasPendingCrops => PendingCrops.Count > 0;
 
     /// <summary>Append a new pending crop to the list. Called by the CropTool commit path
-    /// after a fresh drag — multi-region semantics: doesn't replace the existing rects.</summary>
+    /// after a fresh drag — multi-region semantics: doesn't replace the existing rects.
+    /// Recorded on the undo stack so Ctrl+Z removes the just-added rect (matches what the
+    /// user expects of "an object I dropped on the canvas"). Resize / move on a placed
+    /// rect are not yet undoable as discrete steps.</summary>
     public void AddPendingCrop(double x, double y, double w, double h)
     {
         if (w < 0) { x += w; w = -w; }
         if (h < 0) { y += h; h = -h; }
         if (w < 1 || h < 1) return;
-        PendingCrops.Add(new CropRect(x, y, w, h));
+        var rect = new CropRect(x, y, w, h);
+        _commands.Execute(new AddPendingCropCommand(this, rect), Shapes);
     }
 
     /// <summary>Replace the rect at <paramref name="index"/> with a new one (used by grip

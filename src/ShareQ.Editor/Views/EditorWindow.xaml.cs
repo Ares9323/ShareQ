@@ -101,8 +101,10 @@ public partial class EditorWindow : FluentWindow
     private readonly ShareQ.Core.Imaging.IImageEncoder? _encoder;
 
     // Crop magnifier — built lazily on first mouse-move while the Crop tool is active,
-    // hidden when the tool changes. The Image inside shows a NearestNeighbor-scaled chunk of
-    // SourceImage centered on the cursor so the user can see where pixel boundaries fall.
+    // hidden when the tool changes. Round picker: Image element clipped to an ellipse
+    // (NearestNeighbor scaling only takes effect on Image, not on ImageBrush — the latter
+    // falls back to bilinear and produces blurred pixels), with a thin outline ring + a
+    // red crosshair on top.
     private System.Windows.Controls.Border? _cropMagnifier;
     private System.Windows.Controls.Image? _cropMagnifierImage;
 
@@ -2917,45 +2919,9 @@ public partial class EditorWindow : FluentWindow
             DrawCropRectBorderGripsAndCloseButton(_vm.PendingCrops[idx], idx, idx == _vm.SelectedPendingCropIndex);
         }
 
-        // Global Apply All button — positioned just outside the bounding box of all rects
-        // (top-right). Always visible whenever ≥ 1 pending crop exists, so the user has a
-        // mouse path to confirm without remembering the Enter shortcut. Per-rect ✗ buttons
-        // handle individual close; this is the global ✓.
-        double bboxR = double.MinValue, bboxT = double.MaxValue;
-        foreach (var c in _vm.PendingCrops)
-        {
-            if (c.X + c.Width > bboxR) bboxR = c.X + c.Width;
-            if (c.Y < bboxT) bboxT = c.Y;
-        }
-        DrawingCanvas.Children.Add(MakeApplyAllButton(bboxR + 8, bboxT, 36));
-    }
-
-    private FrameworkElement MakeApplyAllButton(double x, double y, double size)
-    {
-        var btn = new Wpf.Ui.Controls.Button
-        {
-            Width = size, Height = size,
-            Padding = new Thickness(0),
-            Background = new SolidColorBrush(Color.FromArgb(255, 36, 154, 86)),
-            Foreground = Brushes.White,
-            BorderThickness = new Thickness(0),
-            Tag = "pendingcrop",
-            ToolTip = "Apply all crops (Enter)",
-        };
-        var glyphTb = new System.Windows.Controls.TextBlock
-        {
-            Text = "",   // FontAwesome check
-            FontFamily = (FontFamily?)Application.Current.TryFindResource("IconFont"),
-            FontSize = 16,
-            Foreground = Brushes.White,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        btn.Content = glyphTb;
-        Canvas.SetLeft(btn, x);
-        Canvas.SetTop(btn, y);
-        btn.Click += (_, _) => _vm.ConfirmAllPendingCrops();
-        return btn;
+        // No floating Apply-All affordance on the canvas: the "Apply all crops" button in
+        // the Crop properties panel covers the same intent without dropping a green square
+        // next to a pending rect (Enter shortcut still works too).
     }
 
     private static PathFigure MakeRectFigure(double x, double y, double w, double h)
@@ -3277,20 +3243,29 @@ public partial class EditorWindow : FluentWindow
 
         if (_cropMagnifier is null)
         {
-            // Mirrors ScreenColorPickerOverlay's magnifier styling: Image inside a 1-px outline
-            // border, with a small Rectangle marking the centre pixel (the pixel that ends up
-            // on the crop edge if the user clicks now). Same SampleSize / displaySize ratio as
-            // the screen sampler so the two surfaces feel like the same control.
+            // Image (with NearestNeighbor) clipped to an ellipse, then a transparent
+            // outline ellipse + red centre marker stacked above it. Going via Image (vs
+            // ImageBrush) is what guarantees the magnified pixels stay crisp instead of
+            // being bilinearly interpolated.
             _cropMagnifierImage = new System.Windows.Controls.Image
             {
                 Width = displaySize, Height = displaySize,
                 Stretch = System.Windows.Media.Stretch.Fill,
                 IsHitTestVisible = false,
+                Clip = new System.Windows.Media.EllipseGeometry(
+                    new System.Windows.Point(displaySize / 2.0, displaySize / 2.0),
+                    displaySize / 2.0, displaySize / 2.0),
             };
             RenderOptions.SetBitmapScalingMode(_cropMagnifierImage, BitmapScalingMode.NearestNeighbor);
 
-            // Centre-pixel marker — Rectangle outline, same as the screen sampler. Size in
-            // display space = (1 source pixel) × zoomFactor.
+            var outlineRing = new System.Windows.Shapes.Ellipse
+            {
+                Width = displaySize, Height = displaySize,
+                Stroke = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
+                StrokeThickness = 1.5,
+                Fill = System.Windows.Media.Brushes.Transparent,
+                IsHitTestVisible = false,
+            };
             var centerMarker = new System.Windows.Shapes.Rectangle
             {
                 Width = (double)displaySize / sampleSize,
@@ -3305,31 +3280,25 @@ public partial class EditorWindow : FluentWindow
             var inner = new System.Windows.Controls.Grid
             {
                 Width = displaySize, Height = displaySize,
-                ClipToBounds = true,
             };
             inner.Children.Add(_cropMagnifierImage);
+            inner.Children.Add(outlineRing);
             inner.Children.Add(centerMarker);
-            var innerFrame = new System.Windows.Controls.Border
-            {
-                Child = inner,
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
-                BorderThickness = new Thickness(1),
-            };
             _cropMagnifier = new System.Windows.Controls.Border
             {
-                Padding = new Thickness(8),
-                Child = innerFrame,
-                Background = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(4),
+                Child = inner,
                 IsHitTestVisible = false,
                 Tag = "crop-magnifier",
                 Effect = new System.Windows.Media.Effects.DropShadowEffect
                 {
-                    BlurRadius = 8, ShadowDepth = 0, Opacity = 0.6, Color = Colors.Black,
+                    BlurRadius = 10, ShadowDepth = 0, Opacity = 0.7, Color = Colors.Black,
                 },
             };
+            // Force-stack above every other DrawingCanvas child. RedrawPendingCrop / effect
+            // shape redraws clear and re-add their visuals on every change, which would
+            // otherwise leave the magnifier sandwiched below them. ZIndex lets us pin it on
+            // top regardless of insertion order.
+            Canvas.SetZIndex(_cropMagnifier, 10000);
             DrawingCanvas.Children.Add(_cropMagnifier);
         }
         if (_cropMagnifierImage is not null) _cropMagnifierImage.Source = crop;

@@ -3,6 +3,72 @@
 All notable changes to ShareQ. Format loosely follows [Keep a Changelog](https://keepachangelog.com/),
 versions follow [SemVer](https://semver.org/).
 
+## [0.1.2] — 2026-05-08
+
+Multi-region capture and multi-area crop, round ShareX-style pixel pickers across every
+sampler surface, undoable pending crops, and a fix for the settings-wiped-on-update bug
+that bit anyone who ran a 0.1.1 self-update.
+
+### Region capture overlay
+- Multi-region selection: drag accumulates rectangles instead of replacing the previous
+  one, click on the hovered window snaps + adds, Enter applies them as a composite (bbox
+  of all rects with everything outside any rect transparent — matches ShareX's multi-
+  region capture).
+- Snap-to-windows preview while idle: a yellow dashed outline tracks the window under the
+  cursor so a click without drag captures that window exactly.
+- Round pixel picker (was rectangular): Ellipse fed by a NearestNeighbor-scaled crop, red
+  centre crosshair marking the target pixel, X / Y physical-pixel coordinates label.
+- Wheel zoom on the magnifier (3 to 41 px sample window).
+- Marching-ants screen-edge crosshair extending from cursor to canvas bounds, useful for
+  aligning rect edges with distant features. Animated white + black dashes interlock at
+  60 Hz.
+- 8 resize grip handles per committed rect (corners + edge midpoints) with proper resize
+  cursors. Drag inside a rect moves it.
+- Single draggable popup at the bottom unifies the previous top hint and bottom toolbar
+  (status + zoom + Apply + Cancel). Position is remembered across sessions.
+- Dim-path rebuild during in-flight drags is throttled to a 60 Hz tick instead of running
+  on every pointer event — eliminates crosshair and magnifier lag on high-poll mice.
+
+### Editor
+- Multi-area crop: every drag with the Crop tool appends a pending rect, the user can
+  move / resize / delete any of them, then Apply All bakes them all as a single composite
+  (matches the region overlay's behaviour).
+- Pending crop borders are animated marching-ants dashes (yellow when selected, white
+  otherwise) instead of a solid amber outline.
+- 8 resize grip handles per pending crop (corners + edge midpoints), 30 percent smaller
+  than the initial size, screen-space-sized so they stay constant when the canvas is
+  zoomed.
+- "Apply all crops" button in the Crop properties panel (the previous in-canvas floating
+  green button has been removed — it dropped a square next to the rect that read like a
+  per-rect confirm).
+- Ctrl+Z removes the most recently placed pending crop (it's now recorded on the undo
+  stack as a discrete step).
+- Round crop magnifier (was square): Image element clipped to an ellipse with
+  NearestNeighbor scaling, red centre marker. Pinned above effects + pending-crop
+  visuals via Canvas.ZIndex so RedrawPendingCrop can no longer sandwich it underneath.
+
+### Color picker (eyedropper)
+- Round magnifier replaces the square one — same NearestNeighbor + clipped-Image pattern
+  used by the region overlay and the editor crop tool.
+- Wheel zoom on the picker (3 to 41 px sample window) with a live zoom indicator.
+- Works on a frozen snapshot of the desktop captured before the overlay paints, instead
+  of doing a fresh CopyFromScreen per frame. Two consequences: the picker no longer
+  captures its own UI or the cursor sprite (was sampling the cursor colour on flat
+  surfaces), and the per-frame GDI roundtrip + new BitmapSource allocation goes away.
+- Dropped AllowsTransparency on the overlay window — WPF was forcing software rendering
+  for a fullscreen transparent layered window, which on a multi-monitor virtual screen
+  meant a long flash of white at open and constant frame stutter. The window now paints
+  the snapshot opaquely as its background and runs hardware-accelerated.
+- Pixel coordinates readout (X / Y in physical pixels) joins the existing hex + RGB row.
+
+### Storage + update flow
+- Settings folder migrated from %LocalAppData%\ShareQ\ to %LocalAppData%\ShareQ-Data\.
+  The previous path collided with Velopack's install root, so every self-update wiped
+  the user's settings and clipboard history. A one-shot migration on first launch copies
+  the existing data over and updates the active path.
+
+---
+
 ## [0.1.1] — 2026-05-07
 
 Second alpha. Big editor refactor, full Italian localization, image trace (raster → SVG)

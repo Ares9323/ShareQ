@@ -74,19 +74,25 @@
                   IsHitTestVisible="False" Visibility="Collapsed"
                   RenderOptions.EdgeMode="Aliased" />
 
-            <!-- Round pixel-picker (ShareX-style): an Ellipse filled with an ImageBrush of
-                 the zoomed source crop. Centred crosshair marks the exact target pixel.
-                 Coords / size labels are drawn separately just below. -->
-            <Grid x:Name="MagnifierGroup" Visibility="Collapsed">
+            <!-- Round pixel-picker (ShareX-style). Image element clipped to an ellipse —
+                 RenderOptions.BitmapScalingMode=NearestNeighbor only takes effect on Image,
+                 not on ImageBrush (WPF falls back to bilinear there and pixels come out
+                 blurred). Outer Ellipse + centred crosshair stack on top via the same Grid. -->
+            <Grid x:Name="MagnifierGroup" Width="160" Height="160" Visibility="Collapsed">
+                <Image x:Name="MagnifierImage"
+                       Width="160" Height="160"
+                       Stretch="Fill"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor"
+                       IsHitTestVisible="False">
+                    <Image.Clip>
+                        <EllipseGeometry Center="80,80" RadiusX="80" RadiusY="80" />
+                    </Image.Clip>
+                </Image>
                 <Ellipse x:Name="MagnifierCircle"
                          Width="160" Height="160"
-                         Stroke="#80FFFFFF" StrokeThickness="1.5">
-                    <Ellipse.Fill>
-                        <ImageBrush x:Name="MagnifierBrush"
-                                    Stretch="Fill"
-                                    RenderOptions.BitmapScalingMode="NearestNeighbor" />
-                    </Ellipse.Fill>
-                </Ellipse>
+                         Stroke="#80FFFFFF" StrokeThickness="1.5"
+                         Fill="Transparent"
+                         IsHitTestVisible="False" />
                 <Rectangle x:Name="MagnifierCrosshair"
                            Stroke="Red" StrokeThickness="1.5"
                            Fill="Transparent"

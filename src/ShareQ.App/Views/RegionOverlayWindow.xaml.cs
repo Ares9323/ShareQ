@@ -524,7 +524,7 @@ public partial class RegionOverlayWindow : Window
                 // Wire the cropped bitmap into the ImageBrush feeding the circular Ellipse.
                 // Setting ImageBrush.ImageSource is preferred over recreating the brush so
                 // WPF reuses the same paint; cheap on every magnifier tick.
-                MagnifierBrush.ImageSource = new CroppedBitmap(snap, new Int32Rect(rx, ry, sampleSize, sampleSize));
+                MagnifierImage.Source = new CroppedBitmap(snap, new Int32Rect(rx, ry, sampleSize, sampleSize));
             }
         }
         var pixSize = (double)MagnifierBoxPx / sampleSize;
