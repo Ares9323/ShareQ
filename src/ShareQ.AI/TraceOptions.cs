@@ -7,8 +7,12 @@ public enum TraceMode { BlackAndWhite, Grayscale, Color }
 /// <c>Automatic</c> = let the quantizer pick a count by elbow-point heuristic
 /// (kept simple: cap at <c>ColorCount</c> but drop colours whose share &lt; 2%).
 /// <c>FullTone</c> = no quantization, treat every distinct source colour as a layer
-/// (impractical for screenshots; included for parity with Illustrator).</summary>
-public enum TracePalette { Limited, Automatic, FullTone }
+/// (impractical for screenshots; included for parity with Illustrator).
+/// <c>Custom</c> = use the user-picked palette in <see cref="TraceOptions.CustomPalette"/>;
+/// every source pixel maps to its nearest entry by Euclidean RGB distance. Lets the user
+/// fold related tones (e.g. white + light grey collapsed into "white" by sampling only
+/// white). Falls back to Limited when the custom list is empty.</summary>
+public enum TracePalette { Limited, Automatic, FullTone, Custom }
 
 /// <summary>How adjacent colour layers stitch in multi-colour mode.
 /// <c>Overlapping</c> = paths overlap on colour boundaries (no gaps; the upper layer
@@ -81,4 +85,10 @@ public sealed record TraceOptions(
     bool AutoGrouping = true,
     int SmoothingIterations = 2,
     int PreBlurStrength = 1,
-    int OverlapRadius = 1);
+    int OverlapRadius = 1,
+    /// <summary>User-picked palette consumed when <see cref="Palette"/> = Custom. Each
+    /// source pixel is mapped to its nearest entry in this list (Euclidean RGB). Empty
+    /// list = falls back to Limited so the user always gets a trace; the typical workflow
+    /// is "pick 3 colours, get a 3-layer trace where related tones collapse into the
+    /// nearest pick".</summary>
+    System.Collections.Generic.IReadOnlyList<System.Drawing.Color>? CustomPalette = null);

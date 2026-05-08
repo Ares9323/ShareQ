@@ -280,6 +280,15 @@ public sealed class PotraceImageTracer : IImageTracer
     {
         var n = Math.Clamp(opts.ColorCount, 2, 64);
         var requested = opts.IgnoreColor.HasValue ? Math.Min(n + 1, 64) : n;
+        // Custom: use the user-picked palette as-is; each pixel will map to its nearest
+        // entry downstream in BuildPaletteAssignment. Fall through to Limited when the
+        // user hasn't picked anything yet so the preview still shows something useful.
+        if (opts.Palette == TracePalette.Custom && opts.CustomPalette is { Count: > 0 } picks)
+        {
+            return picks
+                .Select(c => new SKColor(c.R, c.G, c.B, 255))
+                .ToList();
+        }
         return opts.Palette switch
         {
             TracePalette.FullTone => FullTonePalette(src),

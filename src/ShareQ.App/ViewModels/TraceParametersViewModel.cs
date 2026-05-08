@@ -46,8 +46,16 @@ public sealed partial class TraceParametersViewModel : ObservableObject
             new(TracePalette.Automatic, "Automatic"),
             new(TracePalette.Limited, "Limited"),
             new(TracePalette.FullTone, "Full Tone"),
+            new(TracePalette.Custom, "Custom (pick colours)"),
         };
         SelectedPalette = Palettes[1];
+        CustomPalette = new ObservableCollection<System.Windows.Media.Color>();
+        CustomPalette.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(IsCustomPalette));
+            OnPropertyChanged(nameof(CanAddSwatch));
+            OnPropertyChanged(nameof(HasEnoughSwatches));
+        };
         Presets = new ObservableCollection<TracePreset>(TracePresets.Stock);
         SelectedPreset = Presets[0];
     }
@@ -81,6 +89,28 @@ public sealed partial class TraceParametersViewModel : ObservableObject
     [ObservableProperty] private TraceViewModeItem _selectedViewMode = null!;
     public ObservableCollection<TracePaletteItem> Palettes { get; }
     [ObservableProperty] private TracePaletteItem _selectedPalette = null!;
+
+    /// <summary>User-picked palette for <see cref="TracePalette.Custom"/> mode. Edited in the
+    /// trace window via the swatch row (click → opens screen colour picker → fills slot).
+    /// Each entry maps to a layer in the trace; pixels collapse to their nearest pick by
+    /// Euclidean RGB so e.g. "white + light grey" become "white" if only white was picked.
+    /// Capped at <see cref="MaxCustomSwatches"/> — potrace handles many layers but UX
+    /// breaks down past ~16 colour chips in a row.</summary>
+    public ObservableCollection<System.Windows.Media.Color> CustomPalette { get; }
+    public const int MaxCustomSwatches = 16;
+    public const int MinCustomSwatches = 2;
+
+    public bool IsCustomPalette => SelectedPalette?.Value == TracePalette.Custom;
+    /// <summary>True while the user can still add another swatch (below the cap).</summary>
+    public bool CanAddSwatch => CustomPalette.Count < MaxCustomSwatches;
+    /// <summary>True once the user has picked at least <see cref="MinCustomSwatches"/>
+    /// colours — below that the trace would map every pixel to one colour.</summary>
+    public bool HasEnoughSwatches => CustomPalette.Count >= MinCustomSwatches;
+
+    partial void OnSelectedPaletteChanged(TracePaletteItem value)
+    {
+        OnPropertyChanged(nameof(IsCustomPalette));
+    }
 
     // Mode toggle group — three RadioButton bindings funnel into one TraceMode field.
     [ObservableProperty] private TraceMode _mode = TraceMode.BlackAndWhite;
@@ -169,7 +199,10 @@ public sealed partial class TraceParametersViewModel : ObservableObject
         AutoGrouping: AutoGrouping,
         SmoothingIterations: SmoothingIterations,
         PreBlurStrength: PreBlurStrength,
-        OverlapRadius: OverlapRadius);
+        OverlapRadius: OverlapRadius,
+        CustomPalette: CustomPalette.Count > 0
+            ? CustomPalette.Select(m => System.Drawing.Color.FromArgb(m.A, m.R, m.G, m.B)).ToList()
+            : null);
 
     /// <summary>Apply every field from <paramref name="o"/> in sequence. Each setter fires
     /// its own PropertyChanged → the window's <c>OnParamsChanged</c> queues N debounced
@@ -199,6 +232,16 @@ public sealed partial class TraceParametersViewModel : ObservableObject
         SmoothingIterations = o.SmoothingIterations;
         PreBlurStrength = o.PreBlurStrength;
         OverlapRadius = o.OverlapRadius;
+        // Custom palette is only restored if the preset actually carries one. Stock presets
+        // ship with null here, so loading one doesn't wipe the user's currently-picked
+        // swatches (they'd be annoyed if switching to "High Fidelity Photo" cleared their
+        // brand colours). Saved custom presets that DO carry a palette get full round-trip.
+        if (o.CustomPalette is { Count: > 0 } picks)
+        {
+            CustomPalette.Clear();
+            foreach (var pick in picks)
+                CustomPalette.Add(System.Windows.Media.Color.FromArgb(pick.A, pick.R, pick.G, pick.B));
+        }
     }
 
     /// <summary>Parse the rendered SVG to fill the Info readout. Cheap regex over the

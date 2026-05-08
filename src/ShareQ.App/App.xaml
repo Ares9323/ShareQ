@@ -22,6 +22,7 @@
             <cv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
             <cv:BytesToImageConverter x:Key="BytesToImage" />
             <cv:EnumValueDisplayConverter x:Key="EnumValueDisplay" />
+            <cv:ColorToBrushConverter x:Key="ColorToBrush" />
 
             <!-- Checker pattern — used as a backdrop behind any partially-transparent fill so
                  the user can see the alpha (gradient stops, picked colours, preview swatches).

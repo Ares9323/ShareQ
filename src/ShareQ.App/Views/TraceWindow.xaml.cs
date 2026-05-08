@@ -279,6 +279,53 @@ public sealed partial class TraceWindow : Wpf.Ui.Controls.FluentWindow
         catch { /* malformed hex — ignore */ }
     }
 
+    /// <summary>Custom palette swatch — left click opens the screen colour picker and writes
+    /// the picked colour back into THIS swatch's slot (re-pick semantics). The DataContext on
+    /// the Border is the Color value itself, so we look up its index in the VM's collection
+    /// to know which slot to overwrite.</summary>
+    private void OnCustomSwatchLeftClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement fe) return;
+        if (fe.DataContext is not System.Windows.Media.Color current) return;
+        var index = _params.CustomPalette.IndexOf(current);
+        if (index < 0) return;
+        e.Handled = true;
+        if (PickColourFromScreen() is { } picked) _params.CustomPalette[index] = picked;
+    }
+
+    /// <summary>Right-click removes the swatch — chip pattern, no extra × button needed.</summary>
+    private void OnCustomSwatchRightClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement fe) return;
+        if (fe.DataContext is not System.Windows.Media.Color current) return;
+        e.Handled = true;
+        _params.CustomPalette.Remove(current);
+    }
+
+    /// <summary>"+" button: open the screen picker and append the picked colour as a new
+    /// swatch. Capped at MaxCustomSwatches (the button's IsEnabled binding already guards
+    /// the cap, but defensive check keeps a misclick from overflowing).</summary>
+    private void OnAddCustomSwatchClicked(object sender, RoutedEventArgs e)
+    {
+        if (_params.CustomPalette.Count >= ViewModels.TraceParametersViewModel.MaxCustomSwatches) return;
+        if (PickColourFromScreen() is { } picked) _params.CustomPalette.Add(picked);
+    }
+
+    /// <summary>Shared screen-pick helper for the custom palette flow. Returns null when the
+    /// picker is unavailable or the user cancelled / the parsed hex was malformed.</summary>
+    private System.Windows.Media.Color? PickColourFromScreen()
+    {
+        var picker = (Application.Current as App)?.Services?.GetService<ScreenColorPickerService>();
+        if (picker is null) return null;
+        var hex = picker.SampleAtCursor();
+        if (string.IsNullOrEmpty(hex)) return null;
+        try
+        {
+            return (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex)!;
+        }
+        catch { return null; }
+    }
+
     private static BitmapImage LoadBitmap(byte[] bytes)
     {
         using var ms = new MemoryStream(bytes);

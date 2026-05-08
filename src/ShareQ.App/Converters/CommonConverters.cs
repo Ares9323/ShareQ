@@ -105,3 +105,23 @@ public sealed class InverseBoolToVisibilityConverter : IValueConverter
         => value is true ? Visibility.Collapsed : Visibility.Visible;
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => Binding.DoNothing;
 }
+
+/// <summary>Wraps a <see cref="System.Windows.Media.Color"/> in a frozen
+/// <see cref="System.Windows.Media.SolidColorBrush"/> so XAML can bind a Background /
+/// Fill directly off a Color-typed property (e.g. an ObservableCollection&lt;Color&gt;
+/// rendered via ItemsControl). Returns Transparent for null / non-Color inputs so the
+/// binding doesn't blow up during template materialisation.</summary>
+public sealed class ColorToBrushConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is System.Windows.Media.Color c)
+        {
+            var b = new System.Windows.Media.SolidColorBrush(c);
+            b.Freeze();
+            return b;
+        }
+        return System.Windows.Media.Brushes.Transparent;
+    }
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => Binding.DoNothing;
+}

@@ -93,23 +93,70 @@
                 </Border>
             </Grid>
 
-            <!-- Mode + Palette toolbar. -->
+            <!-- Mode + Palette toolbar. The custom-palette swatch row sits below it,
+                 visible only when Palette = Custom. Sharing the same Border keeps the
+                 row layout coherent and saves vertical space when not in Custom mode. -->
             <Border Grid.Row="3" Style="{StaticResource PanelStyle}" Margin="12,4,12,4" Padding="12,8">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="{markup:Loc Trace_ModeLabel}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <RadioButton GroupName="Mode" Content="{markup:Loc Trace_ModeColor}"
-                                 IsChecked="{Binding ModeColor, Mode=TwoWay}" Margin="0,0,12,0" />
-                    <RadioButton GroupName="Mode" Content="{markup:Loc Trace_ModeGrayscale}"
-                                 IsChecked="{Binding ModeGrayscale, Mode=TwoWay}" Margin="0,0,12,0" />
-                    <RadioButton GroupName="Mode" Content="{markup:Loc Trace_ModeBlackAndWhite}"
-                                 IsChecked="{Binding ModeBlackAndWhite, Mode=TwoWay}" Margin="0,0,24,0" />
+                <StackPanel Orientation="Vertical">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{markup:Loc Trace_ModeLabel}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <RadioButton GroupName="Mode" Content="{markup:Loc Trace_ModeColor}"
+                                     IsChecked="{Binding ModeColor, Mode=TwoWay}" Margin="0,0,12,0" />
+                        <RadioButton GroupName="Mode" Content="{markup:Loc Trace_ModeGrayscale}"
+                                     IsChecked="{Binding ModeGrayscale, Mode=TwoWay}" Margin="0,0,12,0" />
+                        <RadioButton GroupName="Mode" Content="{markup:Loc Trace_ModeBlackAndWhite}"
+                                     IsChecked="{Binding ModeBlackAndWhite, Mode=TwoWay}" Margin="0,0,24,0" />
 
-                    <TextBlock Text="{markup:Loc Trace_PaletteLabel}" VerticalAlignment="Center" Margin="0,0,8,0"
-                               IsEnabled="{Binding PaletteEnabled}" />
-                    <ComboBox Width="140"
-                              ItemsSource="{Binding Palettes}" DisplayMemberPath="Label"
-                              SelectedItem="{Binding SelectedPalette, Mode=TwoWay}"
-                              IsEnabled="{Binding PaletteEnabled}" />
+                        <TextBlock Text="{markup:Loc Trace_PaletteLabel}" VerticalAlignment="Center" Margin="0,0,8,0"
+                                   IsEnabled="{Binding PaletteEnabled}" />
+                        <ComboBox Width="180"
+                                  ItemsSource="{Binding Palettes}" DisplayMemberPath="Label"
+                                  SelectedItem="{Binding SelectedPalette, Mode=TwoWay}"
+                                  IsEnabled="{Binding PaletteEnabled}" />
+                    </StackPanel>
+
+                    <!-- Custom palette swatch row. Visible only in Custom mode. Each swatch
+                         opens the screen colour picker on left-click (re-pick) and removes
+                         itself on right-click. The trailing "+" button adds a new empty
+                         slot, capped at MaxCustomSwatches (16). The label nudges the user
+                         to pick at least 2 before tracing — below that the trace would map
+                         every pixel to a single colour and produce a flat silhouette. -->
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
+                                Visibility="{Binding IsCustomPalette, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="Picked colours: " VerticalAlignment="Center" Margin="0,0,8,0"
+                                   Foreground="{DynamicResource AccentForegroundDarkBrush}" />
+                        <ItemsControl ItemsSource="{Binding CustomPalette}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="28" Height="28" Margin="0,0,6,0"
+                                            CornerRadius="3"
+                                            Background="{Binding Converter={StaticResource ColorToBrush}}"
+                                            BorderBrush="{DynamicResource AccentForegroundDarkBrush}"
+                                            BorderThickness="1"
+                                            Cursor="Hand"
+                                            ToolTip="Click: re-pick · Right-click: remove"
+                                            MouseLeftButtonDown="OnCustomSwatchLeftClick"
+                                            MouseRightButtonDown="OnCustomSwatchRightClick" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <ui:Button Width="28" Height="28" Padding="0" Margin="2,0,0,0"
+                                   Click="OnAddCustomSwatchClicked"
+                                   IsEnabled="{Binding CanAddSwatch}"
+                                   ToolTip="Pick another colour from screen">
+                            <TextBlock Text="+" FontSize="16" FontWeight="Bold"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </ui:Button>
+                        <TextBlock Text="(pick at least 2)" Margin="12,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource AccentForegroundDarkBrush}" FontStyle="Italic"
+                                   Visibility="{Binding HasEnoughSwatches, Converter={StaticResource InverseBoolToVisibility}}" />
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
