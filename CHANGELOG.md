@@ -3,6 +3,56 @@
 All notable changes to AresToys. Format loosely follows [Keep a Changelog](https://keepachangelog.com/),
 versions follow [SemVer](https://semver.org/).
 
+## [0.1.4] — 2026-05-09
+
+Project rebrand from ShareQ to AresToys, new logo (Pigeon mark across icon, tray, title
+bars and About), a custom palette mode for the SVG tracer, and a per-workflow toggle to
+skip the multi-region overlay when a single capture is what you actually want.
+
+### Branding
+- Rebrand: project, solution, namespaces, assemblies, settings folder, installer artifacts
+  and tray menu strings all migrated from "ShareQ" to "AresToys". Existing 0.1.2 installs
+  continue to read their data folder via the previous `%LocalAppData%\ShareQ-Data\`
+  → `%LocalAppData%\AresToys-Data\` migration path so settings + clipboard history carry
+  over automatically.
+- New logo (Pigeon mark) replaces the old green/grey leaf-pair across every surface:
+  app icon (`.ico` rebuilt as a multi-frame PNG-encoded ICO at 16/24/32/48/64/128/256 so
+  it stays crisp on every Explorer view + DPI), tray icon, title-bar `ImageIcon` on every
+  window (MainWindow, BgRemover, Clipboard, HotkeyCapture, QrGenerator, Trace, Launcher,
+  LauncherCellEdit, ImageEffects, EditorWindow, ColorPickerWindow), and the About panel.
+  Vector `DrawingImage` resources collapsed to a single shared `BitmapImage` pointing at
+  `Assets/AresToysLogo.png`; cross-assembly pack URIs hand the same PNG to the Editor
+  assembly so there's only one logo file to swap in future redesigns.
+- `tools/build-icon.ps1` ships alongside the source to regenerate `icon.ico` from a PNG
+  on demand (multi-size, transparent, no external tooling required).
+
+### Image trace (raster → SVG)
+- New "Custom (pick colours)" palette mode in the Trace window. The user samples 2 to 16
+  colours from the source image with the on-screen eyedropper; every source pixel then
+  maps to its nearest entry by Euclidean RGB distance, so related tones (white + light
+  grey, two near-identical reds, anti-alias halos) collapse into the nearest pick instead
+  of getting an arbitrary auto-quantised palette. Falls back to Limited if the swatch list
+  has fewer than 2 entries so the trace is always defined.
+- Swatch row UI: click an empty slot to drop the colour picker, click an existing chip to
+  replace it, right-click to remove. `MaxCustomSwatches = 16`, `MinCustomSwatches = 2`
+  enforced in the VM. The "Add swatch" + "Need more colours" affordances react live to
+  collection mutations.
+- `TraceOptions.CustomPalette` plumbs the picked list down to the potrace pipeline; the
+  pipeline `Trace to SVG` task picks it up unchanged when a workflow drives the tracer.
+
+### Region capture
+- New per-workflow option `Auto-confirm on first selection (skip multi-region)` on the
+  `Capture region` workflow action. When enabled, the overlay closes on the first valid
+  mouse-up (drag rect or snap-to-window click) without waiting for Enter — single-shot
+  semantics that match the pre-multi-region behaviour, useful for "rapid screenshot"
+  workflows where the user never wants a second region. The multi-region toolbar is
+  hidden in this mode (the affordances it exposes — region count, Apply, Cancel for
+  accumulated rects — are meaningless when the overlay self-confirms). Esc still cancels.
+- Default stays `false` so existing workflows keep the multi-region UX; the toggle lives
+  in the workflow action's parameter strip in Settings → Hotkeys and workflows.
+
+---
+
 ## [0.1.2] — 2026-05-08
 
 Multi-region capture and multi-area crop, round ShareX-style pixel pickers across every

@@ -99,7 +99,7 @@ Plus a declarative `.sxcu` engine that loads ShareX-compatible JSON uploader fil
 
 ## What's still missing
 
-See [`docs/Improvements.md`](docs/Improvements.md) for the full feature-parity tracker against ShareX. Headline gaps:
+Headline gaps against the upstream feature set:
 
 - **No public release tag yet.** Velopack packaging is wired and tested locally + via the CI workflow; the first GitHub Release (v0.1.0) is the last M7 step still pending.
 - **No SharedFolder / FTP / SFTP / S3 / Azure / B2 uploaders** — backlog (FTP+SharedFolder are next; cloud-storage providers come after).
@@ -143,8 +143,6 @@ After M7, the next themed passes (rough order):
 3. Scrolling capture
 4. CLI for scripting
 5. i18n
-
-See [`docs/Improvements.md`](docs/Improvements.md) for the granular feature-parity checklist.
 
 ## Building
 
