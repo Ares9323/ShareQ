@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src/AresToys.App/Assets/AresToysLogo.png" alt="AresToys logo" width="160" />
+</p>
+
 # AresToys
 
 > Modern productivity suite for Windows — unifies CopyQ (clipboard), ShareX (capture + upload), and MaxLauncher (keyboard launcher) into one app, plus tools none of them ship.
