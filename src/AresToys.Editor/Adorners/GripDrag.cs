@@ -64,7 +64,17 @@ public static class GripDrag
         TextShape t => ResizeRect(new RectShim(t.X, t.Y, t.Width, t.Height), grip, px, py, shiftHeld) is { } textBox
             ? t with { X = textBox.X, Y = textBox.Y, Width = textBox.W, Height = textBox.H }
             : null,
-        StepCounterShape c => grip == GripKind.Resize ? ResizeStepCounter(c, px, py) : null,
+        StepCounterShape c => grip switch
+        {
+            GripKind.Resize => ResizeStepCounter(c, px, py),
+            // Tail drag: the dragged point becomes the new TailX/TailY directly (no snapping,
+            // no perpendicular projection — ShareX parity). IsTailActive flips to true on the
+            // first drag so the wedge starts rendering even if the user happens to drop the
+            // tail still inside the disc (we hide it via IsTailVisible in that case, and the
+            // moment they drag it back out the wedge re-appears without a separate flag).
+            GripKind.Tail => c with { TailX = px, TailY = py, IsTailActive = true },
+            _ => null,
+        },
         _ => null
     };
 

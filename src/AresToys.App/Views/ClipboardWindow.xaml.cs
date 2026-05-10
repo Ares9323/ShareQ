@@ -377,14 +377,16 @@ public partial class ClipboardWindow : Wpf.Ui.Controls.FluentWindow
         PreviewImageScale.ScaleY = fit;
     }
 
-    /// <summary>Start RMB-pan on the image preview — same gesture the editor canvas uses.
+    /// <summary>Start MMB-pan on the image preview — ShareX-parity (was RMB pre-0.1.6).
     /// Captures the cursor + scroll offsets so MouseMove can translate the scroll, swaps
     /// the cursor to SizeAll for feedback. Mouse-capture keeps MouseMove firing if the user
-    /// drags outside the ScrollViewer bounds.</summary>
-    private void OnPreviewImageRightButtonDown(object sender, MouseButtonEventArgs e)
+    /// drags outside the ScrollViewer bounds. Wired through generic PreviewMouseDown +
+    /// ChangedButton check because WPF doesn't expose a dedicated MiddleButton variant.</summary>
+    private void OnPreviewImagePreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
+        if (e.ChangedButton != MouseButton.Middle) return;
         if (PreviewImageScroller is null) return;
-        // Skip when the click lands on a scrollbar — let it keep its own RMB semantics.
+        // Skip when the click lands on a scrollbar — let it keep its own MMB semantics.
         if (e.OriginalSource is DependencyObject src && IsOnScrollBar(src)) return;
         _isPreviewPanning = true;
         _previewPanStartCursor = e.GetPosition(PreviewImageScroller);
@@ -399,7 +401,7 @@ public partial class ClipboardWindow : Wpf.Ui.Controls.FluentWindow
     private void OnPreviewImageMouseMove(object sender, MouseEventArgs e)
     {
         if (!_isPreviewPanning) return;
-        if (e.RightButton != MouseButtonState.Pressed) return;
+        if (e.MiddleButton != MouseButtonState.Pressed) return;
         var current = e.GetPosition(PreviewImageScroller);
         var dx = current.X - _previewPanStartCursor.X;
         var dy = current.Y - _previewPanStartCursor.Y;
@@ -408,14 +410,14 @@ public partial class ClipboardWindow : Wpf.Ui.Controls.FluentWindow
         e.Handled = true;
     }
 
-    private void OnPreviewImageRightButtonUp(object sender, MouseButtonEventArgs e)
+    private void OnPreviewImagePreviewMouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (e.ChangedButton != MouseButton.Middle) return;
         if (!_isPreviewPanning) return;
         _isPreviewPanning = false;
         PreviewImageScroller.ReleaseMouseCapture();
         PreviewImageScroller.Cursor = _previewPanSavedCursor;
         _previewPanSavedCursor = null;
-        // Mark handled so the right-button release doesn't bubble up to a context menu.
         e.Handled = true;
     }
 

@@ -122,7 +122,7 @@
                             <ui:Button x:Name="TextToolBtn" Style="{StaticResource ToolBtn}" Click="OnTextToolClicked" ToolTip="T Text">
                                 <Image Source="{StaticResource ToolIconText}" Style="{StaticResource ToolIcon}" />
                             </ui:Button>
-                            <ui:Button x:Name="StepToolBtn" Style="{StaticResource ToolBtn}" Click="OnStepToolClicked" ToolTip="N Step">
+                            <ui:Button x:Name="StepToolBtn" Style="{StaticResource ToolBtn}" Click="OnStepToolClicked" ToolTip="S Step">
                                 <Image Source="{StaticResource ToolIconStep}" Style="{StaticResource ToolIcon}" />
                             </ui:Button>
                             <ui:Button x:Name="ImageBtn" Style="{StaticResource ToolBtn}" Click="OnImageClicked" ToolTip="I Image">
@@ -180,6 +180,8 @@
                       PreviewMouseLeftButtonUp="OnCanvasMouseUp"
                       PreviewMouseRightButtonDown="OnCanvasRightButtonDown"
                       PreviewMouseRightButtonUp="OnCanvasRightButtonUp"
+                      PreviewMouseDown="OnCanvasPreviewMouseDown"
+                      PreviewMouseUp="OnCanvasPreviewMouseUp"
                       MouseLeave="OnCanvasMouseLeave"
                       Background="#1A1A1A">
             <Grid x:Name="CanvasHost" HorizontalAlignment="Center" VerticalAlignment="Center">

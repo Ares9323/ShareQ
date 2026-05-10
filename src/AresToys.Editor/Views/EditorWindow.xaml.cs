@@ -87,6 +87,16 @@ public partial class EditorWindow : FluentWindow
     // Eyedropper state. While non-null, the next canvas click samples a pixel and feeds it back.
     private Action<ShapeColor?>? _eyedropperContinuation;
 
+    // "Modifica al volo" state: alt+click on a placement tool selects a shape AND auto-switches
+    // to Select. _returnToToolAfterDeselect remembers the placement tool the user came from so
+    // a deselect (click on empty canvas) bounces them straight back into placing mode without
+    // the V → R / A / etc. round-trip. Cleared the moment the user picks a different tool by
+    // hand (so a manual switch wins over the queued auto-return). _autoSwitchingTool guards
+    // the PropertyChanged subscription against treating OUR own tool writes as "user manually
+    // picked a tool" and clobbering the field we just set.
+    private EditorTool? _returnToToolAfterDeselect;
+    private bool _autoSwitchingTool;
+
     // RMB-pan state. While the right button is held over the canvas, dragging the mouse
     // translates the ScrollViewer's scroll offsets — same gesture Photoshop / Aseprite / Figma
     // use for canvas pan. We capture the screen-space cursor at mouse-down (RootVisual avoids
@@ -157,6 +167,12 @@ public partial class EditorWindow : FluentWindow
                 // Crop magnifier is tool-specific — switching to anything else means we need to
                 // pull it off the canvas, otherwise it sticks at its last position forever.
                 if (_vm.CurrentTool != EditorTool.Crop) HideCropMagnifier();
+                // Manual tool switch (V hotkey, sidebar button, …) wins over a queued auto-
+                // return: if the user has actively chosen a different tool, drop the
+                // _returnToToolAfterDeselect breadcrumb so the next deselect doesn't fight
+                // their explicit choice. Auto-switches we initiate ourselves set
+                // _autoSwitchingTool so this clear is suppressed.
+                if (!_autoSwitchingTool) _returnToToolAfterDeselect = null;
                 // Pending crops survive a tool switch (they behave like blur/pixelate effect
                 // shapes — non-destructive previews that persist until the user explicitly
                 // applies or discards). With Select tool active, click on a rect selects it
@@ -1286,7 +1302,25 @@ public partial class EditorWindow : FluentWindow
         // the Cancel button — the OnClosing handler already prompts for unsaved changes, so we
         // don't need to gate this).
         if (e.Key == Key.Enter)  { OnSaveClicked(this, new RoutedEventArgs()); e.Handled = true; return; }
-        if (e.Key == Key.Escape) { OnCancelClicked(this, new RoutedEventArgs()); e.Handled = true; return; }
+        if (e.Key == Key.Escape)
+        {
+            // Esc step-back: with an active selection (typically from an alt+click "modifica
+            // al volo" promotion), first Esc clears the selection and bounces back to the
+            // placement tool the user came from; only the SECOND Esc cancels / closes the
+            // editor. With nothing selected, Esc behaves as before. Photoshop / Figma / Office
+            // all use the same layered Esc pattern.
+            if (_vm.SelectedShapes.Count > 0)
+            {
+                CommitPendingLiveEdit();
+                _vm.SetSelection([]);
+                TryReturnToPlacementTool();
+                e.Handled = true;
+                return;
+            }
+            OnCancelClicked(this, new RoutedEventArgs());
+            e.Handled = true;
+            return;
+        }
 
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
         if (ctrl && e.Key == Key.Z) { _vm.UndoCommand.Execute(null); e.Handled = true; return; }
@@ -1301,6 +1335,11 @@ public partial class EditorWindow : FluentWindow
             {
                 CommitPendingLiveEdit(); // Settle any in-flight edit before destroying the selection
                 _vm.RemoveShapes([.. _vm.SelectedShapes]);
+                // Auto-return to the placement tool the user came from when the delete
+                // happened in an alt+click-promoted Select session. Same "modifica al volo"
+                // logic as the empty-canvas-click path: a destructive deselect (Delete
+                // wipes the selection too) is the user signalling "done editing".
+                TryReturnToPlacementTool();
                 e.Handled = true;
                 return;
             }
@@ -1320,7 +1359,7 @@ public partial class EditorWindow : FluentWindow
             case Key.E: _vm.CurrentTool = EditorTool.Ellipse; e.Handled = true; break;
             case Key.F: _vm.CurrentTool = EditorTool.Freehand; e.Handled = true; break;
             case Key.T: _vm.CurrentTool = EditorTool.Text; e.Handled = true; break;
-            case Key.N: _vm.CurrentTool = EditorTool.StepCounter; e.Handled = true; break;
+            case Key.S: _vm.CurrentTool = EditorTool.StepCounter; e.Handled = true; break;
             case Key.B: _vm.CurrentTool = EditorTool.Blur; e.Handled = true; break;
             case Key.X: _vm.CurrentTool = EditorTool.Pixelate; e.Handled = true; break;
             case Key.O: _vm.CurrentTool = EditorTool.Spotlight; e.Handled = true; break;
@@ -1489,6 +1528,17 @@ public partial class EditorWindow : FluentWindow
                 {
                     CommitPendingLiveEdit();
                     _vm.SetSelection([]);
+                    // "Modifica al volo" return: if we got into Select via an alt+click from a
+                    // placement tool, an empty-canvas click is the user signalling "I'm done
+                    // editing" — bounce them back into the previous placement tool instead of
+                    // starting a marquee. Manual tool switches (V hotkey, sidebar button)
+                    // already cleared _returnToToolAfterDeselect via the PropertyChanged
+                    // handler, so this only fires on the auto-promoted Select state.
+                    if (TryReturnToPlacementTool())
+                    {
+                        e.Handled = true;
+                        return;
+                    }
                 }
                 _isMarqueeing = true;
                 _marqueeStartX = p.X;
@@ -1510,30 +1560,40 @@ public partial class EditorWindow : FluentWindow
             return;
         }
 
-        // Shift+click on a placement tool: short-circuit BeginGesture and instead select an
+        // Alt+click on a placement tool: short-circuit BeginGesture and instead select an
         // existing shape of the SAME type as the active tool under the cursor (Rectangle tool →
-        // pick a RectangleShape, Arrow tool → pick an ArrowShape, etc.). Lets the user grab a
-        // previously-drawn shape for inspection / property tweaks without leaving the placement
-        // tool. With no same-type hit, ShiftClickFallback decides: Place (default) falls through
-        // to a normal placement, SelectAny selects any shape under the cursor instead.
-        if ((Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift
+        // pick a RectangleShape, Arrow tool → pick an ArrowShape, etc.), then SWITCH to the
+        // Select tool so the grips / tail handle / properties row become editable. Alt is the
+        // place-mode "select" modifier; Shift remains the multi-select modifier (matching the
+        // Select tool's own shift+click toggle behaviour). Combined Alt+Shift toggles the hit
+        // shape into / out of the existing selection set instead of replacing it, so the user
+        // can collect multiple shapes from a placement tool without leaving it for Select.
+        // Switching tool keeps the selection (OnCurrentToolChanged only clears selection when
+        // leaving Select, not when entering it). With no same-type hit, AltClickFallback
+        // decides: Place (default) falls through to a normal placement, SelectAny selects any
+        // shape under the cursor instead.
+        if ((Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt
             && TryGetPlacementToolShapeType(_vm.CurrentTool) is { } expectedType)
         {
+            var shiftPressed = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+            var fromTool = _vm.CurrentTool;
             var sameTypeHit = HitTestShapeOfType(_vm.Shapes, expectedType, p.X, p.Y);
             if (sameTypeHit is not null)
             {
                 CommitPendingLiveEdit();
-                _vm.SetSelection([sameTypeHit]);
+                ApplyAltClickSelection(sameTypeHit, shiftPressed);
+                AutoSwitchToSelect(fromTool);
                 e.Handled = true;
                 return;
             }
-            if (_vm.ShiftClickFallback == ShiftClickFallback.SelectAny)
+            if (_vm.AltClickFallback == AltClickFallback.SelectAny)
             {
                 var anyHit = ShapeHitTester.HitTest(_vm.Shapes, p.X, p.Y);
                 if (anyHit is not null)
                 {
                     CommitPendingLiveEdit();
-                    _vm.SetSelection([anyHit]);
+                    ApplyAltClickSelection(anyHit, shiftPressed);
+                    AutoSwitchToSelect(fromTool);
                 }
                 // No-match in SelectAny mode → still no placement. User opted into this mode.
                 e.Handled = true;
@@ -1580,13 +1640,62 @@ public partial class EditorWindow : FluentWindow
         return null;
     }
 
+    /// <summary>Apply an alt+click selection: replace the selection with <paramref name="hit"/>
+    /// when <paramref name="addToSet"/> is false, or toggle <paramref name="hit"/> in / out of
+    /// the current set when true (Shift+Alt). Mirrors the Select tool's own shift+click
+    /// multi-select semantics so the user's mental model carries over from one mode to the
+    /// other.</summary>
+    private void ApplyAltClickSelection(Shape hit, bool addToSet)
+    {
+        if (!addToSet)
+        {
+            _vm.SetSelection([hit]);
+            return;
+        }
+        var current = _vm.SelectedShapes.ToList();
+        if (!current.Remove(hit)) current.Add(hit);
+        _vm.SetSelection(current);
+    }
+
+    /// <summary>Switch to the Select tool while remembering <paramref name="fromTool"/> as
+    /// the placement tool the user came from. Subsequent deselect on the empty canvas auto-
+    /// returns to that tool — see <see cref="TryReturnToPlacementTool"/>. The
+    /// <c>_autoSwitchingTool</c> guard stops the CurrentTool PropertyChanged handler from
+    /// treating our own write as "user picked a tool" and clobbering the breadcrumb. We only
+    /// overwrite the breadcrumb when <paramref name="fromTool"/> is itself a placement tool,
+    /// so chained alt+clicks (which would pass <c>EditorTool.Select</c>) preserve the
+    /// original placement tool the user was in before the very first alt+click.</summary>
+    private void AutoSwitchToSelect(EditorTool fromTool)
+    {
+        if (fromTool != EditorTool.Select) _returnToToolAfterDeselect = fromTool;
+        _autoSwitchingTool = true;
+        try { _vm.CurrentTool = EditorTool.Select; }
+        finally { _autoSwitchingTool = false; }
+    }
+
+    /// <summary>If an alt+click had previously promoted us into Select mode, take the user
+    /// back to the placement tool they came from. Returns true when a return happened (caller
+    /// should skip the normal Select-tool empty-area behaviour, e.g. the marquee start).
+    /// Returns false when there's no breadcrumb — caller continues as usual.</summary>
+    private bool TryReturnToPlacementTool()
+    {
+        if (_returnToToolAfterDeselect is not { } returnTool) return false;
+        _autoSwitchingTool = true;
+        try { _vm.CurrentTool = returnTool; }
+        finally { _autoSwitchingTool = false; }
+        _returnToToolAfterDeselect = null;
+        return true;
+    }
+
     private void OnCanvasMouseMove(object sender, MouseEventArgs e)
     {
-        // RMB pan takes precedence — when the right button is held, every mouse-move
+        // MMB pan takes precedence — when the middle button is held, every mouse-move
         // translates the scroll offsets and bypasses tool-specific behaviour. Computed in
         // ScrollViewer-space (CanvasScrollViewer) because that's the surface the offsets
         // live on; CanvasHost moves with the scroll, which would feed back into our delta.
-        if (_isPanning && e.RightButton == MouseButtonState.Pressed)
+        // ShareX-parity (was RMB pre-0.1.6 — the right button is now reserved for the
+        // step-counter quick-delete gesture).
+        if (_isPanning && e.MiddleButton == MouseButtonState.Pressed)
         {
             var current = e.GetPosition(CanvasScrollViewer);
             var dx = current.X - _panStartCursor.X;
@@ -1734,6 +1843,7 @@ public partial class EditorWindow : FluentWindow
             GripKind.From or GripKind.To => Cursors.Hand,
             GripKind.Rotate => Cursors.Cross,
             GripKind.Bend => Cursors.Hand,
+            GripKind.Tail => Cursors.Hand,
             _ => null
         };
         if (DrawingCanvas.Cursor != c) DrawingCanvas.Cursor = c;
@@ -1874,7 +1984,9 @@ public partial class EditorWindow : FluentWindow
         LineShape l => l with { FromX = l.FromX + dx, FromY = l.FromY + dy, ToX = l.ToX + dx, ToY = l.ToY + dy },
         FreehandShape f => f with { Points = f.Points.Select(p => (p.X + dx, p.Y + dy)).ToList() },
         TextShape t => t with { X = t.X + dx, Y = t.Y + dy },
-        StepCounterShape c => c with { CenterX = c.CenterX + dx, CenterY = c.CenterY + dy },
+        // Translate both the disc centre and the tail tip — same delta so the wedge keeps
+        // its anchor relative to the disc when the whole counter is dragged around.
+        StepCounterShape c => c with { CenterX = c.CenterX + dx, CenterY = c.CenterY + dy, TailX = c.TailX + dx, TailY = c.TailY + dy },
         BlurShape b => b with { X = b.X + dx, Y = b.Y + dy },
         PixelateShape p => p with { X = p.X + dx, Y = p.Y + dy },
         SpotlightShape sp => sp with { X = sp.X + dx, Y = sp.Y + dy },
@@ -1883,14 +1995,48 @@ public partial class EditorWindow : FluentWindow
         _ => s
     };
 
-    /// <summary>Start RMB-pan: capture the scroll offsets + cursor in viewport coords, swap
-    /// the cursor to a hand. The PreviewMouseMove handler reads <see cref="_isPanning"/> and
-    /// translates the scroll to follow the cursor. Mouse-capture on the ScrollViewer makes
-    /// MouseMove keep firing even if the user drags outside the canvas bounds.</summary>
+    /// <summary>Right-click on the canvas. Sole job since 0.1.6: ShareX-parity quick-delete
+    /// of a step counter (right-click on the disc removes it and renumbers every counter that
+    /// came after). Pan moved to the middle mouse button — see
+    /// <see cref="OnCanvasPreviewMouseDown"/>. Anywhere outside a step counter, the click
+    /// falls through unhandled (no context menu wired, so nothing visible happens).</summary>
     private void OnCanvasRightButtonDown(object sender, MouseButtonEventArgs e)
     {
         // Skip when the click lands on a scrollbar / interactive child — they have their own
         // RMB semantics (e.g. scrollbar context menu) we shouldn't override.
+        if (IsScrollBarOrInputControl(e.OriginalSource as DependencyObject)) return;
+
+        var hit = ShapeHitTester.HitTest(_vm.Shapes, e.GetPosition(DrawingCanvas).X, e.GetPosition(DrawingCanvas).Y);
+        if (hit is StepCounterShape step)
+        {
+            CommitPendingLiveEdit();
+            _vm.DeleteStepAndRenumber(step);
+            // Same "modifica al volo" return as the Delete-key path: if the user got into
+            // Select via an alt+click, the destructive action is the signal that they're
+            // done editing — bounce them back to the placement tool. No-op when there's no
+            // breadcrumb (right-click delete from a placement tool already keeps them there).
+            TryReturnToPlacementTool();
+            e.Handled = true;
+        }
+    }
+
+    private void OnCanvasRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        // No-op since RMB pan moved to MMB. Kept for the XAML wiring and for future RMB
+        // gestures (context menu, etc.) — currently the only RMB interaction is the
+        // step-counter delete on press, which doesn't need a release handler.
+    }
+
+    /// <summary>Start MMB-pan: capture the scroll offsets + cursor in viewport coords, swap
+    /// the cursor to SizeAll. The MouseMove handler reads <see cref="_isPanning"/> and
+    /// translates the scroll to follow the cursor. Mouse-capture on the ScrollViewer makes
+    /// MouseMove keep firing even if the user drags outside the canvas bounds. Wired through
+    /// the generic PreviewMouseDown / PreviewMouseUp events because WPF doesn't expose a
+    /// dedicated MiddleButton variant — we filter by <see cref="MouseButtonEventArgs.ChangedButton"/>
+    /// and ignore left/right (they're handled by the dedicated handlers).</summary>
+    private void OnCanvasPreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Middle) return;
         if (IsScrollBarOrInputControl(e.OriginalSource as DependencyObject)) return;
 
         _isPanning = true;
@@ -1903,15 +2049,14 @@ public partial class EditorWindow : FluentWindow
         e.Handled = true;
     }
 
-    private void OnCanvasRightButtonUp(object sender, MouseButtonEventArgs e)
+    private void OnCanvasPreviewMouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (e.ChangedButton != MouseButton.Middle) return;
         if (!_isPanning) return;
         _isPanning = false;
         CanvasScrollViewer.ReleaseMouseCapture();
         CanvasScrollViewer.Cursor = _panSavedCursor;
         _panSavedCursor = null;
-        // Mark handled so the right-button release doesn't propagate to a parent that might
-        // open a context menu — RMB on the canvas is now exclusively pan.
         e.Handled = true;
     }
 
@@ -3450,19 +3595,24 @@ public partial class EditorWindow : FluentWindow
             {
                 var isRotateGrip = g.Kind == GripKind.Rotate;
                 var isBendGrip = g.Kind == GripKind.Bend;
-                // Rotate grip: filled blue circle. Bend grip: filled yellow circle (drag-to-curve
-                // visual hint, distinct from the resize / rotate handles). Other grips: white square.
+                var isTailGrip = g.Kind == GripKind.Tail;
+                // Rotate grip: filled blue circle. Bend grip: filled yellow circle (drag-to-
+                // curve hint). Tail grip: filled mint-green circle (ShareX-style step-counter
+                // tail anchor — distinct so the user reads it as "drag to point at something"
+                // and not "resize"). Other grips: white square.
                 var fillBrush = isRotateGrip ? new SolidColorBrush(Color.FromArgb(255, 80, 200, 255))
                               : isBendGrip   ? new SolidColorBrush(Color.FromArgb(255, 255, 208, 0))
+                              : isTailGrip   ? new SolidColorBrush(Color.FromArgb(255, 100, 220, 140))
                               : (Brush)Brushes.White;
+                var isCircleGrip = isRotateGrip || isBendGrip || isTailGrip;
                 var grip = new System.Windows.Shapes.Rectangle
                 {
                     Width = 8, Height = 8,
                     Stroke = new SolidColorBrush(Color.FromArgb(255, 80, 200, 255)),
                     StrokeThickness = 1.5,
                     Fill = fillBrush,
-                    RadiusX = (isRotateGrip || isBendGrip) ? 4 : 0,
-                    RadiusY = (isRotateGrip || isBendGrip) ? 4 : 0,
+                    RadiusX = isCircleGrip ? 4 : 0,
+                    RadiusY = isCircleGrip ? 4 : 0,
                     Tag = "adorner",
                     IsHitTestVisible = false
                 };
@@ -4109,27 +4259,74 @@ public partial class EditorWindow : FluentWindow
 
     private static UIElement CreateStepCounter(StepCounterShape c)
     {
-        // Borderless filled disc + centered number. The user dropped the ring/stroke entirely
-        // (it just added an antialiasing seam and a redundant color knob); size now rides on
-        // StrokeWidth via Radius = StrokeWidth*10 inside the shape, so the existing stroke
-        // slider / mouse-wheel double as the size control. Fill is preferred when set; we
-        // fall back to Outline to preserve the legacy "transparent fill = use outline color"
-        // shortcut from the ShareX-era step-counter UX.
+        // Borderless filled disc + centered number, optionally with a triangular tail wedge
+        // pointing at TailX/TailY (ShareX parity, see StepDrawingShape.cs in their source).
+        // The tail is drawn FIRST so its wide base sits behind the disc — only the pointed
+        // tip pokes out, giving the "callout pointer" silhouette ShareX uses.
         var diameter = c.Radius * 2;
-        var grid = new Grid
+        var fillBrush = c.Fill.IsTransparent ? ToBrush(c.Outline) : ToBrush(c.Fill);
+
+        // Container is a Canvas at the disc's position so we can place the tail and the disc
+        // independently. Switching from a fixed-size Grid (the previous layout) to a Canvas
+        // lets the tail wedge extend past the disc's bounds without clipping.
+        var host = new Canvas
+        {
+            Width = 0,
+            Height = 0,
+            ClipToBounds = false,
+        };
+
+        // Tail wedge: a triangle whose base sits at the disc centre (perpendicular to the
+        // direction towards TailX/TailY) and whose apex is at the tail tip. Width of the
+        // base is the disc diameter, capped at the tail length so a very short tail doesn't
+        // produce a fan wider than it is long. Coordinates are in canvas space (same frame
+        // as TailX/TailY), and the host Canvas is parked at the origin so we don't have to
+        // offset them.
+        if (c.IsTailVisible)
+        {
+            var dx = c.TailX - c.CenterX;
+            var dy = c.TailY - c.CenterY;
+            var tailLength = Math.Sqrt(dx * dx + dy * dy);
+            var ux = dx / tailLength;
+            var uy = dy / tailLength;
+            // Perpendicular (rotated 90°) direction for the base half-width.
+            var halfBase = Math.Min(c.Radius, tailLength);
+            var nx = -uy;
+            var ny = ux;
+            var baseAX = c.CenterX + nx * halfBase;
+            var baseAY = c.CenterY + ny * halfBase;
+            var baseBX = c.CenterX - nx * halfBase;
+            var baseBY = c.CenterY - ny * halfBase;
+            var tailPolygon = new System.Windows.Shapes.Polygon
+            {
+                Points =
+                [
+                    new System.Windows.Point(baseAX, baseAY),
+                    new System.Windows.Point(baseBX, baseBY),
+                    new System.Windows.Point(c.TailX, c.TailY),
+                ],
+                Fill = fillBrush,
+            };
+            host.Children.Add(tailPolygon);
+        }
+
+        // Disc + centred number live in a fixed-size Grid so VerticalAlignment=Center works
+        // without us having to measure ActualHeight at draw time. The Grid is then placed on
+        // the host Canvas at the disc's top-left.
+        var discGrid = new Grid
         {
             Width = diameter,
-            Height = diameter
+            Height = diameter,
         };
         var disc = new System.Windows.Shapes.Ellipse
         {
             Width = diameter,
             Height = diameter,
-            Fill = c.Fill.IsTransparent ? ToBrush(c.Outline) : ToBrush(c.Fill),
+            Fill = fillBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
         };
-        grid.Children.Add(disc);
+        discGrid.Children.Add(disc);
 
         var text = new System.Windows.Controls.TextBlock
         {
@@ -4140,13 +4337,15 @@ public partial class EditorWindow : FluentWindow
             FontStyle = c.Italic ? FontStyles.Italic : FontStyles.Normal,
             FontSize = c.Radius * 0.9,
             HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
         };
-        grid.Children.Add(text);
+        discGrid.Children.Add(text);
 
-        Canvas.SetLeft(grid, c.CenterX - c.Radius);
-        Canvas.SetTop(grid, c.CenterY - c.Radius);
-        return grid;
+        Canvas.SetLeft(discGrid, c.CenterX - c.Radius);
+        Canvas.SetTop(discGrid, c.CenterY - c.Radius);
+        host.Children.Add(discGrid);
+
+        return host;
     }
 
     private static SolidColorBrush ToBrush(ShapeColor c)

@@ -428,13 +428,16 @@ public partial class App : Application
         // Self-update: subscribe to UpdateAvailable for the toast, then fire one silent check on
         // startup. Click on the toast launches the same flow as the Settings button — a simple
         // confirm dialog that can either install + restart now or defer until next launch.
-        // Wired AFTER tray creation so the closure-captured tray reference is non-null on first use.
+        // Routed through IToastNotifier (= WindowsToastNotifier) so the prompt lands in the
+        // Windows Notification Center alongside every other app notification (capture, color
+        // picked, recording status, etc.) and persists past dismissal — the previous tray
+        // balloon disappeared after a few seconds and was easy to miss.
         var updater = _host.Services.GetRequiredService<AresToys.Updater.UpdaterService>();
         updater.UpdateAvailable += (_, args) =>
         {
             Dispatcher.Invoke(() =>
             {
-                tray.ShowToast(
+                notifier.Show(
                     "AresToys update available",
                     $"Version {args.Version} is ready. Click to install.",
                     onClick: () => _ = PromptInstallUpdateAsync(updater, args.Info));

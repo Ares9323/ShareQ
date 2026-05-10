@@ -629,9 +629,9 @@
                                           HorizontalScrollBarVisibility="Auto"
                                           VerticalScrollBarVisibility="Auto"
                                           PreviewMouseWheel="OnPreviewWheel"
-                                          PreviewMouseRightButtonDown="OnPreviewRightButtonDown"
+                                          PreviewMouseDown="OnPreviewPreviewMouseDown"
                                           PreviewMouseMove="OnPreviewMouseMove"
-                                          PreviewMouseRightButtonUp="OnPreviewRightButtonUp">
+                                          PreviewMouseUp="OnPreviewPreviewMouseUp">
                                 <Image x:Name="PreviewImageHost" Source="{Binding PreviewImage}"
                                        Stretch="Uniform" Margin="8">
                                     <Image.LayoutTransform>

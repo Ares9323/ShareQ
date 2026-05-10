@@ -769,7 +769,7 @@
   <data name="Editor_Tool_Arrow" xml:space="preserve"><value>A Freccia</value></data>
   <data name="Editor_Tool_Freehand" xml:space="preserve"><value>F Mano libera</value></data>
   <data name="Editor_Tool_Text" xml:space="preserve"><value>T Testo</value></data>
-  <data name="Editor_Tool_Step" xml:space="preserve"><value>N Contatore</value></data>
+  <data name="Editor_Tool_Step" xml:space="preserve"><value>S Contatore</value></data>
   <data name="Editor_Tool_Image" xml:space="preserve"><value>I Immagine</value></data>
   <data name="Editor_Tool_Blur" xml:space="preserve"><value>B Sfocatura</value></data>
   <data name="Editor_Tool_Pixelate" xml:space="preserve"><value>X Pixel</value></data>

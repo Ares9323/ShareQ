@@ -285,8 +285,8 @@
   <data name="Settings_EditorSectionHint" xml:space="preserve"><value>Behaviour knobs for the image editor (shapes, selection, gestures).</value></data>
   <data name="Settings_WindowsIntegrationTitle" xml:space="preserve"><value>Windows integration</value></data>
   <data name="Settings_WindowsIntegrationHint" xml:space="preserve"><value>How AresToys plugs into the OS: autostart, initial window state, and the tray icon's click routing.</value></data>
-  <data name="Settings_EditorShiftClickSelectAny" xml:space="preserve"><value>Shift+click selects any shape (not only same type)</value></data>
-  <data name="Settings_EditorShiftClickSelectAnyTooltip" xml:space="preserve"><value>While a placement tool is active (Rectangle, Arrow, Ellipse…) shift+click always tries to select an existing shape of the SAME type under the cursor. This option controls what happens when no same-type shape is found: ON = select any shape under the cursor (no placement); OFF (default) = fall through to a normal placement.</value></data>
+  <data name="Settings_EditorAltClickSelectAny" xml:space="preserve"><value>Alt+click selects any shape (not only same type)</value></data>
+  <data name="Settings_EditorAltClickSelectAnyTooltip" xml:space="preserve"><value>While a placement tool is active (Rectangle, Arrow, Ellipse…) alt+click always tries to select an existing shape of the SAME type under the cursor. Alt+Shift+click toggles the hit shape into / out of the current selection set (multi-select). This option controls what happens when no same-type shape is found: ON = select any shape under the cursor (no placement); OFF (default) = fall through to a normal placement.</value></data>
   <data name="Settings_TrayClicksTitle" xml:space="preserve"><value>Tray icon clicks</value></data>
   <data name="Settings_TrayClicksHint" xml:space="preserve"><value>Pick what each click on the tray icon should do. Right-click always opens the menu.</value></data>
   <data name="Settings_TrayLeftClick" xml:space="preserve"><value>Left click</value></data>
@@ -836,7 +836,7 @@
   <data name="Editor_Tool_Arrow" xml:space="preserve"><value>A Arrow</value></data>
   <data name="Editor_Tool_Freehand" xml:space="preserve"><value>F Freehand</value></data>
   <data name="Editor_Tool_Text" xml:space="preserve"><value>T Text</value></data>
-  <data name="Editor_Tool_Step" xml:space="preserve"><value>N Step counter</value></data>
+  <data name="Editor_Tool_Step" xml:space="preserve"><value>S Step counter</value></data>
   <data name="Editor_Tool_Image" xml:space="preserve"><value>I Image</value></data>
   <data name="Editor_Tool_Blur" xml:space="preserve"><value>B Blur</value></data>
   <data name="Editor_Tool_Pixelate" xml:space="preserve"><value>X Pixelate</value></data>

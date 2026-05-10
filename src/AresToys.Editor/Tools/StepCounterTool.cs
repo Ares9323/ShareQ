@@ -27,13 +27,21 @@ public sealed class StepCounterTool : IDrawingTool
     {
         // Radius derives from StrokeWidth*10 (computed inside StepCounterShape) — no separate
         // size param. The stroke slider / mouse-wheel become the size knob.
-        _preview = new StepCounterShape(x, y, _next, outline, fill, strokeWidth, FontFamily, Bold, Italic);
+        // Tail starts inactive at a default offset (5 px past the bottom-right of the disc) —
+        // the user activates it by grabbing the tail grip after selection. While inactive the
+        // wedge isn't rendered, so the initial placement looks identical to a bare disc.
+        var radius = strokeWidth * 2.5;
+        var tailOffset = radius + 5;
+        _preview = new StepCounterShape(x, y, _next, outline, fill, strokeWidth, FontFamily, Bold, Italic,
+            TailX: x + tailOffset, TailY: y + tailOffset, IsTailActive: false);
     }
 
     public void Update(double x, double y)
     {
         if (_preview is null) return;
-        _preview = _preview with { CenterX = x, CenterY = y };
+        var radius = _preview.Radius;
+        var tailOffset = radius + 5;
+        _preview = _preview with { CenterX = x, CenterY = y, TailX = x + tailOffset, TailY = y + tailOffset };
     }
 
     public Shape? Commit(double x, double y)

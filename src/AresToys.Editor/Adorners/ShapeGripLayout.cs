@@ -23,7 +23,14 @@ public static class ShapeGripLayout
         ArrowShape a => [new(GripKind.From, a.FromX, a.FromY), new(GripKind.To, a.ToX, a.ToY), new(GripKind.Bend, a.ControlPoint.X, a.ControlPoint.Y)],
         LineShape l => [new(GripKind.From, l.FromX, l.FromY), new(GripKind.To, l.ToX, l.ToY), new(GripKind.Bend, l.ControlPoint.X, l.ControlPoint.Y)],
         TextShape t => RectGrips(t.X, t.Y, t.Width, t.Height, rotateGripOffset),
-        StepCounterShape c => [new(GripKind.Resize, c.CenterX + c.Radius * 0.707, c.CenterY + c.Radius * 0.707)],
+        StepCounterShape c =>
+        [
+            new(GripKind.Resize, c.CenterX + c.Radius * 0.707, c.CenterY + c.Radius * 0.707),
+            // Tail handle: ShareX-parity draggable dot the user grabs to point the wedge at a
+            // feature in the underlying image. Lives at TailX/TailY (canvas coords), no
+            // rotation since step counters don't carry a Rotation field.
+            new(GripKind.Tail, c.TailX, c.TailY),
+        ],
         BlurShape b => RectGrips(b.X, b.Y, b.Width, b.Height, 0),
         PixelateShape p => RectGrips(p.X, p.Y, p.Width, p.Height, 0),
         SpotlightShape s => RectGrips(s.X, s.Y, s.Width, s.Height, 0),

@@ -3,6 +3,76 @@
 All notable changes to AresToys. Format loosely follows [Keep a Changelog](https://keepachangelog.com/),
 versions follow [SemVer](https://semver.org/).
 
+## [0.1.6] — 2026-05-10
+
+ShareX-style step counter with draggable tail and right-click delete-renumber. Canvas
+plus preview pan moved from right mouse button to middle mouse button across the app to
+match ShareX. Alt+click becomes the placement-tool "select for quick-edit" gesture
+(was Shift+click in 0.1.5), freeing Shift for the conventional multi-select toggle.
+The editor remembers when an alt+click promoted you into Select and bounces you back
+to the placement tool on deselect (the "modifica al volo" workflow). Settings tab
+polish, plus update-available notifications routed through the Windows toast pipeline.
+
+### Editor — step counter
+- Step counter now carries a draggable tail handle (mint-green dot in Select mode),
+  ShareX parity. Drag it to point the wedge at a feature in the underlying image; the
+  triangular wedge renders only when the tip is outside the disc, so a freshly placed
+  counter still looks like a bare disc until the user grabs the tail. The tail and the
+  disc translate together when the whole counter is dragged, so the anchor stays
+  consistent under move.
+- Right-click on a step counter removes it AND decrements every counter that came
+  after, so "1, 2, 3, 4" with #2 deleted becomes "1, 2, 3" instead of leaving a hole.
+  Single undo step via `DeleteStepAndRenumberCommand`. The tool's running counter
+  rolls back too so the next placement picks up max+1.
+- Shortcut moved from N to S — matches ShareX's "Step" mnemonic family and frees N.
+
+### Editor — alt+click "modifica al volo"
+- Renamed the placement-tool "select existing shape" gesture from Shift+click to
+  Alt+click. Shift now stacks: `Alt+Shift+click` toggles the hit shape into / out of
+  the selection set (multi-select), matching the Select tool's own shift+click
+  semantics. Settings key renamed `editor.shift_click_no_match` →
+  `editor.alt_click_no_match`; existing toggles need to be re-set once.
+- Alt+click auto-switches to the Select tool so grips, the new tail handle, and the
+  properties row become editable in one motion — no V hop required.
+- Return-to-placement: when an alt+click promoted you into Select, the next deselect
+  action bounces you back to the placement tool you came from. Triggered by clicking
+  the empty canvas, pressing Esc, pressing Delete on the selected shape(s), or
+  right-clicking a step counter (the renumber-and-delete gesture also deselects).
+  Manually picking a different tool (V, R, A, sidebar button…) wins over the queued
+  auto-return — the user's explicit choice always trumps the breadcrumb.
+- Esc is now layered: first tap clears selection plus auto-return; second tap (with
+  no selection) cancels / closes the editor as before. The unsaved-changes confirm
+  still fires when the user actually tries to leave, so nothing is lost by the extra
+  step.
+
+### Pan — RMB to MMB
+- Canvas pan in the editor, image-preview pan in Clipboard, and preview pan in the
+  Image effects window all moved from right mouse button to middle mouse button
+  (ShareX parity). `BgRemoverWindow` already used MMB and stays as-is.
+  `ScreenColorPickerOverlay`'s RMB stays as Cancel. The freed RMB powers the new
+  step-counter quick-delete gesture above.
+- Wired through generic `PreviewMouseDown` / `PreviewMouseUp` plus a
+  `ChangedButton == MouseButton.Middle` filter, since WPF doesn't expose a dedicated
+  middle-button event variant.
+
+### Settings — App Settings tab
+- Language card moved below Image effects (sits next to Backup as the other
+  "rare configuration" card). Editor card stays near Image effects since they're both
+  editor-adjacent surfaces.
+- Uniform 16 px spacing between every card. The previous layout mixed
+  `Margin="0,0,0,16"` on the top half with `Margin="0,8,0,0"` on Image effects and
+  Backup, producing a 24 px gap above Image effects and only 8 px between Image
+  effects and Backup.
+
+### Self-update
+- Update-available toast now routes through `IToastNotifier` (modern Windows toast
+  pipeline) instead of the legacy tray balloon. The prompt lands in the Notification
+  Center alongside every other app event (Color picked, Recording, Incognito,
+  capture toasts) and persists past dismissal — the previous tray balloon faded after
+  a few seconds and was easy to miss.
+
+---
+
 ## [0.1.5] — 2026-05-10
 
 Editor polish pass: toolbar icons, side-panel buttons, properties labels and window

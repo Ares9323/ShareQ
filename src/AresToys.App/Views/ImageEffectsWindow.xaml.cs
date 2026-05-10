@@ -106,8 +106,12 @@ public partial class ImageEffectsWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    private void OnPreviewRightButtonDown(object sender, MouseButtonEventArgs e)
+    /// <summary>Pan the preview with the middle mouse button (ShareX-parity, was RMB pre-0.1.6).
+    /// Wired through generic PreviewMouseDown + ChangedButton check since WPF lacks a
+    /// dedicated MiddleButton variant.</summary>
+    private void OnPreviewPreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
+        if (e.ChangedButton != MouseButton.Middle) return;
         if (PreviewScroller is null) return;
         _isPreviewPanning = true;
         _previewPanStart = e.GetPosition(PreviewScroller);
@@ -122,15 +126,16 @@ public partial class ImageEffectsWindow : Wpf.Ui.Controls.FluentWindow
     private void OnPreviewMouseMove(object sender, MouseEventArgs e)
     {
         if (!_isPreviewPanning) return;
-        if (e.RightButton != MouseButtonState.Pressed) return;
+        if (e.MiddleButton != MouseButtonState.Pressed) return;
         var current = e.GetPosition(PreviewScroller);
         PreviewScroller.ScrollToHorizontalOffset(_previewPanScrollH - (current.X - _previewPanStart.X));
         PreviewScroller.ScrollToVerticalOffset(_previewPanScrollV - (current.Y - _previewPanStart.Y));
         e.Handled = true;
     }
 
-    private void OnPreviewRightButtonUp(object sender, MouseButtonEventArgs e)
+    private void OnPreviewPreviewMouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (e.ChangedButton != MouseButton.Middle) return;
         if (!_isPreviewPanning) return;
         _isPreviewPanning = false;
         PreviewScroller.ReleaseMouseCapture();

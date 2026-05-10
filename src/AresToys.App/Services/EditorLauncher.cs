@@ -219,14 +219,14 @@ public sealed class EditorLauncher
         var rawStartMax = await _settings.GetAsync("app.editor_start_maximized", cancellationToken).ConfigureAwait(false);
         var startMaximized = string.Equals(rawStartMax, "true", StringComparison.OrdinalIgnoreCase);
 
-        // Shift+click no-match fallback: "select_any" → editor's ShiftClickFallback = SelectAny;
+        // Alt+click no-match fallback: "select_any" → editor's AltClickFallback = SelectAny;
         // anything else (incl. unset / "place") → Place. Same per-open read pattern as the
         // start-maximized flag above so a Settings toggle takes effect on the next editor open
-        // without restart.
-        var rawShiftFallback = await _settings.GetAsync("editor.shift_click_no_match", cancellationToken).ConfigureAwait(false);
-        var shiftFallback = string.Equals(rawShiftFallback, "select_any", StringComparison.OrdinalIgnoreCase)
-            ? AresToys.Editor.ViewModels.ShiftClickFallback.SelectAny
-            : AresToys.Editor.ViewModels.ShiftClickFallback.Place;
+        // without restart. Renamed from shift_click_no_match in 0.1.6.
+        var rawAltFallback = await _settings.GetAsync("editor.alt_click_no_match", cancellationToken).ConfigureAwait(false);
+        var altFallback = string.Equals(rawAltFallback, "select_any", StringComparison.OrdinalIgnoreCase)
+            ? AresToys.Editor.ViewModels.AltClickFallback.SelectAny
+            : AresToys.Editor.ViewModels.AltClickFallback.Place;
 
         // Modeless Show() instead of ShowDialog so the editor doesn't take the app-wide modal
         // lock (toast → click → editor used to freeze MainWindow / ClipboardWindow / tray
@@ -250,7 +250,7 @@ public sealed class EditorLauncher
             vm.CurrentTextStyle = defaults.TextStyle;
             vm.FreehandSmoothDefault = defaults.FreehandSmooth;
             vm.FreehandEndArrowDefault = defaults.FreehandEndArrow;
-            vm.ShiftClickFallback = shiftFallback;
+            vm.AltClickFallback = altFallback;
             vm.ResetStepCounter();
             window.ApplyLocalization(BuildEditorLabels());
             window.Owner = System.Windows.Application.Current.MainWindow;
@@ -355,12 +355,12 @@ public sealed class EditorLauncher
         _logger.LogInformation("EditorLauncher.EditAsync: opening with tool={Tool} (lastUsed={LastUsed}, override='{Override}')",
             resolvedTool, defaults.Tool, defaultTool ?? "(none)");
 
-        // Same shift+click fallback hydration as OpenAsync — read once per editor open so a
+        // Same alt+click fallback hydration as OpenAsync — read once per editor open so a
         // Settings toggle takes effect on the next launch without restart.
-        var rawShiftFallback = await _settings.GetAsync("editor.shift_click_no_match", cancellationToken).ConfigureAwait(false);
-        var shiftFallback = string.Equals(rawShiftFallback, "select_any", StringComparison.OrdinalIgnoreCase)
-            ? AresToys.Editor.ViewModels.ShiftClickFallback.SelectAny
-            : AresToys.Editor.ViewModels.ShiftClickFallback.Place;
+        var rawAltFallback = await _settings.GetAsync("editor.alt_click_no_match", cancellationToken).ConfigureAwait(false);
+        var altFallback = string.Equals(rawAltFallback, "select_any", StringComparison.OrdinalIgnoreCase)
+            ? AresToys.Editor.ViewModels.AltClickFallback.SelectAny
+            : AresToys.Editor.ViewModels.AltClickFallback.Place;
 
         // Editor is WPF — must be created on the UI thread. We use Show() (modeless) instead
         // of ShowDialog() so the user can keep multiple editors open in parallel: rapid-fire
@@ -388,7 +388,7 @@ public sealed class EditorLauncher
             vm.CurrentTextStyle = defaults.TextStyle;
             vm.FreehandSmoothDefault = defaults.FreehandSmooth;
             vm.FreehandEndArrowDefault = defaults.FreehandEndArrow;
-            vm.ShiftClickFallback = shiftFallback;
+            vm.AltClickFallback = altFallback;
             vm.ResetStepCounter();
             window.ApplyLocalization(BuildEditorLabels());
             window.Owner = System.Windows.Application.Current.MainWindow;

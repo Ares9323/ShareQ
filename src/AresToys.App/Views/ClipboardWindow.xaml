@@ -470,9 +470,9 @@
                                               HorizontalScrollBarVisibility="Auto"
                                               VerticalScrollBarVisibility="Auto"
                                               PreviewMouseWheel="OnPreviewImageWheel"
-                                              PreviewMouseRightButtonDown="OnPreviewImageRightButtonDown"
+                                              PreviewMouseDown="OnPreviewImagePreviewMouseDown"
                                               PreviewMouseMove="OnPreviewImageMouseMove"
-                                              PreviewMouseRightButtonUp="OnPreviewImageRightButtonUp"
+                                              PreviewMouseUp="OnPreviewImagePreviewMouseUp"
                                               Visibility="{Binding IsImagePreview, Converter={StaticResource BoolToVisibility}}">
                                     <Image Source="{Binding PreviewImageBytes, Converter={StaticResource BytesToImage}}"
                                            Stretch="Uniform"

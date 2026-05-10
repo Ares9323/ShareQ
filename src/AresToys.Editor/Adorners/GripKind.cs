@@ -14,5 +14,9 @@ public enum GripKind
     // Single grip for text font-size / stepcounter radius
     Resize,
     // Rotation grip floating above the shape (rect / ellipse / text)
-    Rotate
+    Rotate,
+    // Step-counter tail tip — drag to point the wedge at a feature in the underlying image
+    // (ShareX parity). Only exposed by StepCounterShape; never rotated since step counters
+    // don't have a Rotation field of their own.
+    Tail
 }

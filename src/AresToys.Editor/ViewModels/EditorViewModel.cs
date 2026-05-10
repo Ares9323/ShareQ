@@ -98,21 +98,23 @@ public sealed partial class EditorViewModel : ObservableObject
         if (_tools.TryGetValue(EditorTool.Freehand, out var t) && t is FreehandTool fh) fh.EndArrow = value;
     }
 
-    /// <summary>What shift+click does on a placement tool (Rectangle, Ellipse, Arrow, Line,
+    /// <summary>What alt+click does on a placement tool (Rectangle, Ellipse, Arrow, Line,
     /// Freehand, Text, Step, Blur, Pixelate, Spotlight, SmartEraser) when there is NO shape of
     /// the same type under the cursor. With a same-type hit the behaviour is fixed (select the
     /// hit shape — never place); this knob only governs the no-match fallback.
     /// <list type="bullet">
-    /// <item><description><see cref="ShiftClickFallback.Place"/>: ignore Shift, fall through to
-    /// the normal placement gesture (default — Shift acts as "select if match else place").</description></item>
-    /// <item><description><see cref="ShiftClickFallback.SelectAny"/>: hit-test all shapes
-    /// regardless of type and select if any is found, else no-op (Shift acts as a temporary
+    /// <item><description><see cref="AltClickFallback.Place"/>: ignore Alt, fall through to
+    /// the normal placement gesture (default — Alt acts as "select if match else place").</description></item>
+    /// <item><description><see cref="AltClickFallback.SelectAny"/>: hit-test all shapes
+    /// regardless of type and select if any is found, else no-op (Alt acts as a temporary
     /// "select mode" inside any placement tool).</description></item>
     /// </list>
     /// Pushed in by <see cref="Services.EditorLauncher"/> from the
-    /// <c>editor.shift_click_no_match</c> setting.</summary>
+    /// <c>editor.alt_click_no_match</c> setting. (Renamed from <c>shift_click_no_match</c> in
+    /// 0.1.6 — Shift was reassigned to multi-select-toggle so it stacks with the new Alt
+    /// behaviour: Alt+Shift = select-and-add-to-set in placement tools.)</summary>
     [ObservableProperty]
-    private ShiftClickFallback _shiftClickFallback = ShiftClickFallback.Place;
+    private AltClickFallback _altClickFallback = AltClickFallback.Place;
 
     /// <summary>Sticky font defaults for the step counter tool. Decoupled from
     /// <see cref="CurrentTextStyle"/> so the user can pick a different register for digits
@@ -207,6 +209,35 @@ public sealed partial class EditorViewModel : ObservableObject
     public void ResetStepCounter()
     {
         if (_tools[EditorTool.StepCounter] is StepCounterTool t) t.Reset();
+    }
+
+    /// <summary>Right-click on a step counter: remove it AND decrement every counter that
+    /// followed it numerically, so the visible sequence stays gap-free. Also rolls the
+    /// StepCounterTool's running counter back so the next placement picks up the new
+    /// max+1 (or 1 if no counters remain). Single undo step via
+    /// <see cref="DeleteStepAndRenumberCommand"/>.</summary>
+    public void DeleteStepAndRenumber(StepCounterShape step)
+    {
+        ArgumentNullException.ThrowIfNull(step);
+        _commands.Execute(new DeleteStepAndRenumberCommand(step), Shapes);
+
+        // Sync the tool's _next so the next placement isn't a number that's already used by
+        // a surviving counter (or a number we just freed up). Walk the post-Apply collection
+        // and pick max+1, default 1 when no counters remain.
+        if (_tools[EditorTool.StepCounter] is StepCounterTool t)
+        {
+            var max = 0;
+            foreach (var s in Shapes)
+            {
+                if (s is StepCounterShape sc && sc.Number > max) max = sc.Number;
+            }
+            t.SetNext(max + 1);
+        }
+
+        // Drop selection if the deleted step was selected (or one of the renumbered siblings
+        // was — record references won't match after a `with` swap). Simpler to clear; the
+        // user can re-select via the Select tool if needed.
+        SetSelection([]);
     }
 
     partial void OnSelectedShapeChanged(Shape? value)
@@ -419,12 +450,12 @@ public sealed partial class EditorViewModel : ObservableObject
     private void SelectTool(EditorTool tool) => CurrentTool = tool;
 }
 
-/// <summary>Fallback behaviour for shift+click on a placement tool when nothing of the
+/// <summary>Fallback behaviour for alt+click on a placement tool when nothing of the
 /// tool's own shape type lies under the cursor. See
-/// <see cref="EditorViewModel.ShiftClickFallback"/>.</summary>
-public enum ShiftClickFallback
+/// <see cref="EditorViewModel.AltClickFallback"/>.</summary>
+public enum AltClickFallback
 {
-    /// <summary>Ignore Shift and start the normal placement gesture (default).</summary>
+    /// <summary>Ignore Alt and start the normal placement gesture (default).</summary>
     Place,
     /// <summary>Select whatever shape is under the cursor regardless of type, else no-op.</summary>
     SelectAny,
