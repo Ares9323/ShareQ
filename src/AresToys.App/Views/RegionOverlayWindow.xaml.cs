@@ -402,6 +402,18 @@ public partial class RegionOverlayWindow : Window
         for (var i = _committedRegions.Count - 1; i >= 0; i--)
         {
             if (!_committedRegions[i].Contains(pt)) continue;
+            // Double-click inside a committed region = confirm all (same as Enter / the
+            // toolbar Apply button). The first click of the double already selected the rect
+            // and entered Move-drag mode, which OnMouseUp tore down before this second down
+            // arrived, so by ClickCount==2 we just produce the composite and close.
+            if (e.ClickCount == 2)
+            {
+                _selectedRegionIndex = i;
+                UpdateRegionSelectionVisuals();
+                ConfirmCommittedRegions();
+                e.Handled = true;
+                return;
+            }
             _selectedRegionIndex = i;
             UpdateRegionSelectionVisuals();
             BeginRegionDrag(RegionDragMode.Move, i, pt);

@@ -281,6 +281,12 @@
   <data name="Settings_StartMinimizedTooltip" xml:space="preserve"><value>Skip the main window on launch and stay in the tray. Click the tray icon to open the Settings window when needed.</value></data>
   <data name="Settings_EditorStartMaximized" xml:space="preserve"><value>Start editor maximized</value></data>
   <data name="Settings_EditorStartMaximizedTooltip" xml:space="preserve"><value>Open the editor maximized on the active monitor when launched outside a workflow (toast click, history). Workflow tasks have their own fullscreen toggle which overrides this.</value></data>
+  <data name="Settings_EditorSectionTitle" xml:space="preserve"><value>Editor</value></data>
+  <data name="Settings_EditorSectionHint" xml:space="preserve"><value>Behaviour knobs for the image editor (shapes, selection, gestures).</value></data>
+  <data name="Settings_WindowsIntegrationTitle" xml:space="preserve"><value>Windows integration</value></data>
+  <data name="Settings_WindowsIntegrationHint" xml:space="preserve"><value>How AresToys plugs into the OS: autostart, initial window state, and the tray icon's click routing.</value></data>
+  <data name="Settings_EditorShiftClickSelectAny" xml:space="preserve"><value>Shift+click selects any shape (not only same type)</value></data>
+  <data name="Settings_EditorShiftClickSelectAnyTooltip" xml:space="preserve"><value>While a placement tool is active (Rectangle, Arrow, Ellipse…) shift+click always tries to select an existing shape of the SAME type under the cursor. This option controls what happens when no same-type shape is found: ON = select any shape under the cursor (no placement); OFF (default) = fall through to a normal placement.</value></data>
   <data name="Settings_TrayClicksTitle" xml:space="preserve"><value>Tray icon clicks</value></data>
   <data name="Settings_TrayClicksHint" xml:space="preserve"><value>Pick what each click on the tray icon should do. Right-click always opens the menu.</value></data>
   <data name="Settings_TrayLeftClick" xml:space="preserve"><value>Left click</value></data>

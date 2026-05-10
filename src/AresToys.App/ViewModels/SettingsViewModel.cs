@@ -11,6 +11,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private const string StartMinimizedKey = "app.start_minimized";
     private const string EditorStartMaximizedKey = "app.editor_start_maximized";
+    private const string EditorShiftClickNoMatchKey = "editor.shift_click_no_match";
     private readonly AutostartService _autostart;
     private readonly ISettingsStore _settingsStore;
 
@@ -108,8 +109,17 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _editorStartMaximized;
 
+    /// <summary>Bound to the Editor-section "Shift+click selects any shape" toggle. Persisted
+    /// under <see cref="EditorShiftClickNoMatchKey"/> as <c>"select_any"</c> (true) or
+    /// <c>"place"</c> (false / default). Read by <see cref="Services.EditorLauncher"/> on each
+    /// editor open and pushed into the editor view-model's <c>ShiftClickFallback</c> property.
+    /// Governs only the no-match fallback: shift+click on a same-type hit always selects.</summary>
+    [ObservableProperty]
+    private bool _editorShiftClickSelectAny;
+
     private bool _suppressStartMinimizedPersist;
     private bool _suppressEditorStartMaximizedPersist;
+    private bool _suppressEditorShiftClickSelectAnyPersist;
 
     private async Task LoadPersistedSettingsAsync()
     {
@@ -122,6 +132,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         _suppressEditorStartMaximizedPersist = true;
         try { EditorStartMaximized = string.Equals(rawMax, "true", StringComparison.OrdinalIgnoreCase); }
         finally { _suppressEditorStartMaximizedPersist = false; }
+
+        var rawShift = await _settingsStore.GetAsync(EditorShiftClickNoMatchKey, CancellationToken.None).ConfigureAwait(true);
+        _suppressEditorShiftClickSelectAnyPersist = true;
+        try { EditorShiftClickSelectAny = string.Equals(rawShift, "select_any", StringComparison.OrdinalIgnoreCase); }
+        finally { _suppressEditorShiftClickSelectAnyPersist = false; }
     }
 
     partial void OnStartMinimizedChanged(bool value)
@@ -138,6 +153,15 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (_suppressEditorStartMaximizedPersist) return;
         _ = _settingsStore.SetAsync(EditorStartMaximizedKey,
             value ? "true" : "false",
+            sensitive: false,
+            CancellationToken.None);
+    }
+
+    partial void OnEditorShiftClickSelectAnyChanged(bool value)
+    {
+        if (_suppressEditorShiftClickSelectAnyPersist) return;
+        _ = _settingsStore.SetAsync(EditorShiftClickNoMatchKey,
+            value ? "select_any" : "place",
             sensitive: false,
             CancellationToken.None);
     }

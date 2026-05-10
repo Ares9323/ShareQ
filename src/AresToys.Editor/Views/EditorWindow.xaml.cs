@@ -1381,6 +1381,18 @@ public partial class EditorWindow : FluentWindow
             {
                 var pcr = _vm.PendingCrops[i];
                 if (!PointInsideCropRect(p, pcr)) continue;
+                // Double-click inside a pending crop rect = confirm all (same as Enter / the
+                // "Apply all crops" button). The first click of the double already selected the
+                // rect + started a no-op move-drag (released by its own MouseUp before this
+                // second down arrives), so by the time ClickCount==2 we just hand off to the VM
+                // and let the standard commit path tear down the overlay.
+                if (e.ClickCount == 2)
+                {
+                    _vm.SelectedPendingCropIndex = i;
+                    _vm.ConfirmAllPendingCrops();
+                    e.Handled = true;
+                    return;
+                }
                 _cropDragMode = CropDragMode.Move;
                 _cropDragIndex = i;
                 _cropDragStart = p;
@@ -1498,10 +1510,74 @@ public partial class EditorWindow : FluentWindow
             return;
         }
 
+        // Shift+click on a placement tool: short-circuit BeginGesture and instead select an
+        // existing shape of the SAME type as the active tool under the cursor (Rectangle tool →
+        // pick a RectangleShape, Arrow tool → pick an ArrowShape, etc.). Lets the user grab a
+        // previously-drawn shape for inspection / property tweaks without leaving the placement
+        // tool. With no same-type hit, ShiftClickFallback decides: Place (default) falls through
+        // to a normal placement, SelectAny selects any shape under the cursor instead.
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift
+            && TryGetPlacementToolShapeType(_vm.CurrentTool) is { } expectedType)
+        {
+            var sameTypeHit = HitTestShapeOfType(_vm.Shapes, expectedType, p.X, p.Y);
+            if (sameTypeHit is not null)
+            {
+                CommitPendingLiveEdit();
+                _vm.SetSelection([sameTypeHit]);
+                e.Handled = true;
+                return;
+            }
+            if (_vm.ShiftClickFallback == ShiftClickFallback.SelectAny)
+            {
+                var anyHit = ShapeHitTester.HitTest(_vm.Shapes, p.X, p.Y);
+                if (anyHit is not null)
+                {
+                    CommitPendingLiveEdit();
+                    _vm.SetSelection([anyHit]);
+                }
+                // No-match in SelectAny mode → still no placement. User opted into this mode.
+                e.Handled = true;
+                return;
+            }
+            // Place mode → fall through to the normal placement gesture below.
+        }
+
         _gestureStartX = p.X;
         _gestureStartY = p.Y;
         DrawingCanvas.CaptureMouse();
         _vm.BeginGesture(p.X, p.Y);
+    }
+
+    /// <summary>Map a placement-style <see cref="EditorTool"/> to the concrete shape type its
+    /// gesture produces. Select / Crop return null (handled by their own dedicated paths).
+    /// Used to scope shift+click selection to "shapes the current tool would have drawn".</summary>
+    private static Type? TryGetPlacementToolShapeType(EditorTool tool) => tool switch
+    {
+        EditorTool.Rectangle   => typeof(RectangleShape),
+        EditorTool.Ellipse     => typeof(EllipseShape),
+        EditorTool.Arrow       => typeof(ArrowShape),
+        EditorTool.Line        => typeof(LineShape),
+        EditorTool.Freehand    => typeof(FreehandShape),
+        EditorTool.Text        => typeof(TextShape),
+        EditorTool.StepCounter => typeof(StepCounterShape),
+        EditorTool.Blur        => typeof(BlurShape),
+        EditorTool.Pixelate    => typeof(PixelateShape),
+        EditorTool.Spotlight   => typeof(SpotlightShape),
+        EditorTool.SmartEraser => typeof(SmartEraserShape),
+        _ => null,
+    };
+
+    /// <summary>Top-down hit test that only considers shapes whose runtime type matches
+    /// <paramref name="t"/>. Iterates back-to-front (last = top) so the topmost matching shape
+    /// wins on overlap, mirroring <see cref="ShapeHitTester.HitTest"/>'s own ordering.</summary>
+    private static Shape? HitTestShapeOfType(IReadOnlyList<Shape> shapes, Type t, double px, double py)
+    {
+        for (var i = shapes.Count - 1; i >= 0; i--)
+        {
+            if (shapes[i].GetType() == t && ShapeHitTester.IsHit(shapes[i], px, py))
+                return shapes[i];
+        }
+        return null;
     }
 
     private void OnCanvasMouseMove(object sender, MouseEventArgs e)

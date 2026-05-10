@@ -282,7 +282,7 @@
                     <ui:Button x:Name="ApplyCropsButton" Appearance="Primary"
                                HorizontalAlignment="Stretch"
                                Click="OnApplyCropsClicked"
-                               ToolTip="Apply all pending crop rectangles as a composite (Enter)">
+                               ToolTip="Apply all pending crop rectangles as a composite (Enter, or double-click inside a rect)">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xf00c;" FontFamily="{DynamicResource IconFont}"
                                        FontSize="13" Foreground="White" Margin="0,0,8,0"

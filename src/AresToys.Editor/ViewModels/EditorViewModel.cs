@@ -98,6 +98,22 @@ public sealed partial class EditorViewModel : ObservableObject
         if (_tools.TryGetValue(EditorTool.Freehand, out var t) && t is FreehandTool fh) fh.EndArrow = value;
     }
 
+    /// <summary>What shift+click does on a placement tool (Rectangle, Ellipse, Arrow, Line,
+    /// Freehand, Text, Step, Blur, Pixelate, Spotlight, SmartEraser) when there is NO shape of
+    /// the same type under the cursor. With a same-type hit the behaviour is fixed (select the
+    /// hit shape — never place); this knob only governs the no-match fallback.
+    /// <list type="bullet">
+    /// <item><description><see cref="ShiftClickFallback.Place"/>: ignore Shift, fall through to
+    /// the normal placement gesture (default — Shift acts as "select if match else place").</description></item>
+    /// <item><description><see cref="ShiftClickFallback.SelectAny"/>: hit-test all shapes
+    /// regardless of type and select if any is found, else no-op (Shift acts as a temporary
+    /// "select mode" inside any placement tool).</description></item>
+    /// </list>
+    /// Pushed in by <see cref="Services.EditorLauncher"/> from the
+    /// <c>editor.shift_click_no_match</c> setting.</summary>
+    [ObservableProperty]
+    private ShiftClickFallback _shiftClickFallback = ShiftClickFallback.Place;
+
     /// <summary>Sticky font defaults for the step counter tool. Decoupled from
     /// <see cref="CurrentTextStyle"/> so the user can pick a different register for digits
     /// inside the disc without affecting their text-shape font choice. Same propagation
@@ -401,4 +417,15 @@ public sealed partial class EditorViewModel : ObservableObject
 
     [RelayCommand]
     private void SelectTool(EditorTool tool) => CurrentTool = tool;
+}
+
+/// <summary>Fallback behaviour for shift+click on a placement tool when nothing of the
+/// tool's own shape type lies under the cursor. See
+/// <see cref="EditorViewModel.ShiftClickFallback"/>.</summary>
+public enum ShiftClickFallback
+{
+    /// <summary>Ignore Shift and start the normal placement gesture (default).</summary>
+    Place,
+    /// <summary>Select whatever shape is under the cursor regardless of type, else no-op.</summary>
+    SelectAny,
 }

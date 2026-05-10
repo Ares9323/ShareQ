@@ -1445,53 +1445,33 @@
                     <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,16"
                                Text="{Markup:Loc Settings_Blurb}" />
 
-                    <CheckBox IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
-                              Content="{Markup:Loc Settings_StartWithWindows}"
-                              Foreground="#DDD" FontSize="12"
-                              HorizontalAlignment="Left" Margin="0,0,0,8"
-                              ToolTip="{Markup:Loc Settings_StartWithWindowsTooltip}" />
-
-                    <CheckBox IsChecked="{Binding StartMinimized, Mode=TwoWay}"
-                              Content="{Markup:Loc Settings_StartMinimized}"
-                              Foreground="#DDD" FontSize="12"
-                              HorizontalAlignment="Left" Margin="0,0,0,8"
-                              ToolTip="{Markup:Loc Settings_StartMinimizedTooltip}" />
-
-                    <CheckBox IsChecked="{Binding EditorStartMaximized, Mode=TwoWay}"
-                              Content="{Markup:Loc Settings_EditorStartMaximized}"
-                              Foreground="#DDD" FontSize="12"
-                              HorizontalAlignment="Left" Margin="0,0,0,16"
-                              ToolTip="{Markup:Loc Settings_EditorStartMaximizedTooltip}" />
-
-                    <!-- UI language picker. Writes the selected culture tag to ui.language; the
-                         picker itself stays in English so a wrong choice is recoverable without
-                         hunting for the right entry in an unfamiliar language. CurrentTag setter
-                         applies live — bound surfaces (tray menu, future XAML Loc bindings)
-                         refresh on CultureChanged without a restart. -->
+                    <!-- Windows integration: autostart, startup window state, and tray-icon
+                         click routing. All three share the "how AresToys plugs into the OS"
+                         theme so they live in one card; previously the autostart / minimised
+                         flags were loose checkboxes and the tray combos were a separate card,
+                         which read as three disconnected blobs. -->
                     <Border Background="{DynamicResource Surface1Brush}" CornerRadius="4" Padding="14" Margin="0,0,0,16">
                         <StackPanel>
-                            <TextBlock Text="{Markup:Loc Settings_Language}" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock Text="{Markup:Loc Settings_WindowsIntegrationTitle}" FontWeight="SemiBold" Margin="0,0,0,4" />
                             <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
-                                       Text="{Markup:Loc Settings_LanguageHint}" />
-                            <StackPanel Orientation="Horizontal">
-                                <ComboBox x:Name="LanguageCombo"
-                                          Loaded="OnLanguageComboLoaded"
-                                          SelectionChanged="OnLanguageComboChanged"
-                                          MinWidth="220" />
-                                <ui:Button Content="{Markup:Loc Settings_LanguageRestart}"
-                                           Margin="8,0,0,0" Padding="14,4"
-                                           Click="OnRestartAppClicked"
-                                           ToolTip="Some surfaces only translate fully on relaunch — use this to apply the new language everywhere at once." />
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
+                                       Text="{Markup:Loc Settings_WindowsIntegrationHint}" />
+                            <CheckBox IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
+                                      Content="{Markup:Loc Settings_StartWithWindows}"
+                                      Foreground="#DDD" FontSize="12"
+                                      HorizontalAlignment="Left" Margin="0,0,0,8"
+                                      ToolTip="{Markup:Loc Settings_StartWithWindowsTooltip}" />
+                            <CheckBox IsChecked="{Binding StartMinimized, Mode=TwoWay}"
+                                      Content="{Markup:Loc Settings_StartMinimized}"
+                                      Foreground="#DDD" FontSize="12"
+                                      HorizontalAlignment="Left" Margin="0,0,0,12"
+                                      ToolTip="{Markup:Loc Settings_StartMinimizedTooltip}" />
 
-                    <!-- Tray icon click routing. Each combo writes to a single settings key
-                         (tray.left_click / .double_click / .middle_click) read live by
-                         TrayIconService — no restart required. Defaults match the historical
-                         behaviour: left → Settings, double → Clipboard, middle → none. -->
-                    <Border Background="{DynamicResource Surface1Brush}" CornerRadius="4" Padding="14" Margin="0,0,0,16">
-                        <StackPanel>
+                            <!-- In-card divider between the boolean toggles above and the tray
+                                 click-routing matrix below. Same Surface3 thickness/opacity as
+                                 the other in-card separators across the app so the visual
+                                 weight stays consistent. -->
+                            <Border Height="1" Background="{DynamicResource AccentForegroundDarkBrush}" Opacity="0.3" Margin="0,0,0,12" />
+
                             <TextBlock Text="{Markup:Loc Settings_TrayClicksTitle}" FontWeight="SemiBold" Margin="0,0,0,4" />
                             <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
                                        Text="{Markup:Loc Settings_TrayClicksHint}" />
@@ -1520,6 +1500,52 @@
                                            Loaded="OnTrayClickComboLoaded"
                                            SelectionChanged="OnTrayMiddleClickChanged" />
                             </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- UI language picker. Writes the selected culture tag to ui.language; the
+                         picker itself stays in English so a wrong choice is recoverable without
+                         hunting for the right entry in an unfamiliar language. CurrentTag setter
+                         applies live — bound surfaces (tray menu, future XAML Loc bindings)
+                         refresh on CultureChanged without a restart. -->
+                    <Border Background="{DynamicResource Surface1Brush}" CornerRadius="4" Padding="14" Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock Text="{Markup:Loc Settings_Language}" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
+                                       Text="{Markup:Loc Settings_LanguageHint}" />
+                            <StackPanel Orientation="Horizontal">
+                                <ComboBox x:Name="LanguageCombo"
+                                          Loaded="OnLanguageComboLoaded"
+                                          SelectionChanged="OnLanguageComboChanged"
+                                          MinWidth="220" />
+                                <ui:Button Content="{Markup:Loc Settings_LanguageRestart}"
+                                           Margin="8,0,0,0" Padding="14,4"
+                                           Click="OnRestartAppClicked"
+                                           ToolTip="Some surfaces only translate fully on relaunch — use this to apply the new language everywhere at once." />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Editor: knobs for the image editor (start state + per-gesture
+                         behaviour). Sits next to the Image effects card below since both are
+                         editor-adjacent surfaces. EditorStartMaximized lives here rather than
+                         under "Windows integration" because it governs editor-launch behaviour,
+                         not OS-level startup. -->
+                    <Border Background="{DynamicResource Surface1Brush}" CornerRadius="4" Padding="14" Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock Text="{Markup:Loc Settings_EditorSectionTitle}" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
+                                       Text="{Markup:Loc Settings_EditorSectionHint}" />
+                            <CheckBox IsChecked="{Binding EditorStartMaximized, Mode=TwoWay}"
+                                      Content="{Markup:Loc Settings_EditorStartMaximized}"
+                                      Foreground="#DDD" FontSize="12"
+                                      HorizontalAlignment="Left" Margin="0,0,0,8"
+                                      ToolTip="{Markup:Loc Settings_EditorStartMaximizedTooltip}" />
+                            <CheckBox IsChecked="{Binding EditorShiftClickSelectAny, Mode=TwoWay}"
+                                      Content="{Markup:Loc Settings_EditorShiftClickSelectAny}"
+                                      Foreground="#DDD" FontSize="12"
+                                      HorizontalAlignment="Left"
+                                      ToolTip="{Markup:Loc Settings_EditorShiftClickSelectAnyTooltip}" />
                         </StackPanel>
                     </Border>
 

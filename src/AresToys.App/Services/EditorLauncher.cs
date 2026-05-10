@@ -219,6 +219,15 @@ public sealed class EditorLauncher
         var rawStartMax = await _settings.GetAsync("app.editor_start_maximized", cancellationToken).ConfigureAwait(false);
         var startMaximized = string.Equals(rawStartMax, "true", StringComparison.OrdinalIgnoreCase);
 
+        // Shift+click no-match fallback: "select_any" → editor's ShiftClickFallback = SelectAny;
+        // anything else (incl. unset / "place") → Place. Same per-open read pattern as the
+        // start-maximized flag above so a Settings toggle takes effect on the next editor open
+        // without restart.
+        var rawShiftFallback = await _settings.GetAsync("editor.shift_click_no_match", cancellationToken).ConfigureAwait(false);
+        var shiftFallback = string.Equals(rawShiftFallback, "select_any", StringComparison.OrdinalIgnoreCase)
+            ? AresToys.Editor.ViewModels.ShiftClickFallback.SelectAny
+            : AresToys.Editor.ViewModels.ShiftClickFallback.Place;
+
         // Modeless Show() instead of ShowDialog so the editor doesn't take the app-wide modal
         // lock (toast → click → editor used to freeze MainWindow / ClipboardWindow / tray
         // dialogs until close). Same pattern EditAsync uses for pipeline opens; the
@@ -241,6 +250,7 @@ public sealed class EditorLauncher
             vm.CurrentTextStyle = defaults.TextStyle;
             vm.FreehandSmoothDefault = defaults.FreehandSmooth;
             vm.FreehandEndArrowDefault = defaults.FreehandEndArrow;
+            vm.ShiftClickFallback = shiftFallback;
             vm.ResetStepCounter();
             window.ApplyLocalization(BuildEditorLabels());
             window.Owner = System.Windows.Application.Current.MainWindow;
@@ -345,6 +355,13 @@ public sealed class EditorLauncher
         _logger.LogInformation("EditorLauncher.EditAsync: opening with tool={Tool} (lastUsed={LastUsed}, override='{Override}')",
             resolvedTool, defaults.Tool, defaultTool ?? "(none)");
 
+        // Same shift+click fallback hydration as OpenAsync — read once per editor open so a
+        // Settings toggle takes effect on the next launch without restart.
+        var rawShiftFallback = await _settings.GetAsync("editor.shift_click_no_match", cancellationToken).ConfigureAwait(false);
+        var shiftFallback = string.Equals(rawShiftFallback, "select_any", StringComparison.OrdinalIgnoreCase)
+            ? AresToys.Editor.ViewModels.ShiftClickFallback.SelectAny
+            : AresToys.Editor.ViewModels.ShiftClickFallback.Place;
+
         // Editor is WPF — must be created on the UI thread. We use Show() (modeless) instead
         // of ShowDialog() so the user can keep multiple editors open in parallel: rapid-fire
         // PrintScreen / region-capture invocations each produce their own independent window.
@@ -371,6 +388,7 @@ public sealed class EditorLauncher
             vm.CurrentTextStyle = defaults.TextStyle;
             vm.FreehandSmoothDefault = defaults.FreehandSmooth;
             vm.FreehandEndArrowDefault = defaults.FreehandEndArrow;
+            vm.ShiftClickFallback = shiftFallback;
             vm.ResetStepCounter();
             window.ApplyLocalization(BuildEditorLabels());
             window.Owner = System.Windows.Application.Current.MainWindow;
