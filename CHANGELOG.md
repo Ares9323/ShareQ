@@ -3,40 +3,75 @@
 All notable changes to AresToys. Format loosely follows [Keep a Changelog](https://keepachangelog.com/),
 versions follow [SemVer](https://semver.org/).
 
+## [0.1.5] — 2026-05-10
+
+Editor polish pass: toolbar icons, side-panel buttons, properties labels and window
+titles now follow the theme's foreground colours instead of staying hard-coded white.
+New shift+click smart-select on placement tools, double-click confirms pending crops
+or capture regions. App Settings tab regrouped into "Windows integration" plus a
+dedicated "Editor" card. Sliders pick up the theme's dim foreground for track and tick
+marks. MainWindow sidebar buttons gain an accent-tinted hover.
+
+### Editor
+- Toolbar icons (Select, Rectangle, Ellipse, Line, Arrow, Freehand, Text, Step, Image,
+  Blur, Pixelate, Spotlight, Erase, Crop, Resize, Effects, Trace, Magic Eraser) bind
+  through `{DynamicResource AccentForegroundBrush}` so they retint live with the theme
+  instead of staying baked white. Property panel section titles ("Crop properties",
+  "Default properties", the dynamic Selection title) follow the same brush; subtitles
+  and label rows (Outline, Fill, Stroke, Effect, Rotation, Font, Size, Alignment, etc.)
+  use `AccentForegroundDarkBrush` so the value/label hierarchy reads correctly under
+  any palette. The window title in the top-left and the three side-panel action button
+  glyphs (Confirm/Copy, Save as, Cancel) follow `AccentForegroundBrush` too.
+- New shift+click gesture on placement tools (Rectangle, Ellipse, Line, Arrow, Freehand,
+  Text, Step counter, Blur, Pixelate, Spotlight, Smart Eraser): instead of starting a
+  placement gesture, hit-test for an existing shape of the SAME type as the tool under
+  the cursor and select it. Lets the user grab a previously-drawn rectangle to tweak
+  its properties without leaving the Rectangle tool. The current tool stays active so
+  the next plain click still places.
+- Pending-crop and capture-region overlays now confirm on double-click inside any rect,
+  same effect as Enter or the Apply button. The overlay help text and the editor's
+  Apply tooltip mention both gestures.
+
+### Settings
+- Settings tab regrouped: "Run when Windows starts", "Start minimized" and the tray
+  click-routing combos consolidate into a single "Windows integration" card. A new
+  "Editor" card sits next to "Image effects" and hosts "Start editor maximized" plus a
+  new toggle "Shift+click selects any shape (not only same type)" — controls the
+  shift+click behaviour above when no same-type shape is under the cursor (off, the
+  default, falls through to a normal placement; on, selects whatever shape is there).
+  Persisted under `editor.shift_click_no_match` and `app.editor_start_maximized`.
+
+### Theme
+- Slider track, tick bar and outer thumb ring follow `AccentForegroundDarkBrush` instead
+  of the WPF-UI default near-white. Affects every slider in the app: editor stroke,
+  Trace knobs, BgRemover knobs, Image effects, Capture defaults. The inner thumb keeps
+  the user's accent so the slider's identity colour still pops.
+- MainWindow sidebar: non-selected category buttons now hover to a lighter shade of the
+  user's accent (the same `AccentBackgroundLightBrush` used elsewhere) instead of a
+  flat surface-coloured hover. The selected button keeps its dark-accent fill with the
+  existing accent-light hover.
+- Clipboard, Launcher, Hotkey-capture and Editor window titles in the title bar follow
+  `AccentForegroundBrush` instead of a hard-coded `#FFF`, so they re-tint when the user
+  picks a custom foreground colour.
+
+---
+
 ## [0.1.4] — 2026-05-09
 
-Project rebrand from ShareQ to AresToys, new logo (Pigeon mark across icon, tray, title
-bars and About), a custom palette mode for the SVG tracer, and a per-workflow toggle to
-skip the multi-region overlay when a single capture is what you actually want.
-
-### Branding
-- Rebrand: project, solution, namespaces, assemblies, settings folder, installer artifacts
-  and tray menu strings all migrated from "ShareQ" to "AresToys". Existing 0.1.2 installs
-  continue to read their data folder via the previous `%LocalAppData%\ShareQ-Data\`
-  → `%LocalAppData%\AresToys-Data\` migration path so settings + clipboard history carry
-  over automatically.
-- New logo (Pigeon mark) replaces the old green/grey leaf-pair across every surface:
-  app icon (`.ico` rebuilt as a multi-frame PNG-encoded ICO at 16/24/32/48/64/128/256 so
-  it stays crisp on every Explorer view + DPI), tray icon, title-bar `ImageIcon` on every
-  window (MainWindow, BgRemover, Clipboard, HotkeyCapture, QrGenerator, Trace, Launcher,
-  LauncherCellEdit, ImageEffects, EditorWindow, ColorPickerWindow), and the About panel.
-  Vector `DrawingImage` resources collapsed to a single shared `BitmapImage` pointing at
-  `Assets/AresToysLogo.png`; cross-assembly pack URIs hand the same PNG to the Editor
-  assembly so there's only one logo file to swap in future redesigns.
-- `tools/build-icon.ps1` ships alongside the source to regenerate `icon.ico` from a PNG
-  on demand (multi-size, transparent, no external tooling required).
+A custom palette mode for the SVG tracer, and a per-workflow toggle to skip the
+multi-region overlay when a single capture is what you actually want.
 
 ### Image trace (raster → SVG)
 - New "Custom (pick colours)" palette mode in the Trace window. The user samples 2 to 16
   colours from the source image with the on-screen eyedropper; every source pixel then
-  maps to its nearest entry by Euclidean RGB distance, so related tones (white + light
-  grey, two near-identical reds, anti-alias halos) collapse into the nearest pick instead
-  of getting an arbitrary auto-quantised palette. Falls back to Limited if the swatch list
-  has fewer than 2 entries so the trace is always defined.
-- Swatch row UI: click an empty slot to drop the colour picker, click an existing chip to
-  replace it, right-click to remove. `MaxCustomSwatches = 16`, `MinCustomSwatches = 2`
-  enforced in the VM. The "Add swatch" + "Need more colours" affordances react live to
-  collection mutations.
+  maps to its nearest entry by Euclidean RGB distance, so related tones (white plus
+  light grey, two near-identical reds, anti-alias halos) collapse into the nearest pick
+  instead of getting an arbitrary auto-quantised palette. Falls back to Limited if the
+  swatch list has fewer than 2 entries so the trace is always defined.
+- Swatch row UI: click an empty slot to drop the colour picker, click an existing chip
+  to replace it, right-click to remove. `MaxCustomSwatches = 16`, `MinCustomSwatches = 2`
+  enforced in the VM. The "Add swatch" plus "Need more colours" affordances react live
+  to collection mutations.
 - `TraceOptions.CustomPalette` plumbs the picked list down to the potrace pipeline; the
   pipeline `Trace to SVG` task picks it up unchanged when a workflow drives the tracer.
 
@@ -50,6 +85,31 @@ skip the multi-region overlay when a single capture is what you actually want.
   accumulated rects — are meaningless when the overlay self-confirms). Esc still cancels.
 - Default stays `false` so existing workflows keep the multi-region UX; the toggle lives
   in the workflow action's parameter strip in Settings → Hotkeys and workflows.
+
+---
+
+## [0.1.3] — 2026-05-08
+
+Project rebrand from ShareQ to AresToys, new logo (Pigeon mark across icon, tray, title
+bars and About).
+
+### Branding
+- Rebrand: project, solution, namespaces, assemblies, settings folder, installer
+  artifacts and tray menu strings all migrated from "ShareQ" to "AresToys". Existing
+  0.1.2 installs continue to read their data folder via the previous
+  `%LocalAppData%\ShareQ-Data\` → `%LocalAppData%\AresToys-Data\` migration path so
+  settings plus clipboard history carry over automatically.
+- New logo (Pigeon mark) replaces the old green/grey leaf-pair across every surface:
+  app icon (`.ico` rebuilt as a multi-frame PNG-encoded ICO at 16/24/32/48/64/128/256
+  so it stays crisp on every Explorer view plus DPI), tray icon, title-bar `ImageIcon`
+  on every window (MainWindow, BgRemover, Clipboard, HotkeyCapture, QrGenerator, Trace,
+  Launcher, LauncherCellEdit, ImageEffects, EditorWindow, ColorPickerWindow), and the
+  About panel. Vector `DrawingImage` resources collapsed to a single shared
+  `BitmapImage` pointing at `Assets/AresToysLogo.png`; cross-assembly pack URIs hand
+  the same PNG to the Editor assembly so there's only one logo file to swap in future
+  redesigns.
+- `tools/build-icon.ps1` ships alongside the source to regenerate `icon.ico` from a PNG
+  on demand (multi-size, transparent, no external tooling required).
 
 ---
 
