@@ -46,6 +46,13 @@ public sealed class LauncherStore
     /// race here in practice (the launcher window runs everything on the dispatcher).</summary>
     public long StateVersion => System.Threading.Interlocked.Read(ref _stateVersion);
 
+    /// <summary>Force the state version to advance without going through <see cref="SaveAsync"/>.
+    /// Used after a backup import writes the launcher settings key directly through
+    /// <see cref="ISettingsStore"/> — the store would otherwise stay at its old version and the
+    /// next <c>PrepareAsync</c> on a pre-warmed <c>LauncherWindow</c> would skip the reload,
+    /// leaving the visible grid stale (the "empty launcher after import" bug).</summary>
+    public void BumpStateVersion() => System.Threading.Interlocked.Increment(ref _stateVersion);
+
     public async Task<LauncherState> LoadAsync(CancellationToken cancellationToken)
     {
         var cells = new Dictionary<string, LauncherCell>(StringComparer.OrdinalIgnoreCase);

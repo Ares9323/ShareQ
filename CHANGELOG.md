@@ -63,6 +63,22 @@ bug reports also fixed in this release — see the Bug fixes section below.
   parent-driven offset. Settling the layout queue before the direct calls
   keeps the export consistent regardless of whether a modal dialog ran in
   between (which is why Save-as appeared to "just work").
+- Launcher: importing a backup that overwrites `launcher.state` no longer
+  leaves the launcher grid empty until the user edits a cell. The app pre-warms
+  a `LauncherWindow` at startup and gates `PrepareAsync` reloads behind a
+  monotonic `LauncherStore.StateVersion` counter; direct `ISettingsStore`
+  writes in `SettingsBackupService.ImportAsync` bypassed `SaveAsync` and left
+  the counter stale, so the next open kept rendering the pre-import (empty)
+  snapshot. Import now bumps the version explicitly when it touches
+  `launcher.state` / `launcher.cells`.
+- Launcher: switching tabs after importing a large set of cells no longer
+  freezes the UI for several seconds per first visit. `RebuildActiveTab`
+  resolves each cell's icon synchronously on the dispatcher, and the imported
+  cells point at slow paths (OneDrive online-only, `.lnk` Start-Menu entries,
+  unreachable network shares) where `SHGetFileInfo` blocks. `PrepareAsync` now
+  pre-warms `IconService`'s cache for every tab on a background thread after
+  loading state, so the per-cell extraction cost is paid once off-thread
+  instead of 30× synchronously on each first tab switch.
 
 
 

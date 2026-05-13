@@ -196,6 +196,14 @@ public partial class LauncherWindow : Wpf.Ui.Controls.FluentWindow
             RebuildFunctionRow();
             RebuildTabHeaders();
             RebuildActiveTab();
+            // Pre-warm the icon cache for every tab on a background thread so the FIRST switch
+            // to each inactive tab doesn't pay the per-cell SHGetFileInfo cost on the UI thread.
+            // Without this, importing a backup with cells on OneDrive / network / .lnk paths
+            // produced a multi-second freeze on every cross-tab switch. IconService.GetIcon is
+            // thread-safe (internal lock + frozen BitmapSource results), so calling it off the
+            // dispatcher is safe and the populated entries are reused on the next RebuildActiveTab.
+            var snapshot = _state;
+            _ = Task.Run(() => PrewarmAllIcons(snapshot));
         }
 
         // Drag-mode persistence: explicit StartInDragMode from the host wins; otherwise the
@@ -299,6 +307,22 @@ public partial class LauncherWindow : Wpf.Ui.Controls.FluentWindow
         RebuildActiveTab();
     }
     private bool _activeTabRestored;
+
+    private void PrewarmAllIcons(LauncherState snapshot)
+    {
+        try
+        {
+            foreach (var cell in snapshot.Cells.Values)
+            {
+                if (!cell.IsConfigured) continue;
+                _icons.GetIcon(cell.IconPath, cell.Path, cell.IconIndex);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "LauncherWindow: icon pre-warm failed (non-fatal — cache will fill on demand)");
+        }
+    }
 
     private void RebuildFunctionRow()
     {

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using AresToys.App.Services.Launcher;
 using AresToys.Core.Domain;
 using AresToys.Storage.Items;
 using AresToys.Storage.Settings;
@@ -37,17 +38,20 @@ public sealed class SettingsBackupService
     private readonly ISettingsStore _settings;
     private readonly ICategoryStore _categories;
     private readonly IItemStore _items;
+    private readonly LauncherStore _launcher;
     private readonly ILogger<SettingsBackupService> _logger;
 
     public SettingsBackupService(
         ISettingsStore settings,
         ICategoryStore categories,
         IItemStore items,
+        LauncherStore launcher,
         ILogger<SettingsBackupService> logger)
     {
         _settings = settings;
         _categories = categories;
         _items = items;
+        _launcher = launcher;
         _logger = logger;
     }
 
@@ -112,6 +116,7 @@ public sealed class SettingsBackupService
         }
 
         var settingsImported = 0;
+        var launcherStateTouched = false;
         if (doc.Settings is not null)
         {
             foreach (var (key, value) in doc.Settings)
@@ -120,8 +125,15 @@ public sealed class SettingsBackupService
                 // the first place, so any key found in the file is by construction non-sensitive.
                 await _settings.SetAsync(key, value, sensitive: false, cancellationToken).ConfigureAwait(false);
                 settingsImported++;
+                if (key is "launcher.state" or "launcher.cells") launcherStateTouched = true;
             }
         }
+        // The launcher pre-warms its in-memory view at app startup and uses a monotonic version
+        // counter on LauncherStore to decide whether to reload on the next PrepareAsync. Direct
+        // ISettingsStore writes above bypass LauncherStore.SaveAsync, so the counter stays put
+        // and the pre-warmed window keeps showing the old (often empty) grid until the user
+        // mutates a cell. Bump it explicitly here so the next open sees fresh data.
+        if (launcherStateTouched) _launcher.BumpStateVersion();
 
         var categoriesImported = 0;
         if (doc.Categories is not null)
