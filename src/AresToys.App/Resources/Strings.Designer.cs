@@ -247,6 +247,78 @@ namespace AresToys.App.Resources {
                 return ResourceManager.GetString("Clipboard_MenuPinUnpin", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Rename label (F2).
+        /// </summary>
+        public static string Clipboard_MenuRenameLabel {
+            get {
+                return ResourceManager.GetString("Clipboard_MenuRenameLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Add a label….
+        /// </summary>
+        public static string Clipboard_LabelPlaceholder {
+            get {
+                return ResourceManager.GetString("Clipboard_LabelPlaceholder", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Move up in pinned order.
+        /// </summary>
+        public static string Clipboard_TooltipMoveUp {
+            get {
+                return ResourceManager.GetString("Clipboard_TooltipMoveUp", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Move down in pinned order.
+        /// </summary>
+        public static string Clipboard_TooltipMoveDown {
+            get {
+                return ResourceManager.GetString("Clipboard_TooltipMoveDown", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Clipboard.
+        /// </summary>
+        public static string Settings_ClipboardSectionTitle {
+            get {
+                return ResourceManager.GetString("Settings_ClipboardSectionTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Display options for the clipboard window..
+        /// </summary>
+        public static string Settings_ClipboardSectionHint {
+            get {
+                return ResourceManager.GetString("Settings_ClipboardSectionHint", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Show content snippet under label.
+        /// </summary>
+        public static string Settings_ClipboardShowSnippetWithLabel {
+            get {
+                return ResourceManager.GetString("Settings_ClipboardShowSnippetWithLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to When an item has a label, also render a small preview of its content on a second line. Off by default — the label replaces the snippet entirely..
+        /// </summary>
+        public static string Settings_ClipboardShowSnippetWithLabelTooltip {
+            get {
+                return ResourceManager.GetString("Settings_ClipboardShowSnippetWithLabelTooltip", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to 🔍 Search….

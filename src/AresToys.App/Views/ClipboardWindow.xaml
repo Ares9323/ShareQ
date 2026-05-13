@@ -229,7 +229,12 @@
                                 <ui:Button Command="{Binding DataContext.SelectCategoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                            CommandParameter="{Binding Name}"
                                            Appearance="{Binding IsActive, Converter={StaticResource BoolToAppearance}}"
-                                           Margin="0,0,4,0">
+                                           Margin="0,0,4,0"
+                                           Tag="{Binding Name}"
+                                           AllowDrop="True"
+                                           DragEnter="OnCategoryTabDragEnter"
+                                           DragLeave="OnCategoryTabDragLeave"
+                                           Drop="OnCategoryTabDrop">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding Icon}"
                                                    FontFamily="{DynamicResource IconFont}"
@@ -310,10 +315,17 @@
                                 </ListBox.ItemContainerStyle>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:ItemRowViewModel}">
-                                        <Border Padding="8,6" Margin="0,2"
+                                        <Border x:Name="RowBorder"
+                                                Padding="8,6" Margin="0,2"
                                                 CornerRadius="4"
                                                 BorderThickness="2"
+                                                AllowDrop="True"
                                                 PreviewMouseRightButtonDown="OnItemRowPreviewRightClick"
+                                                PreviewMouseLeftButtonDown="OnItemRowPreviewLeftButtonDown"
+                                                PreviewMouseMove="OnItemRowPreviewMouseMove"
+                                                DragEnter="OnItemRowDragEnter"
+                                                DragLeave="OnItemRowDragLeave"
+                                                Drop="OnItemRowDrop"
                                                 Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
                                             <Border.ContextMenu>
                                                 <!-- ContextMenu lives in a popup outside the visual tree, so
@@ -347,6 +359,13 @@
                                                         </MenuItem.ItemContainerStyle>
                                                     </MenuItem>
                                                     <Separator />
+                                                    <!-- Rename label — flips the row template into inline-rename
+                                                         mode. Handler reads the clicked row from the menu's
+                                                         PlacementTarget.DataContext (the row VM) and sets
+                                                         IsRenaming=true so the title TextBlock swaps for a TextBox. -->
+                                                    <MenuItem Header="{Markup:Loc Clipboard_MenuRenameLabel}"
+                                                              Click="OnRenameLabelClicked" />
+                                                    <Separator />
                                                     <!-- Generate QR — only meaningful for text-shaped rows
                                                          (Text/Html/Rtf). On Image/Video/Files the entry hides
                                                          entirely; the handler still has a defensive bail-out for
@@ -376,6 +395,7 @@
                                                     <ColumnDefinition Width="Auto" />
                                                     <ColumnDefinition Width="Auto" />
                                                     <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
                                                 <!-- Left rail: Ctrl+N quick-paste badge on top, pin glyph below.
                                                      Each collapses when its trigger is false. -->
@@ -397,7 +417,7 @@
                                                                    VerticalAlignment="Center" />
                                                     </Border>
                                                     <TextBlock Foreground="Gold" FontSize="11" Text="📌" HorizontalAlignment="Center"
-                                                               Visibility="{Binding Pinned, Converter={StaticResource BoolToVisibility}}" />
+                                                               Visibility="{Binding ShowPinInRail, Converter={StaticResource BoolToVisibility}}" />
                                                 </StackPanel>
                                                 <Border Grid.Column="1"
                                                         Width="56" Height="56"
@@ -409,12 +429,65 @@
                                                            Stretch="Uniform" />
                                                 </Border>
                                                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Preview}"
-                                                               Foreground="{DynamicResource AccentForegroundBrush}"
-                                                               FontSize="13"
+                                                    <!-- Title row: TextBlock (TitleText = Label if set, else
+                                                         Preview) + a 📎 badge marking labeled rows. Swaps to a
+                                                         TextBox when IsRenaming is true so the user can edit the
+                                                         label in place. Enter commits, Esc/LostFocus cancel. -->
+                                                    <Grid>
+                                                        <StackPanel Orientation="Horizontal"
+                                                                    Visibility="{Binding IsRenaming, Converter={StaticResource InverseBoolToVisibility}}">
+                                                            <!-- Inline pin glyph (FA map-pin) shown only when the row has a label, sits
+                                                                 LEFT of the tag icon so the title row reads "[pin] [tag] [label text]"
+                                                                 as a single visual unit. The left-rail 📌 hides in this case
+                                                                 (ShowPinInRail = Pinned AND !HasLabel) so the pin doesn't appear twice. -->
+                                                            <TextBlock Text="&#xF276;"
+                                                                       FontFamily="{DynamicResource IconFont}"
+                                                                       Foreground="{DynamicResource AccentDeleteBrush}"
+                                                                       FontSize="11"
+                                                                       Margin="0,0,6,0"
+                                                                       VerticalAlignment="Center"
+                                                                       Visibility="{Binding ShowPinInline, Converter={StaticResource BoolToVisibility}}" />
+                                                            <TextBlock Text="&#xF02B;"
+                                                                       FontFamily="{DynamicResource IconFont}"
+                                                                       Foreground="{DynamicResource AccentBackgroundLightBrush}"
+                                                                       FontSize="11"
+                                                                       Margin="0,0,6,0"
+                                                                       VerticalAlignment="Center"
+                                                                       Visibility="{Binding HasLabel, Converter={StaticResource BoolToVisibility}}" />
+                                                            <TextBlock Text="{Binding TitleText}"
+                                                                       Foreground="{DynamicResource AccentForegroundBrush}"
+                                                                       FontSize="13"
+                                                                       TextWrapping="Wrap"
+                                                                       MaxHeight="60"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                        </StackPanel>
+                                                        <TextBox x:Name="RenameTextBox"
+                                                                 Text="{Binding Label, Mode=OneWay}"
+                                                                 MaxLength="200"
+                                                                 FontSize="13"
+                                                                 Foreground="{DynamicResource AccentForegroundBrush}"
+                                                                 Background="{DynamicResource Surface1Brush}"
+                                                                 BorderBrush="{DynamicResource AccentBackgroundBrush}"
+                                                                 BorderThickness="1"
+                                                                 Padding="4,2"
+                                                                 IsVisibleChanged="OnRenameTextBoxVisibleChanged"
+                                                                 KeyDown="OnRenameTextBoxKeyDown"
+                                                                 LostFocus="OnRenameTextBoxLostFocus"
+                                                                 Visibility="{Binding IsRenaming, Converter={StaticResource BoolToVisibility}}" />
+                                                    </Grid>
+                                                    <!-- Secondary line: original content snippet shown under a label
+                                                         when the user opts in via App Settings →
+                                                         clipboard.show_snippet_with_label. ShowSnippet on the row VM
+                                                         already AND's HasLabel with the setting, so plain rows
+                                                         (no label) never render this. -->
+                                                    <TextBlock Text="{Binding SnippetText}"
+                                                               Foreground="{DynamicResource AccentForegroundDarkBrush}"
+                                                               FontSize="11"
                                                                TextWrapping="Wrap"
-                                                               MaxHeight="60"
-                                                               TextTrimming="CharacterEllipsis" />
+                                                               MaxHeight="40"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Margin="0,2,0,0"
+                                                               Visibility="{Binding ShowSnippet, Converter={StaticResource BoolToVisibility}}" />
                                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                                                         <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" Text="{Binding Age}" />
                                                         <TextBlock Foreground="#666" FontSize="11" Text=" · " />
@@ -423,6 +496,43 @@
                                                         <TextBlock Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" Text="{Binding SourceProcess}"
                                                                    TextTrimming="CharacterEllipsis" MaxWidth="200" />
                                                     </StackPanel>
+                                                </StackPanel>
+                                                <!-- Reorder chevrons on the pinned strip — appear only on hover over a pinned
+                                                     row (MultiDataTrigger: Pinned AND IsMouseOver on the row Border). Click
+                                                     handlers call PopupWindowViewModel.MovePinnedAsync which swaps the row
+                                                     with its neighbour. Drag-to-reorder is the alternative gesture and is
+                                                     wired on the row Border's Drop event. -->
+                                                <StackPanel Grid.Column="3" Orientation="Vertical" VerticalAlignment="Center" Margin="6,0,0,0">
+                                                    <StackPanel.Style>
+                                                        <Style TargetType="StackPanel">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                            <Style.Triggers>
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding Pinned}" Value="True" />
+                                                                        <Condition Binding="{Binding IsMouseOver, ElementName=RowBorder}" Value="True" />
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                </MultiDataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </StackPanel.Style>
+                                                    <Button Width="22" Height="20" Padding="0" Margin="0,0,0,2"
+                                                            Background="Transparent" BorderThickness="0"
+                                                            Click="OnRowMoveUpClicked"
+                                                            ToolTip="{Markup:Loc Clipboard_TooltipMoveUp}">
+                                                        <TextBlock Text="&#xF077;" FontFamily="{DynamicResource IconFont}"
+                                                                   FontSize="11" Foreground="{DynamicResource AccentForegroundBrush}"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Button>
+                                                    <Button Width="22" Height="20" Padding="0"
+                                                            Background="Transparent" BorderThickness="0"
+                                                            Click="OnRowMoveDownClicked"
+                                                            ToolTip="{Markup:Loc Clipboard_TooltipMoveDown}">
+                                                        <TextBlock Text="&#xF078;" FontFamily="{DynamicResource IconFont}"
+                                                                   FontSize="11" Foreground="{DynamicResource AccentForegroundBrush}"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Button>
                                                 </StackPanel>
                                             </Grid>
                                         </Border>
@@ -450,15 +560,31 @@
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0"
-                                       Margin="8,6"
+                            <!-- Always-on Label editor for the selected row. Bound OneWay to
+                                 SelectedRow.Label; code-behind LostFocus/Enter handler reads
+                                 the TextBox text and persists via PopupWindowViewModel.
+                                 CommitLabelAsync. IsEnabled false when nothing's selected so
+                                 the user doesn't type into a void. -->
+                            <ui:TextBox Grid.Row="0"
+                                        x:Name="PreviewPaneLabelBox"
+                                        Margin="8,6,8,2"
+                                        MaxLength="200"
+                                        FontSize="12"
+                                        Text="{Binding SelectedRow.Label, Mode=OneWay, FallbackValue=''}"
+                                        PlaceholderText="{Markup:Loc Clipboard_LabelPlaceholder}"
+                                        KeyDown="OnPreviewLabelKeyDown"
+                                        LostFocus="OnPreviewLabelLostFocus"
+                                        Visibility="{Binding SelectedRow, Converter={StaticResource NotNullToVisibility}}" />
+                            <TextBlock Grid.Row="1"
+                                       Margin="8,2,8,6"
                                        Foreground="{DynamicResource AccentForegroundDarkBrush}"
                                        FontSize="11"
                                        TextTrimming="CharacterEllipsis"
                                        Text="{Binding PreviewMeta}" />
-                            <Grid Grid.Row="1" Margin="0,0,0,4">
+                            <Grid Grid.Row="2" Margin="0,0,0,4">
                                 <!-- Image preview wrapped in a ScrollViewer so the user can pan after
                                      zooming. Ctrl+wheel scales the LayoutTransform (PreviewMouseWheel
                                      in code-behind to intercept before the ScrollViewer tries to

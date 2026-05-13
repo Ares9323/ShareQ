@@ -1,8 +1,10 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -540,6 +542,170 @@ public partial class ClipboardWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
+    // ── Drag-to-category: drop a row onto a category tab header → move it ────────────
+    // Custom format keeps the payload distinct from FileDrop / text drags so a drop from
+    // Explorer or another app on a category tab is silently ignored.
+    private const string ClipboardItemDragFormat = "arestoys.clipboard.item";
+    private System.Windows.Point? _rowDragStart;
+    private long _rowDragSourceId;
+
+    private void OnItemRowPreviewLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not Border b || b.DataContext is not ItemRowViewModel row)
+        {
+            _rowDragStart = null;
+            return;
+        }
+        // Don't arm a drag while the row is in inline-rename mode — left-clicks there belong
+        // to the TextBox caret, not the drag gesture.
+        if (row.IsRenaming) { _rowDragStart = null; return; }
+        // Skip drag-arming when the click originated on an interactive child (chevron
+        // reorder buttons). Without this check, clicking ↑/↓ would also start a drag if the
+        // user moved the mouse even slightly before releasing — wrong gesture.
+        if (e.OriginalSource is DependencyObject src && IsInsideButton(src))
+        {
+            _rowDragStart = null;
+            return;
+        }
+        _rowDragStart = e.GetPosition(this);
+        _rowDragSourceId = row.Id;
+    }
+
+    private static bool IsInsideButton(DependencyObject node)
+    {
+        for (var current = node; current is not null; current = System.Windows.Media.VisualTreeHelper.GetParent(current))
+        {
+            if (current is ButtonBase) return true;
+        }
+        return false;
+    }
+
+    private void OnItemRowPreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_rowDragStart is null) return;
+        if (e.LeftButton != MouseButtonState.Pressed) { _rowDragStart = null; return; }
+        var pos = e.GetPosition(this);
+        var dx = Math.Abs(pos.X - _rowDragStart.Value.X);
+        var dy = Math.Abs(pos.Y - _rowDragStart.Value.Y);
+        // Honour the OS-defined drag threshold so a click without movement (select / paste)
+        // doesn't get reinterpreted as a drag and steal the click semantics.
+        if (dx < SystemParameters.MinimumHorizontalDragDistance &&
+            dy < SystemParameters.MinimumVerticalDragDistance) return;
+
+        var sourceId = _rowDragSourceId;
+        _rowDragStart = null;
+        if (sender is not Border b) return;
+        var data = new DataObject(ClipboardItemDragFormat, sourceId);
+        // Move semantics — the item leaves the current category and enters the target.
+        DragDrop.DoDragDrop(b, data, DragDropEffects.Move);
+    }
+
+    private void OnCategoryTabDragEnter(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(ClipboardItemDragFormat))
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+        e.Effects = DragDropEffects.Move;
+        if (sender is FrameworkElement fe) fe.Opacity = 0.6;
+        e.Handled = true;
+    }
+
+    private void OnCategoryTabDragLeave(object sender, DragEventArgs e)
+    {
+        if (sender is FrameworkElement fe) fe.Opacity = 1.0;
+    }
+
+    // ── Pinned reorder: chevron clicks + drag-onto-row ───────────────────────────────
+
+    private async void OnRowMoveUpClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe) return;
+        if (fe.DataContext is not ItemRowViewModel row || !row.Pinned) return;
+        await ViewModel.MovePinnedAsync(row.Id, -1);
+    }
+
+    private async void OnRowMoveDownClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe) return;
+        if (fe.DataContext is not ItemRowViewModel row || !row.Pinned) return;
+        await ViewModel.MovePinnedAsync(row.Id, +1);
+    }
+
+    private void OnItemRowDragEnter(object sender, DragEventArgs e)
+    {
+        if (!IsValidPinnedReorderDrag(sender, e, out _, out _))
+        {
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+        e.Effects = DragDropEffects.Move;
+        if (sender is Border b) b.BorderBrush = (System.Windows.Media.Brush)FindResource("AccentBackgroundBrush");
+        e.Handled = true;
+    }
+
+    private void OnItemRowDragLeave(object sender, DragEventArgs e)
+    {
+        // Reset BorderBrush to whatever the row Style would have applied. The selection
+        // trigger re-evaluates on leave; for non-selected rows we go back to Transparent.
+        if (sender is Border b) b.ClearValue(Border.BorderBrushProperty);
+    }
+
+    private async void OnItemRowDrop(object sender, DragEventArgs e)
+    {
+        if (sender is Border b) b.ClearValue(Border.BorderBrushProperty);
+        if (!IsValidPinnedReorderDrag(sender, e, out var sourceId, out var targetId))
+        {
+            return;
+        }
+        e.Handled = true;
+        await ViewModel.ReorderPinnedAsync(sourceId, targetId);
+    }
+
+    /// <summary>Common gate for the pinned-reorder DnD. Allows the operation only when both
+    /// the source row (carried in the DataObject) and the target row (the Border's
+    /// DataContext) are pinned and different from each other. Drops between unpinned rows
+    /// or from unpinned to pinned (and vice-versa) are silently ignored — those gestures
+    /// have no meaningful reorder semantic.</summary>
+    private bool IsValidPinnedReorderDrag(object sender, DragEventArgs e, out long sourceId, out long targetId)
+    {
+        sourceId = 0;
+        targetId = 0;
+        if (!e.Data.GetDataPresent(ClipboardItemDragFormat)) return false;
+        if (e.Data.GetData(ClipboardItemDragFormat) is not long sid) return false;
+        if (sender is not Border border) return false;
+        if (border.DataContext is not ItemRowViewModel targetRow) return false;
+        if (!targetRow.Pinned) return false;
+        var sourceRow = ViewModel.Rows.FirstOrDefault(r => r.Id == sid);
+        if (sourceRow is null || !sourceRow.Pinned) return false;
+        if (sourceRow.Id == targetRow.Id) return false;
+        sourceId = sid;
+        targetId = targetRow.Id;
+        return true;
+    }
+
+    private async void OnCategoryTabDrop(object sender, DragEventArgs e)
+    {
+        if (sender is FrameworkElement fe) fe.Opacity = 1.0;
+        if (!e.Data.GetDataPresent(ClipboardItemDragFormat)) return;
+        if (e.Data.GetData(ClipboardItemDragFormat) is not long itemId) return;
+        // The category name lives in the Button.Tag (bound to CategoryTab.Name in XAML) so
+        // we don't depend on DataContext lookup — works regardless of which inner element
+        // of the button template actually received the drop.
+        if (sender is not FrameworkElement target || target.Tag is not string categoryName) return;
+        if (string.IsNullOrEmpty(categoryName)) return;
+        // Skip the round-trip when the drop target IS the source's current category — avoids
+        // an unnecessary UPDATE + ItemsChanged broadcast for a no-op.
+        var current = ViewModel.Rows.FirstOrDefault(r => r.Id == itemId);
+        if (current is null) return;
+        if (string.Equals(ViewModel.ActiveCategory, categoryName, StringComparison.Ordinal)) return;
+        e.Handled = true;
+        await ViewModel.MoveItemToCategoryAsync(itemId, categoryName);
+    }
+
     private void OnHistoryDoubleClick(object? sender, MouseButtonEventArgs e)
     {
         // Double-click an image row → open editor; double-click a text row → paste.
@@ -556,6 +722,19 @@ public partial class ClipboardWindow : Wpf.Ui.Controls.FluentWindow
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
+        // Bail-out for label-edit TextBoxes (inline rename + preview pane). PreviewKeyDown
+        // tunnels DOWN through the visual tree, so without this check Enter → PasteSelected
+        // would fire before the TextBox's own KeyDown handler ever sees the keystroke, and
+        // the label commit would be replaced by a paste. SearchBox is intentionally exempt:
+        // there Enter / Up / Down ARE the intended shortcuts (search → arrow → Enter pastes).
+        if (Keyboard.FocusedElement is TextBox focusedTb && focusedTb != SearchBox)
+        {
+            // Allow Esc to bubble to the TextBox's own KeyDown so rename cancels properly,
+            // but don't let the window's Esc → BeginHide path fire. Everything else
+            // (Enter, Delete, F2, Up/Down, etc.) is left for the TextBox to handle.
+            return;
+        }
+
         // Ctrl+Shift+Del — wipe everything. Highlighted in the footer hint so users can find it.
         if (e.Key == Key.Delete &&
             (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == (ModifierKeys.Control | ModifierKeys.Shift))
@@ -652,6 +831,14 @@ public partial class ClipboardWindow : Wpf.Ui.Controls.FluentWindow
                 ViewModel.DeleteSelectedCommand.Execute(null);
                 e.Handled = true;
                 break;
+            case Key.F2:
+                // F2 on the selected row = start inline-rename of its label. Skipped when the
+                // search box has focus so the user can keep typing freely. Already-renaming is
+                // a no-op (the IsRenaming setter early-returns when the value doesn't change).
+                if (IsSearchBoxFocused()) return;
+                if (ViewModel.SelectedRow is { } row) row.IsRenaming = true;
+                e.Handled = true;
+                break;
         }
     }
 
@@ -723,5 +910,102 @@ public partial class ClipboardWindow : Wpf.Ui.Controls.FluentWindow
         win.Closed += (_, _) => _suppressDeactivation = false;
         win.Show();
         win.Activate();
+    }
+
+    // ── Label edit: inline rename + preview-pane TextBox ─────────────────────────────
+
+    /// <summary>Right-click → "Rename label" menu handler. <see cref="OnItemRowPreviewRightClick"/>
+    /// already selected the clicked row before the menu opens (WPF doesn't auto-select on
+    /// right-click), so we just flip the selected row into rename mode here.</summary>
+    private void OnRenameLabelClicked(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.SelectedRow is { } row) row.IsRenaming = true;
+    }
+
+    /// <summary>Auto-focus + select-all every time the rename TextBox transitions from hidden
+    /// to visible. Loaded fires once per TextBox instance (template materialisation) and would
+    /// miss subsequent rename invocations on the same row; IsVisibleChanged fires every
+    /// IsRenaming flip, which is what we actually want — Explorer-style F2 rename behaviour.</summary>
+    private void OnRenameTextBoxVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (sender is not TextBox tb) return;
+        if (e.NewValue is not true) return;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            tb.Focus();
+            tb.SelectAll();
+        }), DispatcherPriority.Background);
+    }
+
+    private async void OnRenameTextBoxKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox tb) return;
+        if (tb.DataContext is not ItemRowViewModel row) return;
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            // Commit the typed text. NormalizeLabel inside the store handles empty → null
+            // (= "clear the label, go back to showing the snippet"), trim, and the 200-char cap.
+            row.IsRenaming = false;
+            await ViewModel.CommitLabelAsync(row.Id, tb.Text);
+            // Hand focus back to the list so the next keystroke (arrows / Enter / etc.) goes
+            // where the user expects.
+            HistoryList.Focus();
+        }
+        else if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            row.IsRenaming = false;
+            HistoryList.Focus();
+        }
+    }
+
+    /// <summary>LostFocus = cancel for the inline rename — the user clicked away, treat it as
+    /// "I changed my mind" and revert. Only Enter commits. Symmetrical to Esc.</summary>
+    private void OnRenameTextBoxLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not TextBox tb) return;
+        if (tb.DataContext is not ItemRowViewModel row) return;
+        // The row VM's Label setter hasn't been touched (we bind OneWay), so flipping IsRenaming
+        // off simply restores the previous TextBlock view.
+        row.IsRenaming = false;
+    }
+
+    /// <summary>Preview-pane label TextBox — Enter commits + drops focus (so the next arrow
+    /// keypress reaches the list). Esc reverts pending edits and drops focus without
+    /// committing. The LostFocus handler also commits; Enter just short-circuits via blur.</summary>
+    private async void OnPreviewLabelKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox tb) return;
+        if (ViewModel.SelectedRow is not { } row) return;
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            await ViewModel.CommitLabelAsync(row.Id, tb.Text);
+            HistoryList.Focus();
+            return;
+        }
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            // Reset text to the saved value so LostFocus sees equality and skips the UPDATE,
+            // then drop focus. A second Esc press (now with focus outside) closes the window.
+            tb.Text = row.Label ?? string.Empty;
+            HistoryList.Focus();
+        }
+    }
+
+    /// <summary>LostFocus = commit for the preview pane — the TextBox is the natural resting
+    /// target there (always-on for the selected row, not a transient edit mode), so the user
+    /// clicking away means "I'm done typing, save it". Inverse of the inline rename.</summary>
+    private async void OnPreviewLabelLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not TextBox tb) return;
+        if (ViewModel.SelectedRow is not { } row) return;
+        // Skip the commit when the text hasn't actually changed — avoids a redundant SQLite
+        // UPDATE + ItemsChanged broadcast every time the user clicks elsewhere.
+        var current = row.Label ?? string.Empty;
+        if (string.Equals(tb.Text ?? string.Empty, current, StringComparison.Ordinal)) return;
+        await ViewModel.CommitLabelAsync(row.Id, tb.Text);
     }
 }

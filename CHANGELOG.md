@@ -3,6 +3,75 @@
 All notable changes to AresToys. Format loosely follows [Keep a Changelog](https://keepachangelog.com/),
 versions follow [SemVer](https://semver.org/).
 
+## [0.1.8] — 2026-05-13
+
+Clipboard window gets three CopyQ-flavoured upgrades: optional per-item labels
+that replace the auto-derived snippet in the row title, drag-from-row-to-
+category-tab as a shortcut for the right-click Move-to menu, and user-controlled
+reorder of the pinned strip via both drag-drop and on-hover chevron buttons.
+Two additive schema migrations ship together — `Migration002` adds the `label`
+column and rebuilds the FTS5 index so search matches across content + label,
+`Migration003` adds `pin_sort_order` for the reorder gesture. Both run once on
+first launch under the existing schema_version gate. Settings backup format
+bumps to v3 to carry the new label field; v2 backups (including the legacy
+`shareq-settings-*.json` snapshots) continue to import unchanged.
+
+### Clipboard — pinned reorder
+- Pinned items now keep an explicit per-item sort order (new `pin_sort_order`
+  column added in Migration 003). Order is
+  user-controlled: new pins land at the bottom of the pinned strip
+  (MAX(pin_sort_order)+1) instead of jumping to the top via the created_at
+  tiebreaker, and existing pins can be rearranged freely.
+- Two gestures:
+  - Drag a pinned row onto another pinned row → insert-before. Source moves
+    to the target's slot, target and everything below shifts down by one.
+    Same `arestoys.clipboard.item` drag payload as the category-tab drop,
+    different drop target (the row Border). Mixed pinned↔unpinned drops are
+    silently ignored.
+  - Hover a pinned row → two chevron buttons (FA chevron-up / chevron-down)
+    appear on the right of the row. Click swaps with the adjacent pinned
+    neighbour. MultiDataTrigger on `Pinned + IsMouseOver(RowBorder)` so the
+    chevrons stay invisible at rest and don't add ingombro to non-pinned rows.
+- Chevron clicks suppress drag-arming on the row Border (visual-tree walk for
+  `ButtonBase` ancestor) so a quick mouse-jiggle while clicking a chevron
+  doesn't get reinterpreted as a drag.
+- `IItemStore.ReorderPinnedAsync(IReadOnlyList<long> orderedIds, ct)` applies
+  the new sequence in a single transaction with parameterised UPDATEs and
+  fires one broadcast `Updated(-1)` event so the popup re-queries once.
+
+### Clipboard — drag-to-category
+- Drag any row from the history list onto a category tab header to move the
+  item into that category. Equivalent to right-click → "Move to → <name>",
+  but doesn't require opening the menu. Custom drag format
+  `arestoys.clipboard.item` keeps the payload distinct from Explorer file
+  drops or text drags so an accidental drop from another app is ignored.
+  Drop onto the currently-active category is a silent no-op (no UPDATE, no
+  refresh). Honours the OS drag threshold (`SystemParameters.Minimum*DragDistance`)
+  so a plain click never gets reinterpreted as a drag.
+
+### Clipboard — per-item labels (CopyQ "Notes" equivalent)
+- New optional `Label` field on every clipboard item. When set, the label
+  replaces the auto-derived snippet in the row title and a small `📎` glyph
+  marks the row as labelled. Useful when the list fills up with similar-
+  looking blobs (Unreal node graphs, JSON dumps, hex hashes) that are
+  indistinguishable by their first 200 chars.
+- Three input gestures, all wired to the same persist path: right-click →
+  "Rename label", F2 on the selected row, or the always-on TextBox above the
+  preview pane on the right. Inline rename commits on Enter, cancels on Esc
+  / LostFocus; the preview pane TextBox commits on LostFocus or Enter
+  (asymmetry is intentional — the inline editor is an explicit mode, the
+  preview pane is the natural resting target for the selected row).
+- New App Settings → Clipboard → "Show content snippet under label"
+  checkbox. Default off — the label replaces the snippet entirely, matching
+  CopyQ. When on, labelled rows render a dimmer secondary line with the
+  original content snippet so the user keeps both at a glance.
+- Search (Ctrl+F) matches across label AND content. The FTS5 virtual table
+  was rebuilt with the new `label` column so labelled rows stay findable by
+  their original content snippet alongside the user-typed name.
+- v3 backups loaded by hypothetical older builds drop the label field via
+  standard "ignore unknown JSON properties" semantics — no crash, just a lost
+  label.
+
 ## [0.1.7] — 2026-05-13
 
 Line and Arrow tools unified into a single primitive with per-end cap toggles

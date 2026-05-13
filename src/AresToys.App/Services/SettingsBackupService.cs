@@ -22,7 +22,7 @@ namespace AresToys.App.Services;
 /// migrate forward.</summary>
 public sealed class SettingsBackupService
 {
-    private const int CurrentVersion = 2;
+    private const int CurrentVersion = 3;
     /// <summary>Cache one configured options instance — analyzer (CA1869) flags allocating a
     /// new one per call as a perf footgun. Indented output stays the default since users open
     /// these files in editors / diff tools. <see cref="JavaScriptEncoder.UnsafeRelaxedJsonEscaping"/>
@@ -199,7 +199,8 @@ public sealed class SettingsBackupService
                     UploadedUrl: bp.UploadedUrl,
                     UploaderId: bp.UploaderId,
                     SearchText: bp.SearchText,
-                    Category: string.IsNullOrEmpty(bp.Category) ? Category.Default : bp.Category);
+                    Category: string.IsNullOrEmpty(bp.Category) ? Category.Default : bp.Category,
+                    Label: bp.Label);
                 await _items.AddAsync(newItem, cancellationToken).ConfigureAwait(false);
                 pinnedImported++;
             }
@@ -287,6 +288,10 @@ public sealed class SettingsBackupService
         public string? UploaderId { get; set; }
         public string? SearchText { get; set; }
         public string? Category { get; set; }
+        /// <summary>Optional per-item label (CopyQ "Notes" equivalent). v2 backups omit this
+        /// field; <see cref="ImportAsync"/> imports them with a null label and the user can
+        /// add one after the fact. Added in backup schema v3.</summary>
+        public string? Label { get; set; }
         /// <summary>Raw item payload, base64-encoded. Stored in the clear: pinned items are
         /// assumed not to contain secrets (the user explicitly chose to pin them), and the
         /// alternative — DPAPI ciphertext — wouldn't survive a move to another machine.</summary>
@@ -303,6 +308,7 @@ public sealed class SettingsBackupService
             UploaderId = r.UploaderId,
             SearchText = r.SearchText,
             Category = r.Category,
+            Label = r.Label,
             PayloadBase64 = r.Payload.IsEmpty ? string.Empty : Convert.ToBase64String(r.Payload.Span),
         };
     }

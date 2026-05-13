@@ -122,6 +122,14 @@
   <data name="Clipboard_MenuMoveTo" xml:space="preserve"><value>Move to</value></data>
   <data name="Clipboard_MenuCopyTo" xml:space="preserve"><value>Copy to</value></data>
   <data name="Clipboard_MenuGenerateQr" xml:space="preserve"><value>Generate QR code…</value></data>
+  <data name="Clipboard_MenuRenameLabel" xml:space="preserve"><value>Rename label (F2)</value></data>
+  <data name="Clipboard_LabelPlaceholder" xml:space="preserve"><value>Add a label…</value></data>
+  <data name="Clipboard_TooltipMoveUp" xml:space="preserve"><value>Move up in pinned order</value></data>
+  <data name="Clipboard_TooltipMoveDown" xml:space="preserve"><value>Move down in pinned order</value></data>
+  <data name="Settings_ClipboardSectionTitle" xml:space="preserve"><value>Clipboard</value></data>
+  <data name="Settings_ClipboardSectionHint" xml:space="preserve"><value>Display options for the clipboard window.</value></data>
+  <data name="Settings_ClipboardShowSnippetWithLabel" xml:space="preserve"><value>Show content snippet under label</value></data>
+  <data name="Settings_ClipboardShowSnippetWithLabelTooltip" xml:space="preserve"><value>When an item has a label, also render a small preview of its content on a second line. Off by default — the label replaces the snippet entirely.</value></data>
   <data name="Clipboard_TooltipPaste" xml:space="preserve"><value>Paste (Enter)</value></data>
   <data name="Clipboard_TooltipPin" xml:space="preserve"><value>Pin / unpin (Ctrl+P)</value></data>
   <data name="Clipboard_TooltipCopyPath" xml:space="preserve"><value>Copy file path to clipboard</value></data>

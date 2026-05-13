@@ -320,7 +320,12 @@ public partial class App : Application
                 // subsequent calls in the inference-only band (~100-500 ms).
                 services.AddSingleton<AresToys.AI.IBackgroundRemover, AresToys.AI.U2NetBackgroundRemover>();
 
-                services.AddTransient<PopupWindowViewModel>();
+                // Singleton so SettingsViewModel + ClipboardWindow share the same instance —
+                // toggling "Show snippet under label" in App Settings must push into the same
+                // VM whose Rows the visible clipboard window is bound to. Disposal: the VM
+                // subscribes only to other singletons (item / category stores), so the missed
+                // Dispose at process shutdown is a no-op rather than a leak.
+                services.AddSingleton<PopupWindowViewModel>();
 
                 services.AddSingleton<AresToys.App.Services.Hotkeys.HotkeyConfigService>();
                 services.AddSingleton<WorkflowRunner>();

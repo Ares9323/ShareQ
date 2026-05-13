@@ -16,8 +16,9 @@ public class AresToysDatabaseTests
         cmd.CommandText = "SELECT MAX(version) FROM schema_version;";
         var version = (long)(await cmd.ExecuteScalarAsync())!;
 
-        // Single consolidated Migration001InitialSchema seeds schema v1.
-        Assert.Equal(1, version);
+        // Migration001 (consolidated v1 schema) + Migration002 (adds items.label + rebuilds FTS)
+        // + Migration003 (adds items.pin_sort_order for user-controlled pinned reordering).
+        Assert.Equal(3, version);
     }
 
     [Fact]
@@ -40,6 +41,11 @@ public class AresToysDatabaseTests
         // future migration list shuffle can't silently drop the column the popup's right-click
         // "Move to" depends on.
         Assert.Contains("category", columns);
+        // Added in Migration002 — CopyQ-style per-item label (optional name shown in the row
+        // title in place of the auto-derived snippet).
+        Assert.Contains("label", columns);
+        // Added in Migration003 — user-controlled sort order applied to pinned rows.
+        Assert.Contains("pin_sort_order", columns);
     }
 
     [Fact]
@@ -71,8 +77,8 @@ public class AresToysDatabaseTests
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM schema_version;";
         var rowCount = (long)(await cmd.ExecuteScalarAsync())!;
-        // One row per applied migration (only v1 after the consolidation).
-        Assert.Equal(1, rowCount);
+        // One row per applied migration (v1 consolidated + v2 label / FTS rebuild + v3 pin_sort_order).
+        Assert.Equal(3, rowCount);
     }
 
     [Fact]

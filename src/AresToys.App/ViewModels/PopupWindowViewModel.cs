@@ -144,10 +144,17 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
     /// Persisted to <c>clipboard.pinned</c>.</summary>
     [ObservableProperty] private bool _isPinned;
 
+    /// <summary>When true, a labelled row also shows its content snippet on a dimmer secondary
+    /// line below the label — gives the user the option to see both at once instead of having
+    /// to select the row to read the body. Default false (label-only matches CopyQ). Persisted
+    /// to <c>clipboard.show_snippet_with_label</c>.</summary>
+    [ObservableProperty] private bool _showSnippetWithLabel;
+
     private bool _typeFiltersLoaded;
     private const string ShowImagesKey = "clipboard.show_images";
     private const string ShowTextKey = "clipboard.show_text";
     private const string PinnedKey = "clipboard.pinned";
+    private const string ShowSnippetWithLabelKey = "clipboard.show_snippet_with_label";
 
     partial void OnShowImagesChanged(bool value)
     {
@@ -162,6 +169,15 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
         if (_typeFiltersLoaded) _ = RefreshAsync(CancellationToken.None);
     }
     partial void OnIsPinnedChanged(bool value) => PersistFlag(PinnedKey, value);
+
+    partial void OnShowSnippetWithLabelChanged(bool value)
+    {
+        PersistFlag(ShowSnippetWithLabelKey, value);
+        // Push the new pref into every existing row VM so the secondary line appears /
+        // disappears immediately — without this kick the toggle wouldn't reflect until a
+        // RefreshAsync rebuilt the collection (search edit, category change, etc.).
+        foreach (var row in Rows) row.ShowSnippetWithLabel = value;
+    }
 
     private void PersistFlag(string key, bool value)
     {
@@ -191,11 +207,14 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
         var rawImg = await settings.GetAsync(ShowImagesKey, cancellationToken).ConfigureAwait(true);
         var rawText = await settings.GetAsync(ShowTextKey, cancellationToken).ConfigureAwait(true);
         var rawPinned = await settings.GetAsync(PinnedKey, cancellationToken).ConfigureAwait(true);
+        var rawSnippet = await settings.GetAsync(ShowSnippetWithLabelKey, cancellationToken).ConfigureAwait(true);
         // Filter chips default true (fresh DB shows everything); pinned defaults false (the
-        // popup behaves as before until the user opts in).
+        // popup behaves as before until the user opts in). show-snippet-with-label defaults
+        // false — matches CopyQ where a "Notes"-labeled item shows only the label.
         ShowImages = rawImg != "0";
         ShowText = rawText != "0";
         IsPinned = rawPinned == "1";
+        ShowSnippetWithLabel = rawSnippet == "1";
         _typeFiltersLoaded = true;
     }
 
@@ -410,7 +429,7 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
             var isTextLike = record.Kind is ItemKind.Text or ItemKind.Html or ItemKind.Rtf;
             if (isImageLike && !ShowImages) continue;
             if (isTextLike && !ShowText) continue;
-            Rows.Add(new ItemRowViewModel(record, displayIndex: displayIndex++));
+            Rows.Add(new ItemRowViewModel(record, displayIndex: displayIndex++, showSnippetWithLabel: ShowSnippetWithLabel));
         }
         // Preserve selection across reloads when the same id is still present.
         if (previousId is { } id) SelectedRow = Rows.FirstOrDefault(r => r.Id == id);
@@ -676,6 +695,66 @@ public sealed partial class PopupWindowViewModel : ObservableObject, IDisposable
             Category: name);
         await _items.AddAsync(clone, CancellationToken.None).ConfigureAwait(true);
         // ItemsChanged event triggers RefreshAsync via the existing handler.
+    }
+
+    /// <summary>Persist an updated label for a specific row. Called by both the inline-rename
+    /// commit path (right-click → Rename / F2 → Enter) and the preview pane's label TextBox
+    /// (LostFocus / Enter). Pushes through <see cref="IItemStore.SetLabelAsync"/> which
+    /// normalises empty / oversized input at the storage boundary and fires <c>ItemsChanged</c>;
+    /// the standard subscriber rebuilds the affected row in the bound collection.</summary>
+    public async Task CommitLabelAsync(long itemId, string? newLabel)
+    {
+        await _items.SetLabelAsync(itemId, newLabel, CancellationToken.None).ConfigureAwait(true);
+        // ItemsChanged → OnItemsChanged → RefreshAsync rebuilds the row VM with the new label,
+        // so no in-place mutation is needed here.
+    }
+
+    /// <summary>Move a specific item (by id) into the named category. Called by the
+    /// drag-to-category-tab handler on <see cref="Views.ClipboardWindow"/>; the right-click
+    /// "Move to" menu uses <see cref="MoveSelectedToCategoryAsync"/> which operates on
+    /// <see cref="SelectedRow"/>. Same underlying SQL UPDATE → <c>ItemsChanged</c> path; the
+    /// event handler rebuilds the visible rows.</summary>
+    public async Task MoveItemToCategoryAsync(long itemId, string category)
+    {
+        if (string.IsNullOrEmpty(category)) return;
+        await _items.SetCategoryAsync(itemId, category, CancellationToken.None).ConfigureAwait(true);
+    }
+
+    /// <summary>Single-step chevron move on the pinned strip — swap the item with its
+    /// neighbour in the indicated direction (-1 = up, +1 = down). No-op when there's no
+    /// neighbour (top / bottom of the strip) or when the item isn't pinned. Snapshot the
+    /// current pinned order from <see cref="Rows"/>, apply the swap, persist the whole
+    /// sequence with <see cref="IItemStore.ReorderPinnedAsync"/>.</summary>
+    public async Task MovePinnedAsync(long itemId, int direction)
+    {
+        if (direction is not (-1 or 1)) return;
+        var pinnedIds = Rows.Where(r => r.Pinned).Select(r => r.Id).ToList();
+        var idx = pinnedIds.IndexOf(itemId);
+        if (idx < 0) return;
+        var target = idx + direction;
+        if (target < 0 || target >= pinnedIds.Count) return;
+        (pinnedIds[idx], pinnedIds[target]) = (pinnedIds[target], pinnedIds[idx]);
+        await _items.ReorderPinnedAsync(pinnedIds, CancellationToken.None).ConfigureAwait(true);
+    }
+
+    /// <summary>Drag-drop reorder on the pinned strip — move the source item to the
+    /// position currently held by the target (insert-before semantics). When source and
+    /// target are the same or both unpinned, no-op. Only operates within the pinned strip;
+    /// dropping an unpinned row on a pinned one is ignored upstream by the handler.</summary>
+    public async Task ReorderPinnedAsync(long sourceId, long targetId)
+    {
+        if (sourceId == targetId) return;
+        var pinnedIds = Rows.Where(r => r.Pinned).Select(r => r.Id).ToList();
+        var sourceIdx = pinnedIds.IndexOf(sourceId);
+        var targetIdx = pinnedIds.IndexOf(targetId);
+        if (sourceIdx < 0 || targetIdx < 0) return;
+        pinnedIds.RemoveAt(sourceIdx);
+        // After the remove the target index shifts down by 1 when source was earlier in the
+        // list. Otherwise it stays put. Either way, sourceId lands AT the slot the target
+        // visually occupies before the drop (insert-before semantics).
+        var insertAt = sourceIdx < targetIdx ? targetIdx - 1 : targetIdx;
+        pinnedIds.Insert(insertAt, sourceId);
+        await _items.ReorderPinnedAsync(pinnedIds, CancellationToken.None).ConfigureAwait(true);
     }
 
     private bool HasSelection() => SelectedRow is not null;

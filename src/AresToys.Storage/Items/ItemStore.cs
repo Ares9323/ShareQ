@@ -46,10 +46,10 @@ public sealed class ItemStore : IItemStore
         cmd.CommandText = """
             INSERT INTO items
                 (kind, source, created_at, pinned, source_process, source_window,
-                 payload, payload_size, blob_ref, uploaded_url, uploader_id, search_text, thumbnail, category)
+                 payload, payload_size, blob_ref, uploaded_url, uploader_id, search_text, thumbnail, category, label)
             VALUES
                 ($kind, $source, $created_at, $pinned, $source_process, $source_window,
-                 $payload, $payload_size, $blob_ref, $uploaded_url, $uploader_id, $search_text, $thumbnail, $category);
+                 $payload, $payload_size, $blob_ref, $uploaded_url, $uploader_id, $search_text, $thumbnail, $category, $label);
             SELECT last_insert_rowid();
             """;
         cmd.Parameters.AddWithValue("$kind", item.Kind.ToString());
@@ -66,6 +66,7 @@ public sealed class ItemStore : IItemStore
         cmd.Parameters.AddWithValue("$search_text", (object?)item.SearchText ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$thumbnail", (object?)thumbnail ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$category", string.IsNullOrEmpty(item.Category) ? "Clipboard" : item.Category);
+        cmd.Parameters.AddWithValue("$label", (object?)NormalizeLabel(item.Label) ?? DBNull.Value);
 
         var newId = (long)(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false))!;
 
@@ -132,7 +133,7 @@ public sealed class ItemStore : IItemStore
         // between instant and several seconds.
         var payloadColumn = query.IncludePayload ? "payload" : "NULL AS payload";
         var thumbnailColumn = query.IncludeThumbnail ? "thumbnail" : "NULL AS thumbnail";
-        var sql = new System.Text.StringBuilder($"SELECT items.id, items.kind, items.source, items.created_at, items.payload_size, items.pinned, items.deleted_at, items.source_process, items.source_window, items.blob_ref, items.uploaded_url, items.uploader_id, items.search_text, items.category, {payloadColumn}, {thumbnailColumn} FROM items");
+        var sql = new System.Text.StringBuilder($"SELECT items.id, items.kind, items.source, items.created_at, items.payload_size, items.pinned, items.deleted_at, items.source_process, items.source_window, items.blob_ref, items.uploaded_url, items.uploader_id, items.search_text, items.category, items.label, items.pin_sort_order, {payloadColumn}, {thumbnailColumn} FROM items");
         var hasFts = !string.IsNullOrWhiteSpace(query.Search);
         var hasCategory = !string.IsNullOrEmpty(query.Category);
         if (hasFts)
@@ -145,10 +146,17 @@ public sealed class ItemStore : IItemStore
         if (query.Kind is not null) sql.Append(" AND items.kind = $kind");
         if (query.Pinned is not null) sql.Append(" AND items.pinned = $pinned");
         if (hasCategory) sql.Append(" AND items.category = $category");
-        if (hasFts) sql.Append(" AND items_fts.search_text MATCH $search");
+        // Table-level FTS MATCH (no column prefix) searches every indexed column — currently
+        // search_text + label — so a labeled row remains findable by its content snippet AND a
+        // user-typed name. Schema v2 rebuilt items_fts with the label column for this.
+        if (hasFts) sql.Append(" AND items_fts MATCH $search");
 
-        // Pinned rows always float to the top; within each group, newest first.
-        sql.Append(" ORDER BY items.pinned DESC, items.created_at DESC LIMIT $limit OFFSET $offset;");
+        // Pinned rows always float to the top. Within the pinned group rows are sorted by
+        // the user-controlled pin_sort_order (low → high; new pins land at MAX+1 so they
+        // queue at the bottom), then newest-first as a stable tiebreaker for pre-v2 rows
+        // that all default to 0. Unpinned rows: their pin_sort_order is 0 / irrelevant, so
+        // the created_at DESC tiebreaker is what actually orders them.
+        sql.Append(" ORDER BY items.pinned DESC, items.pin_sort_order ASC, items.created_at DESC LIMIT $limit OFFSET $offset;");
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = sql.ToString();
@@ -170,10 +178,66 @@ public sealed class ItemStore : IItemStore
 
     public async Task<bool> SetPinnedAsync(long id, bool pinned, CancellationToken cancellationToken)
     {
-        var ok = await UpdateScalarAsync("UPDATE items SET pinned = $val WHERE id = $id;",
-            id, pinned ? 1 : 0, cancellationToken).ConfigureAwait(false);
+        var conn = _database.GetOpenConnection();
+        // Pin: stamp pin_sort_order = MAX(existing pinned) + 1 so new pins queue at the
+        // bottom of the pinned strip instead of jumping to the top (which would otherwise
+        // happen because every fresh pin would share order=0 and the created_at tiebreaker
+        // would put the newest at the top — surprising when the user has a curated order).
+        // Unpin: reset to 0 so the row doesn't keep a stale slot if the user re-pins later.
+        int newOrder = 0;
+        if (pinned)
+        {
+            await using var maxCmd = conn.CreateCommand();
+            maxCmd.CommandText = "SELECT COALESCE(MAX(pin_sort_order), 0) FROM items WHERE pinned = 1 AND id <> $id AND deleted_at IS NULL;";
+            maxCmd.Parameters.AddWithValue("$id", id);
+            var v = await maxCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            newOrder = (v is null or DBNull ? 0 : Convert.ToInt32(v, System.Globalization.CultureInfo.InvariantCulture)) + 1;
+        }
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE items SET pinned = $pinned, pin_sort_order = $order WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$pinned", pinned ? 1 : 0);
+        cmd.Parameters.AddWithValue("$order", newOrder);
+        cmd.Parameters.AddWithValue("$id", id);
+        var rows = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        var ok = rows == 1;
         if (ok) ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.PinnedChanged, id));
         return ok;
+    }
+
+    /// <summary>Apply a complete pinned-order snapshot in a single transaction. The caller
+    /// (UI reorder handler) computes the desired sequence of ids after a drag-drop or
+    /// chevron move, then calls this with the ids in their new visual order. We renumber
+    /// them 1..N atomically so concurrent reads always see a coherent ordering — partial
+    /// renumbering after a power loss / connection drop would leave the strip in a weird
+    /// state otherwise. Raises a single Updated event with id=-1 (broadcast) so the popup
+    /// re-queries once.</summary>
+    public async Task ReorderPinnedAsync(IReadOnlyList<long> orderedIds, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(orderedIds);
+        if (orderedIds.Count == 0) return;
+        var conn = _database.GetOpenConnection();
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = (SqliteTransaction)tx;
+            cmd.CommandText = "UPDATE items SET pin_sort_order = $order WHERE id = $id;";
+            var orderParam = cmd.Parameters.Add("$order", Microsoft.Data.Sqlite.SqliteType.Integer);
+            var idParam = cmd.Parameters.Add("$id", Microsoft.Data.Sqlite.SqliteType.Integer);
+            for (var i = 0; i < orderedIds.Count; i++)
+            {
+                orderParam.Value = i + 1;       // 1-based so 0 stays reserved for "never pinned"
+                idParam.Value = orderedIds[i];
+                await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await tx.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+        ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.Updated, -1));
     }
 
     public async Task<bool> SetUploadedUrlAsync(long id, string uploaderId, string url, CancellationToken cancellationToken)
@@ -349,6 +413,23 @@ public sealed class ItemStore : IItemStore
             if (!reader.IsDBNull(catOrd)) category = reader.GetString(catOrd);
         }
         catch (IndexOutOfRangeException) { /* pre-v3 schema — column missing */ }
+        // Label + pin_sort_order columns were added in schema v2 — older readers that
+        // hand-craft a SELECT without them (none today, but possible in narrowly-scoped
+        // diagnostic queries) fall back to null / 0 instead of throwing.
+        string? label = null;
+        try
+        {
+            var labelOrd = reader.GetOrdinal("label");
+            if (!reader.IsDBNull(labelOrd)) label = reader.GetString(labelOrd);
+        }
+        catch (IndexOutOfRangeException) { /* column missing — label stays null */ }
+        int pinSortOrder = 0;
+        try
+        {
+            var psoOrd = reader.GetOrdinal("pin_sort_order");
+            if (!reader.IsDBNull(psoOrd)) pinSortOrder = reader.GetInt32(psoOrd);
+        }
+        catch (IndexOutOfRangeException) { /* column missing — sort order stays 0 */ }
 
         return new ItemRecord(
             Id: reader.GetInt64(reader.GetOrdinal("id")),
@@ -367,7 +448,9 @@ public sealed class ItemStore : IItemStore
             Payload: plaintext,
             SearchText: NullableString(reader, "search_text"),
             Thumbnail: thumbnail,
-            Category: category);
+            Category: category,
+            Label: label,
+            PinSortOrder: pinSortOrder);
     }
 
     public async Task<bool> SetCategoryAsync(long id, string category, CancellationToken cancellationToken)
@@ -381,6 +464,30 @@ public sealed class ItemStore : IItemStore
         var rows = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         if (rows == 1) ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.Updated, id));
         return rows == 1;
+    }
+
+    public async Task<bool> SetLabelAsync(long id, string? label, CancellationToken cancellationToken)
+    {
+        var normalised = NormalizeLabel(label);
+        var conn = _database.GetOpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE items SET label = $label WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$label", (object?)normalised ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$id", id);
+        var rows = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        if (rows == 1) ItemsChanged?.Invoke(this, new ItemsChangedEventArgs(ItemsChangeKind.Updated, id));
+        return rows == 1;
+    }
+
+    /// <summary>Trim, cap at 200 chars, and collapse empty/whitespace to NULL. Done at the
+    /// storage boundary so callers (UI, importers, tests) all see the same canonical form
+    /// and the DB never grows huge label blobs from a misbehaving consumer.</summary>
+    private const int MaxLabelLength = 200;
+    private static string? NormalizeLabel(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var trimmed = raw.Trim();
+        return trimmed.Length <= MaxLabelLength ? trimmed : trimmed[..MaxLabelLength];
     }
 
     private static string? NullableString(SqliteDataReader reader, string column)

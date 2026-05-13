@@ -115,6 +115,14 @@
   <data name="Clipboard_MenuMoveTo" xml:space="preserve"><value>Sposta in</value></data>
   <data name="Clipboard_MenuCopyTo" xml:space="preserve"><value>Copia in</value></data>
   <data name="Clipboard_MenuGenerateQr" xml:space="preserve"><value>Genera codice QR…</value></data>
+  <data name="Clipboard_MenuRenameLabel" xml:space="preserve"><value>Rinomina etichetta (F2)</value></data>
+  <data name="Clipboard_LabelPlaceholder" xml:space="preserve"><value>Aggiungi un'etichetta…</value></data>
+  <data name="Clipboard_TooltipMoveUp" xml:space="preserve"><value>Sposta su nell'ordine dei pinnati</value></data>
+  <data name="Clipboard_TooltipMoveDown" xml:space="preserve"><value>Sposta giù nell'ordine dei pinnati</value></data>
+  <data name="Settings_ClipboardSectionTitle" xml:space="preserve"><value>Appunti</value></data>
+  <data name="Settings_ClipboardSectionHint" xml:space="preserve"><value>Opzioni di visualizzazione della finestra Appunti.</value></data>
+  <data name="Settings_ClipboardShowSnippetWithLabel" xml:space="preserve"><value>Mostra anteprima contenuto sotto l'etichetta</value></data>
+  <data name="Settings_ClipboardShowSnippetWithLabelTooltip" xml:space="preserve"><value>Quando un elemento ha un'etichetta, mostra anche una piccola anteprima del contenuto su una seconda riga. Disattivato di default — l'etichetta sostituisce completamente lo snippet.</value></data>
   <data name="Clipboard_TooltipPaste" xml:space="preserve"><value>Incolla (Invio)</value></data>
   <data name="Clipboard_TooltipPin" xml:space="preserve"><value>Spilla / rimuovi spillo (Ctrl+P)</value></data>
   <data name="Clipboard_TooltipCopyPath" xml:space="preserve"><value>Copia path del file negli appunti</value></data>

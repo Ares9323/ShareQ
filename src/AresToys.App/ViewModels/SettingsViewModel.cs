@@ -12,8 +12,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     private const string StartMinimizedKey = "app.start_minimized";
     private const string EditorStartMaximizedKey = "app.editor_start_maximized";
     private const string EditorAltClickNoMatchKey = "editor.alt_click_no_match";
+    private const string ClipboardShowSnippetWithLabelKey = "clipboard.show_snippet_with_label";
     private readonly AutostartService _autostart;
     private readonly ISettingsStore _settingsStore;
+    private readonly PopupWindowViewModel _clipboardVm;
 
     public SettingsViewModel(
         PluginRegistry registry,
@@ -25,10 +27,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         WorkflowsViewModel workflows,
         ThemeViewModel theme,
         CategoriesViewModel categories,
-        DebugViewModel debug)
+        DebugViewModel debug,
+        PopupWindowViewModel clipboardVm)
     {
         _autostart = autostart;
         _settingsStore = settingsStore;
+        _clipboardVm = clipboardVm;
         Theme = theme;
         Categories = categories;
         Debug = debug;
@@ -119,9 +123,18 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _editorAltClickSelectAny;
 
+    /// <summary>Bound to the Settings-tab "Show content snippet under label" checkbox.
+    /// Persisted under <see cref="ClipboardShowSnippetWithLabelKey"/>. On change the new
+    /// value is pushed directly into <see cref="PopupWindowViewModel.ShowSnippetWithLabel"/>
+    /// so an already-open clipboard window updates its rows immediately — the popup VM is a
+    /// singleton and its own setter re-persists harmlessly to the same key.</summary>
+    [ObservableProperty]
+    private bool _clipboardShowSnippetWithLabel;
+
     private bool _suppressStartMinimizedPersist;
     private bool _suppressEditorStartMaximizedPersist;
     private bool _suppressEditorAltClickSelectAnyPersist;
+    private bool _suppressClipboardShowSnippetWithLabelPersist;
 
     private async Task LoadPersistedSettingsAsync()
     {
@@ -139,6 +152,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         _suppressEditorAltClickSelectAnyPersist = true;
         try { EditorAltClickSelectAny = string.Equals(rawAlt, "select_any", StringComparison.OrdinalIgnoreCase); }
         finally { _suppressEditorAltClickSelectAnyPersist = false; }
+
+        var rawSnippet = await _settingsStore.GetAsync(ClipboardShowSnippetWithLabelKey, CancellationToken.None).ConfigureAwait(true);
+        _suppressClipboardShowSnippetWithLabelPersist = true;
+        try { ClipboardShowSnippetWithLabel = rawSnippet == "1"; }
+        finally { _suppressClipboardShowSnippetWithLabelPersist = false; }
     }
 
     partial void OnStartMinimizedChanged(bool value)
@@ -166,6 +184,18 @@ public sealed partial class SettingsViewModel : ObservableObject
             value ? "select_any" : "place",
             sensitive: false,
             CancellationToken.None);
+    }
+
+    partial void OnClipboardShowSnippetWithLabelChanged(bool value)
+    {
+        if (_suppressClipboardShowSnippetWithLabelPersist) return;
+        _ = _settingsStore.SetAsync(ClipboardShowSnippetWithLabelKey,
+            value ? "1" : "0",
+            sensitive: false,
+            CancellationToken.None);
+        // Push into the clipboard VM so an already-visible window refreshes its rows now,
+        // without waiting for the next Hide→Show cycle to re-read from SQLite.
+        _clipboardVm.ShowSnippetWithLabel = value;
     }
 
     public bool IsUploadersSelected => SelectedTab == SettingsTab.Uploaders;

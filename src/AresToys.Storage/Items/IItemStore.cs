@@ -23,6 +23,18 @@ public interface IItemStore
     /// "Move to → …" menu and by future auto-routing rules. Raises Updated when it changes.</summary>
     Task<bool> SetCategoryAsync(long id, string category, CancellationToken cancellationToken);
 
+    /// <summary>Assign / clear the optional per-item label (CopyQ "Notes" equivalent). Empty or
+    /// whitespace-only input is normalised to NULL. Inputs longer than 200 chars are truncated
+    /// at the storage boundary so the UI can't smuggle in oversized strings. Raises
+    /// <see cref="ItemsChangeKind.Updated"/> when the row was found and updated.</summary>
+    Task<bool> SetLabelAsync(long id, string? label, CancellationToken cancellationToken);
+
+    /// <summary>Atomically renumber the given pinned items' sort order, in the sequence the
+    /// caller passes them (visual top → bottom). Used by drag-reorder and chevron-move on
+    /// the pinned strip. Raises a single <see cref="ItemsChangeKind.Updated"/> broadcast so
+    /// the popup re-queries once.</summary>
+    Task ReorderPinnedAsync(IReadOnlyList<long> orderedIds, CancellationToken cancellationToken);
+
     /// <summary>Raised after any mutation (add / update / pin / soft-delete / restore). Subscribers
     /// must marshal to the UI thread themselves.</summary>
     event EventHandler<ItemsChangedEventArgs>? ItemsChanged;
@@ -52,4 +64,5 @@ public sealed record NewItem(
     string? UploadedUrl = null,
     string? UploaderId = null,
     string? SearchText = null,
-    string Category = "Clipboard");
+    string Category = "Clipboard",
+    string? Label = null);

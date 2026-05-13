@@ -1,12 +1,14 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Text;
 using AresToys.Core.Domain;
 using AresToys.Storage.Items;
 
 namespace AresToys.App.ViewModels;
 
-public sealed class ItemRowViewModel
+public sealed class ItemRowViewModel : INotifyPropertyChanged
 {
-    public ItemRowViewModel(ItemRecord record, int displayIndex)
+    public ItemRowViewModel(ItemRecord record, int displayIndex, bool showSnippetWithLabel = false)
     {
         Id = record.Id;
         Kind = record.Kind;
@@ -16,6 +18,8 @@ public sealed class ItemRowViewModel
         Preview = BuildPreview(record);
         Thumbnail = record.Thumbnail?.ToArray();
         DisplayIndex = displayIndex;
+        _label = record.Label;
+        _showSnippetWithLabel = showSnippetWithLabel;
     }
 
     public long Id { get; }
@@ -35,6 +39,79 @@ public sealed class ItemRowViewModel
 
     public string KindLabel => Kind.ToString();
     public string Age => FormatAge(DateTimeOffset.UtcNow - CapturedAt);
+
+    private string? _label;
+    /// <summary>Optional CopyQ-style "Notes" string. Replaces <see cref="Preview"/> in the
+    /// row title when set. Mutated by the rename gesture (right-click / F2 / preview pane);
+    /// raises PropertyChanged for the dependent flags so the row re-renders in place.</summary>
+    public string? Label
+    {
+        get => _label;
+        set
+        {
+            if (_label == value) return;
+            _label = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasLabel));
+            OnPropertyChanged(nameof(TitleText));
+            OnPropertyChanged(nameof(ShowSnippet));
+            OnPropertyChanged(nameof(IsLabelEmpty));
+            OnPropertyChanged(nameof(ShowPinInline));
+            OnPropertyChanged(nameof(ShowPinInRail));
+        }
+    }
+    public bool HasLabel => !string.IsNullOrWhiteSpace(_label);
+    public bool IsLabelEmpty => string.IsNullOrEmpty(_label);
+
+    /// <summary>Pin glyph moves inline (in the title row, before the tag icon) when the row
+    /// has a label — that way the pin reads as part of the row's "header" alongside the
+    /// label, instead of floating in the left rail where the eye doesn't immediately tie
+    /// it to the label text. Plain rows (no label) keep the pin in the left rail.</summary>
+    public bool ShowPinInline => Pinned && HasLabel;
+    public bool ShowPinInRail => Pinned && !HasLabel;
+
+    /// <summary>What the primary text in the row renders. Falls back to <see cref="Preview"/>
+    /// when no label is set, so an un-labeled row keeps the legacy behaviour.</summary>
+    public string TitleText => HasLabel ? _label! : Preview;
+
+    /// <summary>Alias of <see cref="Preview"/> for the secondary line shown under a labeled
+    /// title when the user enables "Show content snippet under label" in App Settings.</summary>
+    public string SnippetText => Preview;
+
+    private bool _showSnippetWithLabel;
+    public bool ShowSnippetWithLabel
+    {
+        get => _showSnippetWithLabel;
+        set
+        {
+            if (_showSnippetWithLabel == value) return;
+            _showSnippetWithLabel = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowSnippet));
+        }
+    }
+    /// <summary>Visibility gate for the secondary snippet line: only shown when the row has a
+    /// label AND the global setting opts in. Plain rows keep a single-line layout.</summary>
+    public bool ShowSnippet => HasLabel && _showSnippetWithLabel;
+
+    private bool _isRenaming;
+    /// <summary>True while the row is in inline-rename mode (TextBox swapped in for the title
+    /// TextBlock via DataTrigger). Set by the right-click "Rename label" menu and by F2 on the
+    /// selected row; cleared on Enter (commit) or Esc / LostFocus (cancel).</summary>
+    public bool IsRenaming
+    {
+        get => _isRenaming;
+        set
+        {
+            if (_isRenaming == value) return;
+            _isRenaming = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void OnPropertyChanged([CallerMemberName] string? name = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
     private static string BuildPreview(ItemRecord record)
     {

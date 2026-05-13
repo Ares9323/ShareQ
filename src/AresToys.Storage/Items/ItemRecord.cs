@@ -22,7 +22,9 @@ public sealed record ItemRecord(
     ReadOnlyMemory<byte> Payload,
     string? SearchText,
     ReadOnlyMemory<byte>? Thumbnail = null,
-    string Category = "Clipboard")
+    string Category = "Clipboard",
+    string? Label = null,
+    int PinSortOrder = 0)
 {
     public Item ToDomain() => new(
         Id: Id,
