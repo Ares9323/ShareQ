@@ -1,8 +1,14 @@
 name: Release
 
-# Manual-only — never auto-fires on push or tag. The user runs it from the Actions tab when
-# they're ready to cut a release; the version input becomes the tag, the Velopack package
-# version, and the GitHub Release name. Keeps releases deliberate; CI on push stays free.
+# Triggers (whichever the user prefers):
+#   1. workflow_dispatch — manual run from the Actions tab. Type the version in the form.
+#   2. push of a tag matching v* — `git tag v0.1.8 && git push origin v0.1.8` cuts the release
+#      with the tag's version (the leading v is stripped). Pre-release flag is inferred from
+#      the tag containing a hyphen (e.g. v0.1.8-rc1) so the SemVer pre-release suffix doubles
+#      as the "mark as pre-release on GitHub" signal — no extra knob.
+# Either path produces the same artifacts (vpk pack + draft GitHub Release). Releases stay
+# deliberate either way: workflow_dispatch needs a manual click, tag push needs an explicit
+# `git push origin <tag>`.
 on:
   workflow_dispatch:
     inputs:
@@ -15,6 +21,9 @@ on:
         required: false
         type: boolean
         default: false
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   release:
@@ -30,6 +39,28 @@ jobs:
           # Full history so vpk delta-pack can compare against previous releases. Without it the
           # first delta after a shallow clone would either be missing or full-size.
           fetch-depth: 0
+
+      # Normalise the version + prerelease flag from whichever trigger fired. Downstream steps
+      # read $env:RELEASE_VERSION / $env:RELEASE_PRERELEASE so they don't care which path got
+      # us here. workflow_dispatch: take the form input verbatim. push tag: strip the leading
+      # 'v' and infer pre-release from the presence of a SemVer pre-release suffix (hyphen).
+      - name: Resolve release version
+        id: resolve
+        shell: pwsh
+        run: |
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            $version = '${{ github.event.inputs.version }}'
+            $prerelease = '${{ github.event.inputs.prerelease }}'
+          } else {
+            $tag = '${{ github.ref_name }}'                    # e.g. v0.1.8 or v0.1.8-rc1
+            if ($tag -notmatch '^v') { throw "Release tags must start with 'v', got '$tag'." }
+            $version = $tag.Substring(1)
+            $prerelease = if ($version.Contains('-')) { 'true' } else { 'false' }
+          }
+          if ([string]::IsNullOrWhiteSpace($version)) { throw "Empty release version after parsing." }
+          Write-Host "Release version: $version (prerelease=$prerelease)"
+          "RELEASE_VERSION=$version"       | Out-File -FilePath $env:GITHUB_ENV -Append
+          "RELEASE_PRERELEASE=$prerelease" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -101,7 +132,7 @@ jobs:
           --configuration Release
           --runtime win-x64
           --self-contained true
-          -p:Version=${{ github.event.inputs.version }}
+          -p:Version=${{ env.RELEASE_VERSION }}
           -p:PublishSingleFile=false
           -p:PublishReadyToRun=false
           -o publish
@@ -117,7 +148,7 @@ jobs:
         run: >
           dotnet vpk pack
           --packId AresToys
-          --packVersion ${{ github.event.inputs.version }}
+          --packVersion ${{ env.RELEASE_VERSION }}
           --packDir publish
           --mainExe AresToys.exe
           --packTitle "AresToys"
@@ -128,19 +159,23 @@ jobs:
       # vpk upload github creates a draft Release on the supplied tag and uploads every artifact
       # in Releases\. The user reviews + publishes from the GitHub UI — keeps "I want to release"
       # an explicit final click instead of an automatic-on-merge surprise.
+      # When the trigger was a tag push, vpk would normally try to CREATE the tag itself and
+      # fail (tag already exists). We pass the tag explicitly either way; vpk handles the
+      # "tag exists, attach release to it" path. The conditional --pre flag uses the
+      # normalised prerelease env (workflow_dispatch input OR tag-suffix detection).
       - name: Upload to GitHub Releases (draft)
         run: >
           dotnet vpk upload github
           --repoUrl https://github.com/${{ github.repository }}
           --token ${{ secrets.GITHUB_TOKEN }}
-          --tag v${{ github.event.inputs.version }}
-          --releaseName "AresToys ${{ github.event.inputs.version }}"
+          --tag v${{ env.RELEASE_VERSION }}
+          --releaseName "AresToys ${{ env.RELEASE_VERSION }}"
           --publish
           --channel win
-          ${{ github.event.inputs.prerelease == 'true' && '--pre' || '' }}
+          ${{ env.RELEASE_PRERELEASE == 'true' && '--pre' || '' }}
 
       - name: Upload artifacts (debug copy)
         uses: actions/upload-artifact@v5
         with:
-          name: velopack-${{ github.event.inputs.version }}
+          name: velopack-${{ env.RELEASE_VERSION }}
           path: Releases/

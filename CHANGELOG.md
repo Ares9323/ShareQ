@@ -16,6 +16,22 @@ first launch under the existing schema_version gate. Settings backup format
 bumps to v3 to carry the new label field; v2 backups (including the legacy
 `shareq-settings-*.json` snapshots) continue to import unchanged.
 
+### Release flow + tooling
+- `release.yml` now accepts a second trigger alongside the existing manual
+  `workflow_dispatch`: pushing a tag matching `v*` (e.g. `git tag v0.1.8 &&
+  git push origin v0.1.8`) cuts the release with the tag's version. The
+  leading `v` is stripped; a SemVer pre-release suffix (`v0.1.8-rc1`) auto-
+  marks the GitHub Release as pre-release so no extra flag is needed. Both
+  paths share the same vpk pack → GitHub Release draft pipeline via a single
+  "Resolve release version" step that normalises the version + prerelease
+  flag into env vars consumed by every downstream step.
+- New `tools/test-local.ps1` mirrors the test step of `ci.yml` so you can
+  validate before pushing the tag. Default is Release configuration
+  (matches CI), `-Project Storage` filters to a single test project,
+  `-SkipBuild` reuses the previous build output. Exit code is non-zero on
+  any failure so it can gate a release script:
+  `pwsh tools/test-local.ps1; if ($LASTEXITCODE -eq 0) { git tag v0.1.8; git push origin v0.1.8 }`.
+
 ### Clipboard — pinned reorder
 - Pinned items now keep an explicit per-item sort order (new `pin_sort_order`
   column added in Migration 003). Order is
