@@ -293,6 +293,16 @@
   <data name="Settings_EditorSectionHint" xml:space="preserve"><value>Behaviour knobs for the image editor (shapes, selection, gestures).</value></data>
   <data name="Settings_WindowsIntegrationTitle" xml:space="preserve"><value>Windows integration</value></data>
   <data name="Settings_WindowsIntegrationHint" xml:space="preserve"><value>How AresToys plugs into the OS: autostart, initial window state, and the tray icon's click routing.</value></data>
+  <data name="Settings_ModulesTitle" xml:space="preserve"><value>Modules</value></data>
+  <data name="Settings_ModulesHint" xml:space="preserve"><value>Disable subsystems you don't use. Disabled modules skip their startup pre-warm, background hooks, hotkeys and tray entries, so they cost nothing at runtime.</value></data>
+  <data name="Settings_ModuleClipboard" xml:space="preserve"><value>Clipboard manager</value></data>
+  <data name="Settings_ModuleClipboardTooltip" xml:space="preserve"><value>Captures every copy event, stores it in SQLite, and exposes the Win+V popup. Disabling stops all clipboard interception and database writes.</value></data>
+  <data name="Settings_ModuleLauncher" xml:space="preserve"><value>Launcher</value></data>
+  <data name="Settings_ModuleLauncherTooltip" xml:space="preserve"><value>Keyboard-driven app launcher overlay (F1-F10 strip + numeric tabs × QWERTY cells). Disabling skips its hotkey, tray entry and icon-cache pre-warming.</value></data>
+  <data name="Settings_ModuleWormholes" xml:space="preserve"><value>Wormholes (desktop fences)</value></data>
+  <data name="Settings_ModuleWormholesTooltip" xml:space="preserve"><value>Transparent windows pinned to the desktop layer that mirror folders or hold curated shortcuts. Feature is in development — enable to opt into early builds.</value></data>
+  <data name="Settings_ModulesRestartHint" xml:space="preserve"><value>Module gates run only at startup — restart to apply.</value></data>
+  <data name="Settings_ModulesRestartButton" xml:space="preserve"><value>Restart AresToys</value></data>
   <data name="Settings_EditorAltClickSelectAny" xml:space="preserve"><value>Alt+click selects any shape (not only same type)</value></data>
   <data name="Settings_EditorAltClickSelectAnyTooltip" xml:space="preserve"><value>While a placement tool is active (Rectangle, Arrow, Ellipse…) alt+click always tries to select an existing shape of the SAME type under the cursor. Alt+Shift+click toggles the hit shape into / out of the current selection set (multi-select). This option controls what happens when no same-type shape is found: ON = select any shape under the cursor (no placement); OFF (default) = fall through to a normal placement.</value></data>
   <data name="Settings_TrayClicksTitle" xml:space="preserve"><value>Tray icon clicks</value></data>

@@ -38,6 +38,7 @@ public sealed class TrayIconService : IDisposable
     private readonly PipelineExecutor _executor;
     private readonly Hotkeys.HotkeyConfigService _hotkeys;
     private readonly LocalizationService _localization;
+    private readonly ModuleSettings _modules;
     private readonly TaskbarIcon _icon;
     private MainWindow? _mainWindow;
     // Click handler bound to the most recently shown toast. Cleared after the toast closes
@@ -51,6 +52,7 @@ public sealed class TrayIconService : IDisposable
         PipelineExecutor executor,
         Hotkeys.HotkeyConfigService hotkeys,
         LocalizationService localization,
+        ModuleSettings modules,
         ILogger<TrayIconService> logger)
     {
         _services = services;
@@ -59,6 +61,7 @@ public sealed class TrayIconService : IDisposable
         _executor = executor;
         _hotkeys = hotkeys;
         _localization = localization;
+        _modules = modules;
         _logger = logger;
         _icon = new TaskbarIcon
         {
@@ -84,8 +87,13 @@ public sealed class TrayIconService : IDisposable
         _icon.ContextMenu = BuildMenu();
         // Click routing reads from settings on every event so changes apply without restart.
         // Defaults map to the historical behaviour: left=open Settings, double=toggle popup, middle=nothing.
+        // When the clipboard module is disabled the default double-click target would lead nowhere,
+        // so we fall back to opening Settings — preserves a useful gesture instead of dead silence.
         _icon.LeftClickCommand = new RelayCommand(() => DispatchClick(LeftClickKey, DefaultPipelineProfiles.OpenSettingsId));
-        _icon.DoubleClickCommand = new RelayCommand(() => DispatchClick(DoubleClickKey, DefaultPipelineProfiles.ShowPopupId));
+        var doubleClickDefault = _modules.ClipboardEnabled
+            ? DefaultPipelineProfiles.ShowPopupId
+            : DefaultPipelineProfiles.OpenSettingsId;
+        _icon.DoubleClickCommand = new RelayCommand(() => DispatchClick(DoubleClickKey, doubleClickDefault));
         _icon.MiddleClickCommand = new RelayCommand(() => DispatchClick(MiddleClickKey, NoneMarker));
 
         // ShowNotification() requires the underlying Win32 NOTIFYICONDATA to be created.
@@ -203,7 +211,14 @@ public sealed class TrayIconService : IDisposable
         menu.Items.Add(tools);
 
         menu.Items.Add(new Separator());
-        menu.Items.Add(BuildShortcutMenuItem(Strings.Tray_OpenClipboard, DefaultPipelineProfiles.ShowPopupId,
+        // Clipboard + Launcher tray entries are gated on the module flags — when a module is
+        // disabled in Settings → Modules we drop the entry entirely so the menu doesn't advertise
+        // shortcuts that won't work (no ingestion = empty clipboard window, no pre-warm = grey
+        // flash on launcher). The DI singletons stay registered: an unexpected code path that
+        // resolves the window still gets a working instance, just without history / cells.
+        if (_modules.ClipboardEnabled)
+        {
+            menu.Items.Add(BuildShortcutMenuItem(Strings.Tray_OpenClipboard, DefaultPipelineProfiles.ShowPopupId,
             () =>
             {
                 // Same toggle / capture-foreground / show-and-activate sequence the
@@ -232,7 +247,10 @@ public sealed class TrayIconService : IDisposable
                     catch (Exception ex) { _logger.LogWarning(ex, "Clipboard show failed"); }
                 }
             }));
-        menu.Items.Add(BuildShortcutMenuItem(Strings.Tray_OpenLauncher, DefaultPipelineProfiles.OpenLauncherId,
+        }
+        if (_modules.LauncherEnabled)
+        {
+            menu.Items.Add(BuildShortcutMenuItem(Strings.Tray_OpenLauncher, DefaultPipelineProfiles.OpenLauncherId,
             () =>
             {
                 // Same toggle pattern as OpenLauncherMenuTask: closed → open + activate; open
@@ -264,8 +282,14 @@ public sealed class TrayIconService : IDisposable
                     }
                 }
             }));
-        menu.Items.Add(BuildShortcutMenuItem(Strings.Tray_ToggleIncognito, DefaultPipelineProfiles.ToggleIncognitoId,
-            () => Run<IncognitoModeService>(s => _ = s.ToggleAsync(CancellationToken.None))));
+        }
+        // Incognito is a clipboard-capture suppression toggle — meaningless when the clipboard
+        // module is off (no ingestion to suppress). Gate on the same flag.
+        if (_modules.ClipboardEnabled)
+        {
+            menu.Items.Add(BuildShortcutMenuItem(Strings.Tray_ToggleIncognito, DefaultPipelineProfiles.ToggleIncognitoId,
+                () => Run<IncognitoModeService>(s => _ = s.ToggleAsync(CancellationToken.None))));
+        }
         menu.Items.Add(new Separator());
         // Three extra entries before "Open screenshot folder" — deep-link into the matching
         // Settings tabs. Beside the user value (one-click into common tabs), they push the

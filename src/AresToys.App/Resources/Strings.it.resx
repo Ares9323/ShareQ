@@ -280,6 +280,16 @@
   <data name="Settings_TrayDoubleClick" xml:space="preserve"><value>Doppio click</value></data>
   <data name="Settings_TrayMiddleClick" xml:space="preserve"><value>Click centrale</value></data>
   <data name="Settings_TrayDoNothing" xml:space="preserve"><value>(nessuna azione)</value></data>
+  <data name="Settings_ModulesTitle" xml:space="preserve"><value>Moduli</value></data>
+  <data name="Settings_ModulesHint" xml:space="preserve"><value>Disabilita i sottosistemi che non usi. I moduli disattivati saltano pre-warm di avvio, hook in background, hotkey e voci tray: non pesano sul PC a runtime.</value></data>
+  <data name="Settings_ModuleClipboard" xml:space="preserve"><value>Gestore appunti</value></data>
+  <data name="Settings_ModuleClipboardTooltip" xml:space="preserve"><value>Cattura ogni copia, la salva in SQLite e mostra il popup Win+V. Disattivato, nessuna intercettazione degli appunti e nessuna scrittura su database.</value></data>
+  <data name="Settings_ModuleLauncher" xml:space="preserve"><value>Launcher</value></data>
+  <data name="Settings_ModuleLauncherTooltip" xml:space="preserve"><value>Overlay launcher da tastiera (striscia F1-F10 + tab numeriche × celle QWERTY). Disattivato, salta hotkey, voce tray e pre-warm della cache icone.</value></data>
+  <data name="Settings_ModuleWormholes" xml:space="preserve"><value>Wormholes (fence desktop)</value></data>
+  <data name="Settings_ModuleWormholesTooltip" xml:space="preserve"><value>Finestre trasparenti pinnate sul desktop layer che fanno mirror di cartelle o contengono shortcut curati. Funzione in sviluppo — abilita per accedere alle build preview.</value></data>
+  <data name="Settings_ModulesRestartHint" xml:space="preserve"><value>I gate dei moduli scattano solo all'avvio — riavvia per applicare.</value></data>
+  <data name="Settings_ModulesRestartButton" xml:space="preserve"><value>Riavvia AresToys</value></data>
   <data name="Settings_ImageEffectsTitle" xml:space="preserve"><value>Effetti immagine</value></data>
   <data name="Settings_ImageEffectsHint" xml:space="preserve"><value>Definisci catene di regolazioni, filtri e disegni (compatibili ShareX). Apri l'editor per aggiungere effetti a un preset e visualizzare l'anteprima su un'immagine campione. Importa direttamente i preset .sxie di ShareX.</value></data>
   <data name="Settings_ImageEffectsOpen" xml:space="preserve"><value>Apri editor effetti immagine…</value></data>

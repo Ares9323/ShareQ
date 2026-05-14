@@ -13,6 +13,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     private const string EditorStartMaximizedKey = "app.editor_start_maximized";
     private const string EditorAltClickNoMatchKey = "editor.alt_click_no_match";
     private const string ClipboardShowSnippetWithLabelKey = "clipboard.show_snippet_with_label";
+    // Module-toggle keys shared with ModuleSettings (kept in lockstep — App.OnStartup reads the
+    // same constants on launch to decide whether to spin each module up).
+    private const string ClipboardModuleKey  = ModuleSettings.ClipboardKey;
+    private const string LauncherModuleKey   = ModuleSettings.LauncherKey;
+    private const string WormholesModuleKey  = ModuleSettings.WormholesKey;
     private readonly AutostartService _autostart;
     private readonly ISettingsStore _settingsStore;
     private readonly PopupWindowViewModel _clipboardVm;
@@ -131,10 +136,42 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _clipboardShowSnippetWithLabel;
 
+    /// <summary>Bound to the Settings → Modules "Clipboard" toggle. Persisted under
+    /// <see cref="ClipboardModuleKey"/> — read by <see cref="App.OnStartup"/> to decide whether
+    /// to start <see cref="Services.ClipboardIngestionService"/>, pre-warm the popup window, and
+    /// register the Win+V hotkey. Toggling at runtime persists immediately but the resulting
+    /// behaviour change only lands on the next launch, signalled to the user via the
+    /// <see cref="ModulesRestartRequired"/> hint.</summary>
+    [ObservableProperty]
+    private bool _clipboardModuleEnabled = true;
+
+    /// <summary>Bound to the Settings → Modules "Launcher" toggle. Same lifecycle as
+    /// <see cref="ClipboardModuleEnabled"/> — gates pre-warm of <see cref="Views.LauncherWindow"/>
+    /// + the launcher hotkey + the tray menu entry.</summary>
+    [ObservableProperty]
+    private bool _launcherModuleEnabled = true;
+
+    /// <summary>Bound to the Settings → Modules "Wormholes" toggle. Wormholes is the desktop-
+    /// fence subsystem currently in development (see docs/WormholesSpec.md). The toggle persists
+    /// here so existing installs can opt in ahead of the feature shipping; the gates that read
+    /// this flag in <see cref="App.OnStartup"/> are currently no-ops.</summary>
+    [ObservableProperty]
+    private bool _wormholesModuleEnabled;
+
+    /// <summary>True while at least one module toggle has been changed in the current session.
+    /// Bound to a hint label below the toggle group that prompts the user to restart for the
+    /// changes to take effect — the gates fire once on startup, so live tear-down isn't
+    /// supported and the hint is the honest answer.</summary>
+    [ObservableProperty]
+    private bool _modulesRestartRequired;
+
     private bool _suppressStartMinimizedPersist;
     private bool _suppressEditorStartMaximizedPersist;
     private bool _suppressEditorAltClickSelectAnyPersist;
     private bool _suppressClipboardShowSnippetWithLabelPersist;
+    private bool _suppressClipboardModulePersist;
+    private bool _suppressLauncherModulePersist;
+    private bool _suppressWormholesModulePersist;
 
     private async Task LoadPersistedSettingsAsync()
     {
@@ -157,6 +194,23 @@ public sealed partial class SettingsViewModel : ObservableObject
         _suppressClipboardShowSnippetWithLabelPersist = true;
         try { ClipboardShowSnippetWithLabel = rawSnippet == "1"; }
         finally { _suppressClipboardShowSnippetWithLabelPersist = false; }
+
+        // Module flags share the "unset → default" semantics with App.OnStartup: Clipboard +
+        // Launcher default ON when the key is missing, Wormholes defaults OFF (opt-in).
+        var rawClipboardModule = await _settingsStore.GetAsync(ClipboardModuleKey, CancellationToken.None).ConfigureAwait(true);
+        _suppressClipboardModulePersist = true;
+        try { ClipboardModuleEnabled = !string.Equals(rawClipboardModule, "false", StringComparison.OrdinalIgnoreCase); }
+        finally { _suppressClipboardModulePersist = false; }
+
+        var rawLauncherModule = await _settingsStore.GetAsync(LauncherModuleKey, CancellationToken.None).ConfigureAwait(true);
+        _suppressLauncherModulePersist = true;
+        try { LauncherModuleEnabled = !string.Equals(rawLauncherModule, "false", StringComparison.OrdinalIgnoreCase); }
+        finally { _suppressLauncherModulePersist = false; }
+
+        var rawWormholesModule = await _settingsStore.GetAsync(WormholesModuleKey, CancellationToken.None).ConfigureAwait(true);
+        _suppressWormholesModulePersist = true;
+        try { WormholesModuleEnabled = string.Equals(rawWormholesModule, "true", StringComparison.OrdinalIgnoreCase); }
+        finally { _suppressWormholesModulePersist = false; }
     }
 
     partial void OnStartMinimizedChanged(bool value)
@@ -196,6 +250,36 @@ public sealed partial class SettingsViewModel : ObservableObject
         // Push into the clipboard VM so an already-visible window refreshes its rows now,
         // without waiting for the next Hide→Show cycle to re-read from SQLite.
         _clipboardVm.ShowSnippetWithLabel = value;
+    }
+
+    partial void OnClipboardModuleEnabledChanged(bool value)
+    {
+        if (_suppressClipboardModulePersist) return;
+        _ = _settingsStore.SetAsync(ClipboardModuleKey,
+            value ? "true" : "false",
+            sensitive: false,
+            CancellationToken.None);
+        ModulesRestartRequired = true;
+    }
+
+    partial void OnLauncherModuleEnabledChanged(bool value)
+    {
+        if (_suppressLauncherModulePersist) return;
+        _ = _settingsStore.SetAsync(LauncherModuleKey,
+            value ? "true" : "false",
+            sensitive: false,
+            CancellationToken.None);
+        ModulesRestartRequired = true;
+    }
+
+    partial void OnWormholesModuleEnabledChanged(bool value)
+    {
+        if (_suppressWormholesModulePersist) return;
+        _ = _settingsStore.SetAsync(WormholesModuleKey,
+            value ? "true" : "false",
+            sensitive: false,
+            CancellationToken.None);
+        ModulesRestartRequired = true;
     }
 
     public bool IsUploadersSelected => SelectedTab == SettingsTab.Uploaders;

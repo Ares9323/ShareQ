@@ -344,6 +344,10 @@ public partial class App : Application
                 services.AddSingleton<SettingsViewModel>();
                 services.AddSingleton<MainWindow>();
                 services.AddSingleton<TrayIconService>();
+                // Holds the runtime-resolved enabled state for the optional feature modules
+                // (Clipboard, Launcher, Wormholes). Populated below from the persisted settings
+                // keys *after* the host is built, before any eager init runs.
+                services.AddSingleton<ModuleSettings>();
             })
             .Build();
 
@@ -351,6 +355,23 @@ public partial class App : Application
 
         var db = _host.Services.GetRequiredService<IAresToysDatabase>();
         await db.InitializeAsync(CancellationToken.None);
+
+        // Hydrate module-enabled flags from the settings store. Done once here so every gate
+        // point downstream (eager pre-warm, ClipboardIngestionService start, hotkey loop, tray
+        // menu builder) reads a stable snapshot of "is this module on for this process". Toggling
+        // in the Settings UI persists to the same keys but requires restart to take effect —
+        // tearing down a live ingestion thread or hotkey hook mid-process isn't worth the
+        // complexity for a feature most users will set once.
+        var settingsStore = _host.Services.GetRequiredService<AresToys.Storage.Settings.ISettingsStore>();
+        var modules = _host.Services.GetRequiredService<ModuleSettings>();
+        var clipboardModuleRaw = await settingsStore.GetAsync(ModuleSettings.ClipboardKey, CancellationToken.None).ConfigureAwait(true);
+        var launcherModuleRaw  = await settingsStore.GetAsync(ModuleSettings.LauncherKey,  CancellationToken.None).ConfigureAwait(true);
+        var wormholesModuleRaw = await settingsStore.GetAsync(ModuleSettings.WormholesKey, CancellationToken.None).ConfigureAwait(true);
+        // Clipboard + Launcher default ON when unset (preserves historical behaviour for existing
+        // installs). Wormholes defaults OFF — feature still in development, opt-in only.
+        modules.ClipboardEnabled = !string.Equals(clipboardModuleRaw, "false", StringComparison.OrdinalIgnoreCase);
+        modules.LauncherEnabled  = !string.Equals(launcherModuleRaw,  "false", StringComparison.OrdinalIgnoreCase);
+        modules.WormholesEnabled =  string.Equals(wormholesModuleRaw, "true",  StringComparison.OrdinalIgnoreCase);
 
         // Apply the user's theme BEFORE any window resolves: ThemeService writes to App.Resources
         // and to WPF-UI's accent manager, both of which are read at control-template instantiation
@@ -527,38 +548,43 @@ public partial class App : Application
             ((Window)sender!).Hide();
         };
 
-        // Pre-warm the launcher singleton so the first hotkey press doesn't pay the construction
-        // cost (XAML parse + InitializeComponent + first SQLite read) on the user's critical path.
-        // Resolving the service triggers the ctor; PrepareAsync runs in the background to populate
-        // the cell grid + load sizing/active-tab from storage. By the time the user hits Win+Z (or
-        // whatever opens the launcher), Show() paints with cells already there — no grey flash.
-        // Fire-and-forget: any failure (corrupt SQLite, missing icon) just falls back to the
-        // standard load path on first explicit open.
-        // Same treatment for the clipboard window: hydrates Rows + type filters in the background
-        // so Win+V's first press paints with the row list already populated.
+        // Pre-warm the launcher + clipboard singletons so the first hotkey press doesn't pay the
+        // construction cost (XAML parse + InitializeComponent + first SQLite read) on the user's
+        // critical path. Resolving the service triggers the ctor; PrepareAsync runs in the
+        // background to populate the cell grid / row list. By the time the user hits Win+Z or
+        // Win+V, Show() paints with content already there — no grey flash.
+        //
+        // Gated by the per-module flags: if the user has disabled Clipboard or Launcher in
+        // Settings → Modules, the pre-warm (and its associated SQLite reads + icon cache spin-up
+        // via SHGetFileInfo) is skipped entirely. The DI registration stays in place so any
+        // direct .GetRequiredService<…>() call still resolves a window — graceful degradation
+        // for opening the disabled module through an unexpected code path.
         _ = Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, async () =>
         {
-            // _host is set during host build above and lives for the process lifetime; the
-            // null-forgiving here keeps the analyzer happy without an early return that would
-            // mask a real bug. If _host were ever null here something is catastrophically wrong.
             var services = _host!.Services;
-            try
+            if (modules.LauncherEnabled)
             {
-                var launcher = services.GetRequiredService<AresToys.App.Views.LauncherWindow>();
-                await launcher.PrepareAsync();
+                try
+                {
+                    var launcher = services.GetRequiredService<AresToys.App.Views.LauncherWindow>();
+                    await launcher.PrepareAsync();
+                }
+                catch (Exception ex)
+                {
+                    services.GetService<ILogger<App>>()?.LogDebug(ex, "Launcher pre-warm failed; first open will load lazily");
+                }
             }
-            catch (Exception ex)
+            if (modules.ClipboardEnabled)
             {
-                services.GetService<ILogger<App>>()?.LogDebug(ex, "Launcher pre-warm failed; first open will load lazily");
-            }
-            try
-            {
-                var clipboard = services.GetRequiredService<AresToys.App.Views.ClipboardWindow>();
-                await clipboard.PrepareAsync();
-            }
-            catch (Exception ex)
-            {
-                services.GetService<ILogger<App>>()?.LogDebug(ex, "Clipboard pre-warm failed; first open will load lazily");
+                try
+                {
+                    var clipboard = services.GetRequiredService<AresToys.App.Views.ClipboardWindow>();
+                    await clipboard.PrepareAsync();
+                }
+                catch (Exception ex)
+                {
+                    services.GetService<ILogger<App>>()?.LogDebug(ex, "Clipboard pre-warm failed; first open will load lazily");
+                }
             }
         });
 
@@ -586,6 +612,14 @@ public partial class App : Application
 
         async Task RegisterCatalogAsync(string id)
         {
+            // Skip hotkey registration for hotkeys that belong to a disabled module — turning
+            // the module off means the global keyboard hook never even sees the binding, so
+            // the user can reclaim the shortcut for another app or workflow without conflict.
+            if (IsHotkeyForDisabledModule(id, modules))
+            {
+                hotkeyLogger.LogInformation("Hotkey {Id} skipped — module disabled", id);
+                return;
+            }
             var def = await hotkeyConfig.GetEffectiveAsync(id, CancellationToken.None);
             if (def.VirtualKey == 0)
             {
@@ -603,12 +637,20 @@ public partial class App : Application
 
         // Settings UI raises Changed when the user rebinds, clears, or resets → keep the hook in
         // sync. VK 0 means the user cleared the binding, so unregister and don't re-register.
+        // Hotkeys for disabled modules stay unregistered even on rebind — the module flag is the
+        // hard gate; the binding edit persists but doesn't take effect until the module is
+        // re-enabled + the app restarted.
         hotkeyConfig.Changed += (_, def) =>
         {
             _keyboardHook.Unregister(def.Id);
             if (def.VirtualKey == 0)
             {
                 hotkeyLogger.LogInformation("Hotkey {Id} cleared", def.Id);
+                return;
+            }
+            if (IsHotkeyForDisabledModule(def.Id, modules))
+            {
+                hotkeyLogger.LogInformation("Hotkey {Id} rebind ignored — module disabled", def.Id);
                 return;
             }
             _keyboardHook.Register(def.Id, def.Modifiers, def.VirtualKey, MakeCallback(def.Id), suppress: true);
@@ -619,8 +661,17 @@ public partial class App : Application
         try { _keyboardHook.Install(); hotkeyLogger.LogInformation("Low-level keyboard hook installed for global hotkeys."); }
         catch (Exception ex) { hotkeyLogger.LogWarning(ex, "Failed to install keyboard hook"); }
 
-        var ingestion = _host.Services.GetRequiredService<ClipboardIngestionService>();
-        ingestion.Start(helper.Handle);
+        // The clipboard ingestion service hooks the Win32 clipboard chain and watches for every
+        // copy event in the system — this is the single biggest "always-on" cost of the
+        // clipboard module. Gated on the module flag: turning Clipboard off in Settings means
+        // zero clipboard interception, zero SQLite writes on copy, zero "on-clipboard" workflow
+        // executions. The hotkey for Win+V is also skipped further up, so the user truly stops
+        // paying for the module.
+        if (modules.ClipboardEnabled)
+        {
+            var ingestion = _host.Services.GetRequiredService<ClipboardIngestionService>();
+            ingestion.Start(helper.Handle);
+        }
     }
 
 
@@ -756,6 +807,28 @@ public partial class App : Application
     /// "Upload with AresToys" verb. Empty / unset → <c>manual-upload</c>. Kept here so the App
     /// handler and the Settings UI stay in sync.</summary>
     public const string ExplorerContextMenuWorkflowKey = "explorer.context_menu.workflow";
+
+    /// <summary>True when the hotkey id belongs to a feature module currently disabled in
+    /// <see cref="ModuleSettings"/>. Used by the hotkey registration loop to skip a binding
+    /// outright (the global keyboard hook never sees the combo, leaving the shortcut free for
+    /// the user's other apps). Mapping is intentionally explicit + small — every module owns at
+    /// most a couple of workflow ids and a static table keeps the gating predictable.</summary>
+    private static bool IsHotkeyForDisabledModule(string hotkeyId, ModuleSettings modules)
+    {
+        // Clipboard module owns the Win+V popup. The "on-clipboard" automatic workflow is not a
+        // hotkey (fired by ClipboardIngestionService events), so gating Ingestion above covers it.
+        // Incognito is a clipboard-capture suppression toggle — also pointless without ingestion.
+        if (!modules.ClipboardEnabled &&
+            (hotkeyId == AresToys.Pipeline.Profiles.DefaultPipelineProfiles.ShowPopupId
+             || hotkeyId == AresToys.Pipeline.Profiles.DefaultPipelineProfiles.ToggleIncognitoId))
+            return true;
+        // Launcher module owns the open-launcher workflow.
+        if (!modules.LauncherEnabled && hotkeyId == AresToys.Pipeline.Profiles.DefaultPipelineProfiles.OpenLauncherId)
+            return true;
+        // Wormholes hotkeys (new-wormhole, hide-all) will join this table when the feature
+        // ships; until then there's nothing for them to gate.
+        return false;
+    }
 
     /// <summary>Show a confirm dialog for an available update. OK → download + apply + restart.
     /// Cancel → leave it for the next launch (Velopack will offer it again on the next silent
