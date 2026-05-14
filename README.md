@@ -6,7 +6,7 @@
 
 > Modern productivity suite for Windows — unifies CopyQ (clipboard), ShareX (capture + upload), and MaxLauncher (keyboard launcher) into one app, plus tools none of them ship.
 
-**Status:** Alpha. Builds and runs. Velopack packaging is green (installer + portable + delta updates) — the public v0.1.0 release tag is the only thing still pending.
+**Status:** Alpha, actively shipped. Latest release: **v0.1.8** (2026-05-13); v0.1.9 in flight. Velopack-driven installer + portable + delta updates flow through GitHub Releases on every tagged version.
 
 ---
 
@@ -36,21 +36,34 @@ On top of feature parity with the upstreams, AresToys adds tools none of them sh
 The app boots, hosts a tray icon, registers global hotkeys, and the following flows are complete end-to-end:
 
 **Capture**
-- Region capture (Win+Shift+S) with darkened overlay + window snap
-- Fullscreen / per-monitor / last-region (tray menu)
+- Region capture (Win+Shift+S) with darkened overlay, window snap, **multi-region drag-to-accumulate** (Enter applies the composite — bbox of all rects with everything outside any rect transparent), **snap-to-windows preview** while idle, marching-ants screen-edge crosshair, per-rect 8 grip handles, draggable popup toolbar with status + zoom + Apply / Cancel
+- Fullscreen / per-monitor / last-region / active-window capture (DWM extended bounds — no resize-border padding) via the tray menu
+- Full-page **webpage capture** of any URL via WebView2 (affordances auto-hide on machines without the runtime; tray surfaces an "install runtime" entry)
 - Screen recording → `.mp4` (Shift+PrtScn) and `.gif` (Ctrl+Shift+PrtScn) via FFmpeg
-- Screen color picker / color sampler (hex/RGB/HSB/CMYK/decimal/linear/BGRA copy formats)
+- Screen color picker / sampler (hex / RGB / HSB / CMYK / decimal / linear / BGRA copy formats) — round magnifier with wheel zoom (3–41 px sample window) and pixel-coordinate readout, shared with the editor crop tool and the eyedropper
 - Pin-to-screen (always-on-top thumbnail with drag + wheel zoom)
+- Per-workflow `Auto-confirm on first selection` option to skip the multi-region toolbar for "rapid screenshot" flows
 
 **Clipboard**
 - Persistent SQLite history with FTS5 search + DPAPI-encrypted payloads
 - CopyQ-style popup (Win+V) with custom categories, pin, search header, filter dropdown, vertical toolbar, geometry persistence, Ctrl+1-9 quick-paste
+- **Per-item labels** (CopyQ "Notes" equivalent): replace the auto-derived snippet in the row title with a user-typed name. Three input gestures — right-click → Rename label, F2 inline rename, always-on TextBox above the preview pane. FTS5 search matches across content AND label
+- **Drag-to-category-tab** as a shortcut for the right-click Move-to menu — a custom drag payload keeps the gesture distinct from Explorer / text drags
+- **User-controlled pinned reorder**: drag a pinned row onto another (insert-before), or use on-hover chevron up / down buttons to swap with the adjacent neighbour. New pins land at the bottom of the strip
+- Process blacklist (KeePass / 1Password / etc.) + incognito-mode hotkey
+- Auto-rotation: keep last N items / last N days, per-category overrides
 
 **Editor**
-- WPF-based, ShareX-inspired — Rectangle, Ellipse, Freehand (with smooth/end-arrow), Text (drag-to-draw + wrap), Step counter, Image, Pixelate, Crop
+- WPF-based, ShareX-inspired — Rectangle, Ellipse, **Line / Arrow** (unified primitive with per-end caps and pickable tip style: ShareX-style curve or filled triangle), Freehand (smooth + per-end caps), Text (drag-to-draw + wrap), **Step counter** (draggable tail handle, right-click delete-and-renumber), Image, Pixelate, Blur, Spotlight, Smart Eraser, **Crop with multi-area support** (every drag appends a pending rect, Apply All bakes them as a composite)
 - Outer-aligned outlines (EvenOdd ring geometry)
-- Color picker with palette + recents + live preview + eyedropper
+- Color picker with palette + recents + live preview + eyedropper (full-screen `ScreenColorPickerOverlay` with round magnifier shared across every sampler surface)
 - Clipboard round-trip (Ctrl+C/X/V) preserves shapes as editable objects in-process, falls back to raster for other apps
+- **Effects launcher** opens the image-effects panel directly from the editor and swaps the rendered result back as an undoable canvas op
+- **Magic eraser** (AI background removal) and **Trace** (raster → SVG) launch from the same toolbar; both produce a result that re-enters the editor as an undoable swap
+- **Alt+click "modifica al volo"** on placement tools auto-switches to Select for one edit and bounces back to the previous tool on deselect. Esc is layered (first tap clears selection + cancels the bounce; second tap closes the editor)
+- **Multi-editor** — open multiple editor windows in parallel without focus stealing
+- Save commits to history in the global capture format; **Save as…** exports to a path + format the user picks (PNG / JPEG / BMP / GIF)
+- Toolbar icons, panel titles and side-panel actions follow the active accent theme (no more hard-coded white)
 
 **Image effects**
 - 60+ effects ported from ShareX across Adjustments (brightness / contrast / saturation / hue / levels / curves / temperature / split-toning / film emulation / …), Manipulations (canvas / crop / resize / rotate / shadow / rounded-corners / auto-crop / skew / flip / orthogonal-rotate), Filters (blur / motion-blur / sharpen / glow / pixelate / vignette / colour halftone / torn-edge / emboss / edge-detect / add-noise), Drawings (background / border / text / text-ex / image / particles / checkerboard / gradient overlay)
@@ -91,21 +104,21 @@ Plus a declarative `.sxcu` engine that loads ShareX-compatible JSON uploader fil
 - Built-in profiles: region capture, screen recording, color picker/sampler, pin to screen, manual upload, upload clipboard text, open clipboard, open launcher.
 
 **Other**
-- Categories (CopyQ-style) with Move/Copy/Delete and per-category clear
-- Settings backup / restore (JSON export / import)
-- Themes with WPF-UI v4 brush overrides + custom Surface1/2/3 + Foreground/AccentForeground
+- Categories (CopyQ-style) with Move / Copy / Delete and per-category clear
+- Settings backup / restore (JSON export / import) — v3 format carries per-item clipboard labels; v2 backups (including the legacy `shareq-settings-*.json` snapshots) keep importing unchanged
+- Themes with WPF-UI v4 brush overrides + custom Surface1/2/3 + Foreground / AccentForeground
 - Launcher overlay (MaxLauncher-inspired): F1-F10 strip + 10 numeric tabs × 30 QWERTY cells, drag-and-drop assignment, search-as-you-type
-- Autostart toggle (HKCU\Run, no admin)
+- **Full Italian localization** (UI, settings, editor, image effects, pipeline-action catalog, dialogs) with a Language picker in Settings
+- Autostart toggle + Start-minimized option (both HKCU, no admin)
+- Update-available prompt routes through the modern Windows toast pipeline, so it persists in the Action Center alongside every other capture / clipboard / recording event
 
 ## What's still missing
 
 Headline gaps against the upstream feature set:
 
-- **No public release tag yet.** Velopack packaging is wired and tested locally + via the CI workflow; the first GitHub Release (v0.1.0) is the last M7 step still pending.
-- **No SharedFolder / FTP / SFTP / S3 / Azure / B2 uploaders** — backlog (FTP+SharedFolder are next; cloud-storage providers come after).
+- **No SharedFolder / FTP / SFTP / S3 / Azure / B2 uploaders** — backlog (FTP + SharedFolder are next; cloud-storage providers come after).
 - **No scrolling capture / image combiner / hash checker / metadata viewer** — backlog. (Explorer context menu shipped; OCR was tried via Windows.Media.Ocr and dropped — too unreliable on dark themes / low contrast for the maintenance cost.)
 - **Bundled OAuth client IDs aren't shipped** in the public source. Maintainers create `src/AresToys.Uploaders/Secrets.Local.cs` with their own credentials (gitignored). End users of a public release get zero-friction sign-in; users building from source themselves will see "isn't configured in this build" until they either drop in their own keys or paste credentials in the Configure dialog.
-- **No i18n** — UI is English only.
 - **No CLI / scripting interface** — everything runs through hotkeys + workflows.
 
 ## Tech stack
@@ -121,6 +134,8 @@ Headline gaps against the upstream feature set:
 - [ZXing.Net](https://github.com/micjahn/ZXing.Net) for QR decoding
 - [Microsoft.Toolkit.Uwp.Notifications](https://learn.microsoft.com/windows/apps/design/shell/tiles-and-notifications/send-local-toast?tabs=desktop) for Windows toast notifications (Action Center persistence + inline images)
 - [Velopack](https://github.com/velopack/velopack) for installer / portable packaging and auto-update via GitHub Releases
+- [ONNX Runtime](https://onnxruntime.ai/) with the DirectML execution provider — runs the embedded U2NetP saliency model behind the Magic eraser locally on any DX12 GPU (CPU fallback otherwise)
+- Bundled [potrace](http://potrace.sourceforge.net/) 1.16 (BSD) under `Tools/` drives the raster → SVG tracer
 
 ## Roadmap
 
@@ -135,14 +150,15 @@ Headline gaps against the upstream feature set:
 | **M6** | Screen recorder + Beautify + Watermark/Step counter | ✅ done — recorder ships; Watermark + step-counter live in the image-effects pass below; Beautify (the standalone one-click "make this look nicer" tool) shelved as low-impact |
 | **M6.5** | Image-effects framework (60+ ShareX effects, `.sxie` round-trip, gradient + font pickers, live editor, pipeline task) | ✅ done |
 | **M6.6** | QR generator UX (live preview window + multiline editor + PNG/SVG export + Action-Center notifications) | ✅ done |
-| **M7** | Velopack packaging + GitHub auto-update + release v0.1.0 | 🟡 packaging + updater wired; first release tag still pending |
+| **M7** | Velopack packaging + GitHub auto-update + release v0.1.0 | ✅ done — v0.1.0 shipped 2026-05-05; latest is v0.1.8 (2026-05-13), v0.1.9 in flight |
 
 After M7, the next themed passes (rough order):
 1. SharedFolder + FTP/FTPS/SFTP uploaders
 2. Cloud storage uploaders (S3 / Azure Blob / Backblaze B2 / Google Cloud / Cloudflare R2)
 3. Scrolling capture
 4. CLI for scripting
-5. i18n
+
+(Italian localization landed in 0.1.1 and is now part of every build — the placeholder has moved out of the post-M7 list.)
 
 ## Building
 
@@ -163,11 +179,11 @@ User data lives at `%LOCALAPPDATA%\AresToys\` (SQLite + custom-uploaders + recor
 
 Distribution is built with [Velopack](https://velopack.io): every release ships both an installer (`AresToys-win-Setup.exe`) and a portable zip (`AresToys-win-Portable.zip`). The in-app updater (Settings → About → "Check for updates") fetches delta packages from GitHub Releases — only the differences between versions are downloaded.
 
-To cut a release (maintainer):
+To cut a release (maintainer), pick one of three equivalent paths:
 
-1. Open the **Actions** tab → **Release** workflow → **Run workflow**.
-2. Type the new semantic version (e.g. `0.1.0`) and tick "prerelease" if applicable.
-3. The workflow builds, packs with `vpk`, and uploads a published GitHub Release with all assets.
+1. **One-shot from a local terminal** — bump `<Version>` in `src/AresToys.App/AresToys.App.csproj` (strip the `-dev` suffix for the tagged version), then run `pwsh tools/release.ps1` (or double-click [`release.bat`](release.bat) from Explorer). The script refuses to run on a dirty tree or if the tag already exists locally / on origin, runs `tools/test-local.ps1`, asks for confirmation, creates the annotated tag and pushes it. The pushed tag fires the on-tag trigger of `release.yml`, which builds + packs + publishes the GitHub Release. Flags: `-SkipTests`, `-SkipConfirm`, `-Version X.Y.Z` (override), `-Force` (allow dirty tree). If the push fails the local tag is removed automatically so the next run starts clean.
+2. **Manual tag push** — `git tag v0.1.8 && git push origin v0.1.8` triggers the same on-tag pipeline. A SemVer pre-release suffix (`v0.1.8-rc1`) auto-marks the GitHub Release as pre-release; no extra flag needed.
+3. **GitHub UI** — Actions tab → **Release** workflow → **Run workflow**, type the semantic version (e.g. `0.1.0`) and tick "prerelease" if applicable. Same vpk pack + GitHub Release pipeline as the other two paths.
 
 The `vpk` CLI is pinned in [`.config/dotnet-tools.json`](.config/dotnet-tools.json) — `dotnet tool restore` installs the same version locally for testing the pack step before pushing a tag. The convenience wrapper [`tools/pack-local.ps1`](tools/pack-local.ps1) drives the same `dotnet publish` + `vpk pack` chain the workflow uses, with a few quality-of-life shortcuts:
 

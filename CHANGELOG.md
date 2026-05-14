@@ -3,6 +3,20 @@
 All notable changes to AresToys. Format loosely follows [Keep a Changelog](https://keepachangelog.com/),
 versions follow [SemVer](https://semver.org/).
 
+## [0.1.9] — Unreleased
+
+### Release flow + tooling
+- New `tools/release.ps1` + `release.bat` shim drive the whole tag-and-push
+  flow in one go: reads `<Version>` from `AresToys.App.csproj` (strips
+  `-dev`), refuses to run on a dirty working tree, refuses if the tag
+  already exists locally or on origin, runs `test-local.ps1`, asks for
+  confirmation, then creates the annotated tag and pushes it (which fires
+  the on-tag trigger added in 0.1.8's `release.yml`). Double-click
+  `release.bat` from Explorer or run `pwsh tools/release.ps1` from a
+  terminal. Flags: `-SkipTests`, `-SkipConfirm`, `-Version X.Y.Z`
+  (override), `-Force` (allow dirty tree). If the push fails the local tag
+  is removed automatically so the next run starts clean.
+
 ## [0.1.8] — 2026-05-13
 
 Clipboard window gets three CopyQ-flavoured upgrades: optional per-item labels
@@ -29,8 +43,7 @@ bumps to v3 to carry the new label field; v2 backups (including the legacy
   validate before pushing the tag. Default is Release configuration
   (matches CI), `-Project Storage` filters to a single test project,
   `-SkipBuild` reuses the previous build output. Exit code is non-zero on
-  any failure so it can gate a release script:
-  `pwsh tools/test-local.ps1; if ($LASTEXITCODE -eq 0) { git tag v0.1.8; git push origin v0.1.8 }`.
+  any failure so it can gate a release script.
 
 ### Clipboard — pinned reorder
 - Pinned items now keep an explicit per-item sort order (new `pin_sort_order`
