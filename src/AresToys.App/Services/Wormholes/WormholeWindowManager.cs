@@ -1,5 +1,6 @@
 using System.Windows;
 using Microsoft.Extensions.Logging;
+using AresToys.App.Services.Launcher;
 using AresToys.App.Views;
 
 namespace AresToys.App.Services.Wormholes;
@@ -7,13 +8,15 @@ namespace AresToys.App.Services.Wormholes;
 public sealed class WormholeWindowManager : IWormholeWindowManager
 {
     private readonly IWormholeStore _store;
+    private readonly IconService _icons;
     private readonly ILogger<WormholeWindowManager> _logger;
     private readonly Dictionary<Guid, WormholeWindow> _live = new();
     private bool _initialized;
 
-    public WormholeWindowManager(IWormholeStore store, ILogger<WormholeWindowManager> logger)
+    public WormholeWindowManager(IWormholeStore store, IconService icons, ILogger<WormholeWindowManager> logger)
     {
         _store = store;
+        _icons = icons;
         _logger = logger;
     }
 
@@ -90,7 +93,12 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
             catch (Exception ex) { _logger.LogWarning(ex, "Wormhole save failed for {Id}", record.Id); }
         }
 
-        var window = new WormholeWindow(record, PersistChange);
+        var window = new WormholeWindow(
+            record,
+            PersistChange,
+            _icons,
+            _store.WormholesRootPath,
+            _store.GetShortcutsDirectory(record.Id));
         window.DeleteRequested += async (_, id) =>
         {
             try { await DeleteAsync(id, CancellationToken.None).ConfigureAwait(true); }
