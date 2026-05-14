@@ -208,18 +208,34 @@ public sealed class TrayIconService : IDisposable
                 win.Show();
                 win.Activate();
             })))));
-        // Wormholes entry under Tools — gated on the module flag. The full New / Manage flow
-        // (dialog, list grid in Settings) lands in a follow-up; the skeleton just exposes a
-        // one-click "spawn a default Data wormhole at the cursor" so the user can verify the
-        // chassis works end-to-end.
+        // Wormholes entry under Tools — gated on the module flag. Opens the NewWormholeDialog
+        // (§8.4) so the user picks Data vs Portal + title + (for Portal) the source folder.
+        // The dialog hands the choice back to the manager which materialises the record.
+        menu.Items.Add(tools);
+
         if (_modules.WormholesEnabled)
         {
-            tools.Items.Add(BuildMenuItem(Strings.Tray_NewWormhole,
+            // Wormholes lives as a sibling of Tools at the top level — same vertical hierarchy
+            // as Capture / Upload / Tools so the user reaches it in one click instead of
+            // diving into Tools first. Subentries grow here (sort modes, show/hide all,
+            // import/export, etc.) without polluting Tools' generic toolbox feel.
+            var wormholes = new MenuItem { Header = Strings.Tray_Wormholes };
+            wormholes.Items.Add(BuildMenuItem(Strings.Tray_NewWormhole,
                 () => Run<AresToys.App.Services.Wormholes.IWormholeWindowManager>(m =>
-                    _ = m.CreateAsync("Wormhole", AresToys.App.Services.Wormholes.WormholeKind.Data,
-                                       CancellationToken.None))));
+                {
+                    var dlg = new AresToys.App.Views.NewWormholeDialog();
+                    var ok = dlg.ShowDialog() == true && dlg.Result is not null;
+                    if (!ok) return;
+                    var choice = dlg.Result!;
+                    _ = m.CreateAsync(choice.Title, choice.Kind, choice.SourceFolder, CancellationToken.None);
+                })));
+            // Recovery one-click when wormholes end up off-screen (multi-monitor rearrange,
+            // monitor disconnect, weird DPI). Cascade-resets every live wormhole onto the
+            // primary monitor and brings them to the front.
+            wormholes.Items.Add(BuildMenuItem(Strings.Tray_RecenterWormholes,
+                () => Run<AresToys.App.Services.Wormholes.IWormholeWindowManager>(m => m.RecenterAll())));
+            menu.Items.Add(wormholes);
         }
-        menu.Items.Add(tools);
 
         menu.Items.Add(new Separator());
         // Clipboard + Launcher tray entries are gated on the module flags — when a module is

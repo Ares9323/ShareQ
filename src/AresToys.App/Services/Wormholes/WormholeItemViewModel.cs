@@ -5,16 +5,23 @@ using AresToys.App.Services.Launcher;
 
 namespace AresToys.App.Services.Wormholes;
 
-/// <summary>UI wrapper around a <see cref="WormholeItem"/>. Resolves the icon via
-/// <see cref="IconService"/> at construction (synchronous — the icon cache absorbs the cost on
-/// repeat hits) and exposes the visible label, hiding <c>.lnk</c> / <c>.url</c> extensions in
-/// line with the spec §8.5 "Hide .lnk and .url extension" default. Holds the absolute path to
-/// the shortcut file so the window can fire <c>ShellExecute</c> on double-click without
-/// re-resolving the storage root.</summary>
+/// <summary>UI wrapper around a single visible entry in a wormhole. Two flavours:
+/// <list type="bullet">
+///   <item>**Data** items: <see cref="PersistedItem"/> is set; <see cref="AbsolutePath"/> is the
+///         absolute path of the persisted <c>.lnk</c> / <c>.url</c> shortcut.</item>
+///   <item>**Portal** items: <see cref="PersistedItem"/> is null; <see cref="AbsolutePath"/> is
+///         the absolute path of the real file inside the watched folder. Created transiently
+///         on every folder-watcher tick — no JSON state to keep in sync.</item>
+/// </list>
+/// Double-click → <see cref="AbsolutePath"/> + <c>ShellExecute</c>. Same gesture, both flavours;
+/// the shell resolves <c>.lnk</c> targets transparently and opens regular files with their
+/// registered handler.</summary>
 public sealed partial class WormholeItemViewModel : ObservableObject
 {
-    public WormholeItem Item { get; }
-    public string AbsoluteShortcutPath { get; }
+    /// <summary>Backing record for Data items, null for Portal items.</summary>
+    public WormholeItem? PersistedItem { get; }
+
+    public string AbsolutePath { get; }
 
     [ObservableProperty]
     private string _displayName = string.Empty;
@@ -22,21 +29,39 @@ public sealed partial class WormholeItemViewModel : ObservableObject
     [ObservableProperty]
     private BitmapSource? _icon;
 
+    /// <summary>Data-item constructor: shortcut path is relative to <paramref name="wormholesRoot"/>.</summary>
     public WormholeItemViewModel(WormholeItem item, string wormholesRoot, IconService icons)
     {
-        Item = item;
-        AbsoluteShortcutPath = Path.Combine(wormholesRoot, item.ShortcutPath);
-        DisplayName = ResolveDisplayName(item, AbsoluteShortcutPath);
-        Icon = icons.GetIcon(AbsoluteShortcutPath);
+        PersistedItem = item;
+        AbsolutePath = Path.Combine(wormholesRoot, item.ShortcutPath);
+        DisplayName = ResolveDisplayName(item.DisplayName, AbsolutePath);
+        Icon = icons.GetIcon(AbsolutePath);
     }
 
-    /// <summary>Derive the user-facing label. Per-item <see cref="WormholeItem.DisplayName"/>
-    /// override wins; otherwise we use the filename without the <c>.lnk</c> / <c>.url</c>
-    /// extension (Portals does the same — keeps "Notepad" readable instead of "Notepad.lnk").</summary>
-    private static string ResolveDisplayName(WormholeItem item, string absolutePath)
+    /// <summary>Portal-item constructor: <paramref name="absolutePath"/> points directly at the
+    /// real file or folder inside the watched <c>sourcePath</c>. No persisted record exists.</summary>
+    public WormholeItemViewModel(string absolutePath, IconService icons)
     {
-        if (!string.IsNullOrWhiteSpace(item.DisplayName)) return item.DisplayName!;
-        var name = Path.GetFileNameWithoutExtension(absolutePath);
-        return string.IsNullOrWhiteSpace(name) ? Path.GetFileName(absolutePath) : name;
+        PersistedItem = null;
+        AbsolutePath = absolutePath;
+        DisplayName = ResolveDisplayName(null, absolutePath);
+        Icon = icons.GetIcon(absolutePath);
+    }
+
+    /// <summary>Derive the user-facing label. Per-item override (Data flavour only) wins;
+    /// otherwise we use the filename without the <c>.lnk</c> / <c>.url</c> extension (Portals
+    /// does the same — keeps "Notepad" readable instead of "Notepad.lnk"). Folders keep their
+    /// full name.</summary>
+    private static string ResolveDisplayName(string? overrideName, string absolutePath)
+    {
+        if (!string.IsNullOrWhiteSpace(overrideName)) return overrideName!;
+        var ext = Path.GetExtension(absolutePath);
+        if (string.Equals(ext, ".lnk", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(ext, ".url", StringComparison.OrdinalIgnoreCase))
+        {
+            var noExt = Path.GetFileNameWithoutExtension(absolutePath);
+            return string.IsNullOrWhiteSpace(noExt) ? Path.GetFileName(absolutePath) : noExt;
+        }
+        return Path.GetFileName(absolutePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
     }
 }

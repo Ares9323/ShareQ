@@ -18,10 +18,15 @@ public interface IWormholeWindowManager
     /// flag.</summary>
     Task InitializeAsync(CancellationToken cancellationToken);
 
-    /// <summary>Creates a new wormhole record, persists it, spawns the window. The record's id
-    /// + geometry are returned so the caller can position the window or focus it. Currently
-    /// only Data wormholes are supported in the skeleton; Portal will follow in M-Wormholes-B.</summary>
+    /// <summary>Creates a new wormhole record, persists it, spawns the window. For Data the
+    /// <paramref name="sourceFolder"/> parameter is ignored; for Portal it MUST point at an
+    /// existing folder to mirror (throws otherwise).</summary>
     Task<WormholeRecord> CreateAsync(string title, WormholeKind kind, CancellationToken cancellationToken);
+
+    /// <summary>Portal-aware overload. <paramref name="sourceFolder"/> is required when
+    /// <paramref name="kind"/> is <see cref="WormholeKind.Portal"/> and ignored otherwise. The
+    /// folder is captured verbatim — caller validates existence via the New wormhole dialog.</summary>
+    Task<WormholeRecord> CreateAsync(string title, WormholeKind kind, string? sourceFolder, CancellationToken cancellationToken);
 
     /// <summary>Removes the wormhole + its on-disk artifacts (Shortcuts folder for Data, just the
     /// record for Portal) and closes the open window if any.</summary>
@@ -30,4 +35,10 @@ public interface IWormholeWindowManager
     /// <summary>Closes every live wormhole window without removing records — used by the module
     /// teardown path (Settings → toggle Wormholes OFF) and by app shutdown.</summary>
     void CloseAll();
+
+    /// <summary>Repositions every currently-open wormhole onto the primary monitor in a cascade
+    /// and activates them. User-triggered recovery path (tray menu) for when wormholes end up
+    /// off-screen — monitor disconnect, weird DPI scaling, multi-monitor layout change between
+    /// sessions.</summary>
+    void RecenterAll();
 }

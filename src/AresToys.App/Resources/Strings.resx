@@ -82,6 +82,8 @@
   <data name="Tray_PinToScreen" xml:space="preserve"><value>Pin to screen…</value></data>
   <data name="Tray_QrGenerator" xml:space="preserve"><value>QR generator…</value></data>
   <data name="Tray_NewWormhole" xml:space="preserve"><value>New wormhole…</value></data>
+  <data name="Tray_RecenterWormholes" xml:space="preserve"><value>Bring all wormholes here</value></data>
+  <data name="Tray_Wormholes" xml:space="preserve"><value>Wormholes</value></data>
   <data name="Tray_UploadFile" xml:space="preserve"><value>Upload file…</value></data>
   <data name="Tray_UploadFromClipboard" xml:space="preserve"><value>Upload from clipboard</value></data>
   <data name="Tray_OpenClipboard" xml:space="preserve"><value>Open clipboard</value></data>

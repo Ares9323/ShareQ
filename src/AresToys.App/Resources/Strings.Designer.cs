@@ -1545,6 +1545,24 @@ namespace AresToys.App.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Bring all wormholes here.
+        /// </summary>
+        public static string Tray_RecenterWormholes {
+            get {
+                return ResourceManager.GetString("Tray_RecenterWormholes", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Wormholes.
+        /// </summary>
+        public static string Tray_Wormholes {
+            get {
+                return ResourceManager.GetString("Tray_Wormholes", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Quit.
         /// </summary>
         public static string Tray_Quit {
