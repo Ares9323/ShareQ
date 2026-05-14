@@ -12,8 +12,12 @@
              Painted as the background so the dim layer above just darkens it without WPF
              needing AllowsTransparency (which would force Layered Window + disable HW accel). -->
         <Image x:Name="ScreenshotImage" Stretch="Fill" />
-        <!-- Dim layer with an even-odd "hole" at the selection rect (rebuilt on each move). -->
-        <Path x:Name="DimPath" Fill="#80000000" />
+        <!-- Dim layer with an even-odd "hole" at the selection rect (rebuilt on each move).
+             40000000 = ~25% black: enough to mute the un-selected area visually but light
+             enough that the user still recognises what's outside the rect (e.g. picking from
+             a screen with white windows). #80 (50%) was reported as too dark to comfortably
+             frame against pre-existing UI. -->
+        <Path x:Name="DimPath" Fill="#40000000" />
         <Canvas x:Name="OverlayCanvas">
             <Rectangle x:Name="SelectionRect"
                        Stroke="#33B5FF"

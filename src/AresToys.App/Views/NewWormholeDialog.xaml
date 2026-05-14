@@ -1,4 +1,9 @@
-<Window x:Class="AresToys.App.Views.NewWormholeDialog"
+<!-- FluentWindow (not plain Window) so the title bar matches the rest of AresToys: dark
+     themed strip integrated with the content area instead of the OS-default white chrome.
+     Same configuration as MainWindow.xaml (ExtendsContentIntoTitleBar + WindowBackdropType=None
+     + Surface2 background) — replicating it here means new dialogs adopt the AresToys look
+     without per-window theming bolted on. -->
+<ui:FluentWindow x:Class="AresToys.App.Views.NewWormholeDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
@@ -7,11 +12,31 @@
         Width="480"
         SizeToContent="Height"
         ResizeMode="NoResize"
-        Background="{DynamicResource Surface1Brush}"
+        WindowBackdropType="None"
+        ExtendsContentIntoTitleBar="True"
+        Background="{DynamicResource Surface2Brush}"
         ShowInTaskbar="False">
-    <StackPanel Margin="20">
-        <TextBlock Text="New wormhole" FontSize="18" FontWeight="SemiBold"
-                   Foreground="{DynamicResource AccentForegroundBrush}" Margin="0,0,0,16" />
+    <!-- Accent-tinted frame around the content — same treatment as MainWindow.xaml so the dialog
+         reads as part of AresToys instead of "flat themed Window". The outer Border carries the
+         AresToys "accent telaio" (BorderBrush=AccentForegroundDarkBrush, BorderThickness=2,
+         CornerRadius=8) used by Launcher / Clipboard / HotkeyCapture / MainWindow.
+         ExtendsContentIntoTitleBar (on the window) lets us paint into the caption strip; the
+         ui:TitleBar control handles drag + close + restore for us. -->
+    <Border Background="{DynamicResource Surface2Brush}"
+            BorderBrush="{DynamicResource AccentForegroundDarkBrush}" BorderThickness="2" CornerRadius="8">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <ui:TitleBar Grid.Row="0" Title="New wormhole">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Source="pack://application:,,,/Assets/icon.ico" />
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
+    <StackPanel Grid.Row="1" Margin="20">
+        <!-- (No inline header — the ui:TitleBar above already shows "New wormhole" and a
+             second heading is just visual noise.) -->
 
         <!-- Title input. Defaults to "Wormhole"; the user typically edits it before confirming
              so we focus + select-all in OnLoaded for a one-keystroke retype gesture. -->
@@ -19,32 +44,12 @@
                    FontSize="12" Margin="0,0,0,4" />
         <TextBox x:Name="TitleBox" Text="Wormhole" FontSize="13" Margin="0,0,0,12" />
 
-        <!-- Type radio. Shortcuts/Links = curated list of .lnk/.url; Folder portal = live
-             mirror of a real folder. Picking Folder portal auto-opens the folder picker (the
-             field below is informational only — you can't usefully type a path here). -->
-        <TextBlock Text="Type" Foreground="{DynamicResource AccentForegroundBrush}"
-                   FontSize="12" Margin="0,0,0,4" />
-        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-            <RadioButton x:Name="DataRadio" GroupName="Kind" IsChecked="True"
-                         VerticalAlignment="Center" VerticalContentAlignment="Center"
-                         Checked="OnKindChanged" Margin="0,0,20,0">
-                <TextBlock Text="Shortcuts/Links"
-                           Foreground="{DynamicResource AccentForegroundBrush}"
-                           VerticalAlignment="Center" />
-            </RadioButton>
-            <RadioButton x:Name="PortalRadio" GroupName="Kind"
-                         VerticalAlignment="Center" VerticalContentAlignment="Center"
-                         Checked="OnKindChanged">
-                <TextBlock Text="Folder portal"
-                           Foreground="{DynamicResource AccentForegroundBrush}"
-                           VerticalAlignment="Center" />
-            </RadioButton>
-        </StackPanel>
-
-        <!-- Portal folder row: surfaces the chosen path read-only-ish (the textbox is enabled
-             but the picker is the authoritative way to set it — typing a path is error-prone
-             and was the cause of a "the field doesn't accept my input" report in -A). -->
-        <StackPanel x:Name="PortalFolderRow" Margin="0,0,0,12" Visibility="Collapsed">
+        <!-- Folder row — always visible. A wormhole is now just "a folder on disk shown as a
+             grid", no more Shortcuts vs Portal distinction (it was redundant: a Shortcuts
+             wormhole was a Folder portal pointing at a hidden internal folder full of .lnk
+             files). Folder picker is the authoritative input; the textbox is read-only so the
+             user can't half-type a broken path. -->
+        <StackPanel x:Name="PortalFolderRow" Margin="0,0,0,12">
             <TextBlock Text="Folder" Foreground="{DynamicResource AccentForegroundBrush}"
                        FontSize="12" Margin="0,0,0,4" />
             <Grid>
@@ -63,9 +68,14 @@
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <!-- IsDefault=True wires Enter (from any focused control in this window) to fire
+                 Click on Create — saves a Tab + Space gesture after typing the title. IsCancel
+                 on the Cancel button maps Esc the same way without any explicit InputBinding. -->
             <ui:Button x:Name="OkButton" Content="Create" Padding="14,4" Margin="0,0,8,0"
-                       Appearance="Primary" Click="OnOkClicked" />
-            <ui:Button Content="Cancel" Padding="14,4" Click="OnCancelClicked" />
+                       Appearance="Primary" IsDefault="True" Click="OnOkClicked" />
+            <ui:Button Content="Cancel" Padding="14,4" IsCancel="True" Click="OnCancelClicked" />
         </StackPanel>
     </StackPanel>
-</Window>
+    </Grid>
+    </Border>
+</ui:FluentWindow>

@@ -451,10 +451,8 @@ public partial class RegionOverlayWindow : Window
             return;
         }
 
-        // Crosshair position update is cheap (4 line-endpoint assignments) and runs every
-        // pointer event so the alignment guide tracks the cursor in real time. The expensive
-        // dim-path rebuild is throttled separately via _pendingDragRect (handled by the tick).
-        UpdateCrosshairPosition(current);
+        // (Crosshair tracking removed — see note on UpdateCrosshairAnts above. The dim path
+        // + magnifier provide sufficient alignment feedback.)
 
         // Move / resize on a committed region preempts the new-rect drag flow below.
         if (_regionDragMode != RegionDragMode.None)
@@ -565,44 +563,13 @@ public partial class RegionOverlayWindow : Window
         PositionMagnifierNearCursor(cursorInWindow);
         // Position is also updated from OnMouseMove for snappy real-time tracking; here we
         // just animate the dashes so the visual phase scrolls.
-        UpdateCrosshairPosition(cursorInWindow);
-        UpdateCrosshairAnts();
+        // Screen-spanning crosshair + marching-ants intentionally disabled — reported as
+        // distracting ("croce gigante con marching ants attorno al puntatore"). The magnifier
+        // already gives sub-pixel guidance and the dim layer frames the selection clearly
+        // enough without a full-screen cross. XAML elements (CrosshairH/V/Dark) stay in the
+        // tree at Visibility=Collapsed so a future setting can re-enable them without a XAML
+        // restructure.
     }
-
-    /// <summary>Position-only crosshair update — cheap, runs from OnMouseMove at 1000 Hz on
-    /// gaming mice without starving the dispatcher. The dash-offset animation is decoupled
-    /// (see <see cref="UpdateCrosshairAnts"/>) so we don't pay for dash recomputation on
-    /// every pointer event. Splitting them eliminated the visible lag we had when the
-    /// crosshair tried to do both per-pointer and per-tick work in the same call.</summary>
-    private void UpdateCrosshairPosition(Point cursorInWindow)
-    {
-        CrosshairH.X1 = 0; CrosshairH.X2 = ActualWidth;
-        CrosshairH.Y1 = CrosshairH.Y2 = cursorInWindow.Y;
-        CrosshairHDark.X1 = 0; CrosshairHDark.X2 = ActualWidth;
-        CrosshairHDark.Y1 = CrosshairHDark.Y2 = cursorInWindow.Y;
-        CrosshairV.Y1 = 0; CrosshairV.Y2 = ActualHeight;
-        CrosshairV.X1 = CrosshairV.X2 = cursorInWindow.X;
-        CrosshairVDark.Y1 = 0; CrosshairVDark.Y2 = ActualHeight;
-        CrosshairVDark.X1 = CrosshairVDark.X2 = cursorInWindow.X;
-
-        CrosshairH.Visibility = Visibility.Visible;
-        CrosshairHDark.Visibility = Visibility.Visible;
-        CrosshairV.Visibility = Visibility.Visible;
-        CrosshairVDark.Visibility = Visibility.Visible;
-    }
-
-    /// <summary>Animation-only update — bumps the marching-ants phase. Driven from the
-    /// magnifier tick (60 Hz) which is plenty for the dash scroll illusion.</summary>
-    private void UpdateCrosshairAnts()
-    {
-        _crosshairAntsPhase = (_crosshairAntsPhase + 0.5) % 8.0;
-        CrosshairH.StrokeDashOffset = _crosshairAntsPhase;
-        CrosshairV.StrokeDashOffset = _crosshairAntsPhase;
-        CrosshairHDark.StrokeDashOffset = _crosshairAntsPhase + 4;
-        CrosshairVDark.StrokeDashOffset = _crosshairAntsPhase + 4;
-    }
-
-    private double _crosshairAntsPhase;
 
     private void PositionMagnifierNearCursor(Point cursor)
     {

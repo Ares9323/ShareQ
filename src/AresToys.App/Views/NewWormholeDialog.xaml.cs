@@ -2,47 +2,31 @@ using System.IO;
 using System.Windows;
 using AresToys.App.Services.Wormholes;
 using Microsoft.Win32;
+using Wpf.Ui.Controls;
 
 namespace AresToys.App.Views;
 
-public partial class NewWormholeDialog : Window
+public partial class NewWormholeDialog : FluentWindow
 {
-    private bool _loaded;
-
     public NewWormholeDialog()
     {
         InitializeComponent();
         Loaded += (_, _) =>
         {
-            _loaded = true;
             TitleBox.Focus();
             TitleBox.SelectAll();
+            // No more type selection — every wormhole is a folder mirror now. Auto-open the
+            // folder picker as soon as the dialog appears (after the title field is focused)
+            // so the user can pick a folder in one click. The title auto-fills from the folder
+            // name if it's still the placeholder "Wormhole".
+            Dispatcher.BeginInvoke(new Action(() => OnBrowseClicked(this, new RoutedEventArgs())),
+                System.Windows.Threading.DispatcherPriority.Loaded);
         };
     }
 
     /// <summary>Result of an OK confirmation. Null if the dialog was cancelled. The caller hands
     /// this off to <see cref="IWormholeWindowManager"/> which materialises the record.</summary>
     public NewWormholeChoice? Result { get; private set; }
-
-    private void OnKindChanged(object sender, RoutedEventArgs e)
-    {
-        if (PortalFolderRow is null) return; // event fires during XAML init before the field is wired
-        var portal = PortalRadio.IsChecked == true;
-        PortalFolderRow.Visibility = portal ? Visibility.Visible : Visibility.Collapsed;
-
-        // Auto-open the folder picker the first time the user lands on Portal — typing a path
-        // by hand was error-prone (escaping, trailing slashes, missing quotes) and there's no
-        // real benefit to the textbox-first workflow. Only fires after Loaded so the initial
-        // Checked event on DataRadio (during XAML init) doesn't trigger anything.
-        if (portal && _loaded && string.IsNullOrWhiteSpace(FolderBox.Text))
-        {
-            // Dispatcher.BeginInvoke so the radio button finishes its visual update before the
-            // modal folder dialog opens — otherwise the radio dot can render a frame late and
-            // look unresponsive.
-            Dispatcher.BeginInvoke(new Action(() => OnBrowseClicked(this, new RoutedEventArgs())),
-                System.Windows.Threading.DispatcherPriority.Loaded);
-        }
-    }
 
     private void OnBrowseClicked(object sender, RoutedEventArgs e)
     {
@@ -73,28 +57,21 @@ public partial class NewWormholeDialog : Window
         var title = (TitleBox.Text ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(title))
         {
-            MessageBox.Show(this, "Title can't be empty.", "AresToys",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, "Title can't be empty.", "AresToys",
+                System.Windows.MessageBoxButton.OK, MessageBoxImage.Warning);
             TitleBox.Focus();
             return;
         }
 
-        if (PortalRadio.IsChecked == true)
+        var folder = (FolderBox.Text ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
         {
-            var folder = (FolderBox.Text ?? string.Empty).Trim();
-            if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
-            {
-                MessageBox.Show(this, "Pick an existing folder for the Portal wormhole to mirror.",
-                    "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
-                FolderBox.Focus();
-                return;
-            }
-            Result = new NewWormholeChoice(title, WormholeKind.Portal, folder);
+            System.Windows.MessageBox.Show(this, "Pick an existing folder for this wormhole to mirror.",
+                "AresToys", System.Windows.MessageBoxButton.OK, MessageBoxImage.Warning);
+            FolderBox.Focus();
+            return;
         }
-        else
-        {
-            Result = new NewWormholeChoice(title, WormholeKind.Data, null);
-        }
+        Result = new NewWormholeChoice(title, folder);
 
         DialogResult = true;
         Close();
@@ -109,4 +86,4 @@ public partial class NewWormholeDialog : Window
 
 /// <summary>Captures the user's choice from <see cref="NewWormholeDialog"/>. The manager turns
 /// this into a persisted <see cref="WormholeRecord"/> + a live window.</summary>
-public sealed record NewWormholeChoice(string Title, WormholeKind Kind, string? SourceFolder);
+public sealed record NewWormholeChoice(string Title, string SourceFolder);

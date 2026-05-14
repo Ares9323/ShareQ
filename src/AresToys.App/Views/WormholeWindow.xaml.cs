@@ -16,6 +16,9 @@ public partial class WormholeWindow : Window
     private static readonly string ChevronDownGlyph = char.ConvertFromUtf32(0xE70D);
     private static readonly string LockClosedGlyph  = char.ConvertFromUtf32(0xE72E);
     private static readonly string LockOpenGlyph    = char.ConvertFromUtf32(0xE785);
+    // (Per-kind glyph removed when the Shortcuts/Portal distinction was unified into a single
+    // "folder mirror" type — every wormhole is the same kind now, the chrome doesn't need to
+    // disambiguate.)
 
     /// <summary>Hard cap on Portal items rendered per wormhole. Mirrors the spec §6.4 default.
     /// Beyond this we emit a one-shot toast-style banner and truncate — large folders block
@@ -26,7 +29,23 @@ public partial class WormholeWindow : Window
     private readonly Action _onPersist;
     private readonly IconService _icons;
     private readonly string _wormholesRoot;
-    private readonly string _shortcutsDirectory;
+    // (Per-wormhole "private shortcuts directory" was the Data-kind back-store; dropped along
+    // with the Shortcuts/Folder distinction. Every wormhole is now a folder mirror.)
+    /// <summary>Callback supplied by <see cref="Services.Wormholes.WormholeWindowManager"/>
+    /// returning every persisted wormhole other than this one. Used to populate the per-item
+    /// "Move to →" submenu. Evaluated at menu-build time (not ctor) so newly created wormholes
+    /// appear in the submenu without having to recycle the window.</summary>
+    private readonly Func<IReadOnlyList<WormholeRecord>>? _listOtherRecords;
+    /// <summary>Cross-wormhole move executor — owned by the manager because it needs to touch
+    /// both the source and destination records (and the on-disk shortcuts / source folders) and
+    /// re-emit Changed events so both windows refresh in place. Null = the "Move to →" entry is
+    /// hidden (used during early wire-up / tests).</summary>
+    private readonly Func<WormholeItemViewModel, Guid, CancellationToken, Task<bool>>? _moveItemToWormhole;
+    /// <summary>Shared defaults — icon size + opacity — read on every <see cref="EffectiveIconSize"/>
+    /// + <see cref="ApplyAppearance"/> call. Null when the manager didn't wire one (older tests
+    /// / direct construction); in that case we fall through to <see cref="DesktopIconSize"/>
+    /// for icon size and the legacy 0.95 hardcoded opacity.</summary>
+    private readonly Services.Wormholes.WormholeDefaultsService? _defaults;
     private readonly ObservableCollection<WormholeItemViewModel> _items = new();
     private bool _isClosingFromManager;
     private bool _portalItemCapReached;
@@ -36,13 +55,17 @@ public partial class WormholeWindow : Window
         Action onPersist,
         IconService icons,
         string wormholesRoot,
-        string shortcutsDirectory)
+        Func<IReadOnlyList<WormholeRecord>>? listOtherRecords = null,
+        Func<WormholeItemViewModel, Guid, CancellationToken, Task<bool>>? moveItemToWormhole = null,
+        Services.Wormholes.WormholeDefaultsService? defaults = null)
     {
         _record = record;
         _onPersist = onPersist;
         _icons = icons;
         _wormholesRoot = wormholesRoot;
-        _shortcutsDirectory = shortcutsDirectory;
+        _listOtherRecords = listOtherRecords;
+        _moveItemToWormhole = moveItemToWormhole;
+        _defaults = defaults;
         InitializeComponent();
         DataContext = record;
         ItemsHost.ItemsSource = _items;
@@ -54,17 +77,10 @@ public partial class WormholeWindow : Window
 
         ApplyLockState();
         ApplyRollState();
+        ApplyAppearance();
 
-        if (_record.Kind == WormholeKind.Portal)
-        {
-            RefreshPortalItems();
-            EmptyStateHint.Text = "Folder is empty — drop files here to add them.";
-        }
-        else
-        {
-            RebuildDataItems();
-            EmptyStateHint.Text = "No items yet — drop files here.";
-        }
+        RefreshPortalItems();
+        EmptyStateHint.Text = "Folder is empty — drop files here to add them.";
         UpdateEmptyStateVisibility();
 
         // Wire the geometry-persist handlers on Loaded so WPF's initial reposition during the
@@ -80,6 +96,128 @@ public partial class WormholeWindow : Window
             if (_isClosingFromManager) return;
             _onPersist();
         };
+        // Ctrl+MouseWheel zooms tile size like Explorer's icon view. Tunneling handler on the
+        // window so it fires regardless of whether the cursor is over the ListBox or the empty
+        // state — and we can mark e.Handled = true before the ListBox sees it (which would
+        // otherwise scroll the content while we're trying to zoom).
+        PreviewMouseWheel += OnPreviewMouseWheelZoom;
+
+        // Edge-resize via WM_NCHITTEST. WindowStyle=None + AllowsTransparency=True kills WPF's
+        // native resize border; we synthesise hit-zones manually so the cursor switches to the
+        // correct resize arrow within 8 px of any edge and Windows drives the actual resize.
+        SourceInitialized += (_, _) =>
+        {
+            var helper = new System.Windows.Interop.WindowInteropHelper(this);
+            var src = System.Windows.Interop.HwndSource.FromHwnd(helper.Handle);
+            src?.AddHook(WindowProcResizeHook);
+        };
+    }
+
+    // WM_NCHITTEST handler. Constants from winuser.h: HTCLIENT=1, HTLEFT=10, HTRIGHT=11,
+    // HTTOP=12, HTTOPLEFT=13, HTTOPRIGHT=14, HTBOTTOM=15, HTBOTTOMLEFT=16, HTBOTTOMRIGHT=17.
+    // Returning any HT*EDGE/HT*CORNER tells DefWindowProc to begin a resize loop using the
+    // appropriate cursor — no further code needed on our side. Skipped when the wormhole is
+    // locked (must not resize) or rolled (only the header strip is visible; resize would
+    // expose a torn layout).
+    private IntPtr WindowProcResizeHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int WM_NCHITTEST = 0x0084;
+        if (msg != WM_NCHITTEST) return IntPtr.Zero;
+        if (_record.IsLocked || _record.IsRolled) return IntPtr.Zero;
+
+        // lParam packs screen X in the low word and screen Y in the high word. Sign-extension
+        // matters on multi-monitor setups where the secondary monitor sits at negative coords.
+        int xScreen = unchecked((short)(lParam.ToInt64() & 0xFFFF));
+        int yScreen = unchecked((short)((lParam.ToInt64() >> 16) & 0xFFFF));
+        var pos = PointFromScreen(new Point(xScreen, yScreen));
+
+        const double edge = 8;
+        bool left   = pos.X >= 0 && pos.X < edge;
+        bool right  = pos.X <= ActualWidth  && pos.X > ActualWidth  - edge;
+        bool top    = pos.Y >= 0 && pos.Y < edge;
+        bool bottom = pos.Y <= ActualHeight && pos.Y > ActualHeight - edge;
+
+        int hit = (top, bottom, left, right) switch
+        {
+            (true,  _,    true,  _   ) => 13, // HTTOPLEFT
+            (true,  _,    _,    true ) => 14, // HTTOPRIGHT
+            (_,     true, true,  _   ) => 16, // HTBOTTOMLEFT
+            (_,     true, _,    true ) => 17, // HTBOTTOMRIGHT
+            (true,  _,    _,    _    ) => 12, // HTTOP
+            (_,     true, _,    _    ) => 15, // HTBOTTOM
+            (_,     _,    true, _    ) => 10, // HTLEFT
+            (_,     _,    _,    true ) => 11, // HTRIGHT
+            _ => 0,
+        };
+        if (hit == 0) return IntPtr.Zero;   // not on an edge — let WPF handle normally
+        handled = true;
+        return new IntPtr(hit);
+    }
+
+    /// <summary>Effective tile icon size for this wormhole. Fallback chain:
+    /// per-wormhole override (<see cref="WormholeRecord.IconSizePx"/> &gt; 0) →
+    /// app-wide default (<see cref="Services.Wormholes.WormholeDefaultsService.DefaultIconSizePx"/> &gt; 0) →
+    /// user's Windows desktop icon size (<see cref="DesktopIconSize"/>). The middle layer is
+    /// what the Settings → Wormholes "Default icon size" slider drives.</summary>
+    private int EffectiveIconSize()
+    {
+        if (_record.IconSizePx > 0) return _record.IconSizePx;
+        if (_defaults is { DefaultIconSizePx: > 0 } d) return d.DefaultIconSizePx;
+        return DesktopIconSize.Get();
+    }
+
+    /// <summary>Tile padding read from the app-wide default. No per-wormhole override slot yet
+    /// (one knob is plenty until proven otherwise) — every wormhole uses the same density set
+    /// in Settings → Wormholes.</summary>
+    private int EffectiveTilePadding() => _defaults?.DefaultTilePaddingPx ?? 4;
+
+    /// <summary>Effective opacity: per-wormhole override wins, else the app-wide default
+    /// (<see cref="Services.Wormholes.WormholeDefaultsService.DefaultOpacity"/>). Final fallback
+    /// is the legacy 0.95 that the XAML used to hardcode — preserves visuals if the manager
+    /// somehow didn't wire a defaults service.</summary>
+    private double EffectiveOpacity()
+    {
+        if (_record.Appearance.OpacityOverride is { } v) return v;
+        return _defaults?.DefaultOpacity ?? 0.95;
+    }
+
+    /// <summary>Apply opacity to the two backdrop layers — body + header — leaving the
+    /// content overlay (icon tiles, labels, chrome buttons) at full opacity. Setting Opacity
+    /// on the root <c>OuterFrame</c> would cascade to every descendant including the icons,
+    /// which the user explicitly didn't want ("opacity solo allo sfondo e all'header").</summary>
+    private void ApplyAppearance()
+    {
+        var op = EffectiveOpacity();
+        BodyBackdrop.Opacity = op;
+        HeaderBackdrop.Opacity = op;
+    }
+
+    /// <summary>Cheap path: only the opacity changed (Settings slider drag). Skips
+    /// RebuildItems so the slider stays fluid even with many wormholes open.</summary>
+    internal void RefreshOpacity() => ApplyAppearance();
+
+    /// <summary>Expensive path: the icon size changed → every item VM has to be
+    /// re-constructed so it asks <see cref="IconService.GetIconAtSize"/> for the new
+    /// resolution. Use sparingly (typically once per NumberBox commit, not on every drag
+    /// tick).</summary>
+    internal void RefreshIconSize() => RebuildItems();
+
+    private void OnPreviewMouseWheelZoom(object sender, MouseWheelEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control) return;
+        // Step: 8 px per wheel tick. Enough granularity to land on Windows' standard preset
+        // sizes (32 / 48 / 64 / 96) within 1–4 ticks while still feeling smooth.
+        const int step = 8;
+        const int min = 24;
+        const int max = 256;
+        var current = EffectiveIconSize();
+        var next = e.Delta > 0 ? current + step : current - step;
+        next = Math.Clamp(next, min, max);
+        if (next == current) { e.Handled = true; return; }
+        _record.IconSizePx = next;
+        _onPersist();
+        RebuildItems();
+        e.Handled = true; // prevent ListBox from scrolling while the user is zooming
     }
 
     internal void CloseFromManager()
@@ -115,6 +253,15 @@ public partial class WormholeWindow : Window
         ApplyRollState();
     }
 
+    /// <summary>Re-enumerate the watched folder and rebuild the item tiles. Called by the
+    /// manager after the global icon-size / tile-padding defaults change so the live window
+    /// adopts the new dimensions without restart.</summary>
+    internal void RebuildItems()
+    {
+        RefreshPortalItems();
+        UpdateEmptyStateVisibility();
+    }
+
     /// <summary>One-shot Loaded handler that subscribes the geometry-persist hooks AFTER the
     /// initial Show + reposition has settled. Self-unsubscribes so a re-Loaded event (rare for
     /// a top-level window but possible) doesn't double-subscribe and double-persist every drag.</summary>
@@ -144,12 +291,11 @@ public partial class WormholeWindow : Window
 
     public event EventHandler<Guid>? DeleteRequested;
 
-    /// <summary>Re-enumerate the Portal source folder and rebuild <see cref="_items"/>. Called
-    /// from the manager's <c>FolderWatcher.Changed</c> handler (debounced 300 ms) and from the
-    /// hamburger "Refresh" entry. No-op for Data wormholes.</summary>
+    /// <summary>Re-enumerate the source folder and rebuild <see cref="_items"/>. Called from
+    /// the manager's <c>FolderWatcher.Changed</c> handler (debounced 300 ms) and from the
+    /// hamburger "Refresh" entry.</summary>
     public void RefreshPortalItems()
     {
-        if (_record.Kind != WormholeKind.Portal) return;
         var portal = _record.Portal;
         if (portal is null) return;
 
@@ -159,22 +305,26 @@ public partial class WormholeWindow : Window
         {
             if (!Directory.Exists(portal.SourcePath))
             {
-                // Source went away (drive ejected, folder deleted): leave items empty and
-                // show a banner via the empty-state slot. The watcher keeps the path so the
-                // wormhole repopulates when the folder reappears.
-                EmptyStateHint.Text = "Source folder is not available right now.";
-                UpdateEmptyStateVisibility();
+                // Source went away (drive ejected, folder deleted, manual rename): swap to
+                // the dedicated error panel which shows the missing path + a "Pick a new
+                // folder…" button so the user can repoint without going through the chrome
+                // hamburger. EmptyStateHint stays hidden — keeping both visible would
+                // crowd the small wormhole real estate.
+                ShowSourceMissingState(portal.SourcePath);
                 return;
             }
+            // Path resolves again — back to the normal empty / populated states.
+            SourceMissingPanel.Visibility = Visibility.Collapsed;
             EmptyStateHint.Text = "Folder is empty — drop files here to add them.";
 
-            // Folders first then files; both sorted by name (case-insensitive). Sort mode toggle
-            // is part of §8.6 hamburger menu — Name is the default in the spec.
+            // Source enumeration: folders + files (or just files if the user disabled subdir
+            // listing). The sort mode (Name / Modified / Type) chosen via the hamburger menu
+            // is applied in SortPortalEntries; folders are always grouped first regardless.
             IEnumerable<string> entries = portal.IncludeSubdirectoriesAsItems
                 ? Directory.EnumerateDirectories(portal.SourcePath).Concat(Directory.EnumerateFiles(portal.SourcePath))
                 : Directory.EnumerateFiles(portal.SourcePath);
 
-            var ordered = entries.OrderBy(p => Path.GetFileName(p), StringComparer.CurrentCultureIgnoreCase).ToList();
+            var ordered = SortPortalEntries(entries, portal.SortMode).ToList();
             foreach (var path in ordered)
             {
                 if (_items.Count >= PortalItemCap)
@@ -182,7 +332,7 @@ public partial class WormholeWindow : Window
                     _portalItemCapReached = true;
                     break;
                 }
-                _items.Add(new WormholeItemViewModel(path, _icons));
+                _items.Add(new WormholeItemViewModel(path, _icons, EffectiveIconSize(), EffectiveTilePadding()));
             }
         }
         catch (UnauthorizedAccessException)
@@ -246,30 +396,59 @@ public partial class WormholeWindow : Window
     }
 
     // -----------------------------------------------------------------------------------------
-    // Hamburger menu (entries differ by Data vs Portal)
+    // Hamburger menu
     // -----------------------------------------------------------------------------------------
 
     private void OnHamburgerClicked(object sender, RoutedEventArgs e)
     {
         var menu = new System.Windows.Controls.ContextMenu();
-        var isPortal = _record.Kind == WormholeKind.Portal;
 
-        var openFolder = new System.Windows.Controls.MenuItem
-        {
-            Header = isPortal ? "Open source folder" : "Open shortcuts folder",
-        };
+        var openFolder = new System.Windows.Controls.MenuItem { Header = "Open folder" };
         openFolder.Click += (_, _) => OpenAssociatedFolder();
         menu.Items.Add(openFolder);
 
-        if (isPortal)
-        {
-            var refresh = new System.Windows.Controls.MenuItem { Header = "Refresh" };
-            refresh.Click += (_, _) => RefreshPortalItems();
-            menu.Items.Add(refresh);
+        var refresh = new System.Windows.Controls.MenuItem { Header = "Refresh" };
+        refresh.Click += (_, _) => RefreshPortalItems();
+        menu.Items.Add(refresh);
 
-            var changeFolder = new System.Windows.Controls.MenuItem { Header = "Change folder…" };
-            changeFolder.Click += (_, _) => OnChangeFolder();
-            menu.Items.Add(changeFolder);
+        var changeFolder = new System.Windows.Controls.MenuItem { Header = "Change folder…" };
+        changeFolder.Click += (_, _) => OnChangeFolder();
+        menu.Items.Add(changeFolder);
+
+        // Sort by submenu. The chosen mode persists on the per-record Portal config and the
+        // items list rebuilds immediately.
+        var sortBy = new System.Windows.Controls.MenuItem { Header = "Sort by" };
+        var sortModes = new[] { "Name", "Modified", "Type" };
+        var currentSort = GetCurrentSortMode();
+        foreach (var mode in sortModes)
+        {
+            var captured = mode;
+            var item = new System.Windows.Controls.MenuItem
+            {
+                Header = mode,
+                IsCheckable = true,
+                IsChecked = string.Equals(currentSort, captured, StringComparison.OrdinalIgnoreCase),
+                StaysOpenOnClick = false,
+            };
+            item.Click += (_, _) => SetSortMode(captured);
+            sortBy.Items.Add(item);
+        }
+        menu.Items.Add(sortBy);
+
+        // Reset zoom: visible only when this wormhole carries a per-record override
+        // (Ctrl+Wheel was used at some point). Clearing it falls back through the chain
+        // to the app-wide default + DesktopIconSize, which the user can read off the
+        // Settings → Wormholes panel.
+        if (_record.IconSizePx > 0)
+        {
+            var resetZoom = new System.Windows.Controls.MenuItem { Header = "Reset zoom to default" };
+            resetZoom.Click += (_, _) =>
+            {
+                _record.IconSizePx = 0;
+                _onPersist();
+                RebuildItems();
+            };
+            menu.Items.Add(resetZoom);
         }
 
         menu.Items.Add(new System.Windows.Controls.Separator());
@@ -292,14 +471,37 @@ public partial class WormholeWindow : Window
         var delete = new System.Windows.Controls.MenuItem { Header = "Delete wormhole…" };
         delete.Click += (_, _) =>
         {
-            var confirm = MessageBox.Show(this,
-                isPortal
-                    ? $"Delete wormhole \"{_record.Title}\"?\n\nThe source folder on disk is NOT touched."
-                    : $"Delete wormhole \"{_record.Title}\"? This cannot be undone.",
+            var confirm = MessageBox.Show(OwnerForDialogs(),
+                $"Delete wormhole \"{_record.Title}\"?\n\nThe source folder on disk is NOT touched.",
                 "AresToys",
                 MessageBoxButton.OKCancel, MessageBoxImage.Question,
                 MessageBoxResult.Cancel);
             if (confirm != MessageBoxResult.OK) return;
+
+            // Second prompt: if the source folder is on disk AND empty, offer to remove it.
+            // Never auto-delete a folder with content — that's the user's data and the first
+            // dialog promised we wouldn't touch it. Empty folders are a common leftover after a
+            // "create wormhole, move stuff elsewhere, delete wormhole" workflow.
+            if (_record.Portal is { SourcePath: { Length: > 0 } src }
+                && Directory.Exists(src) && IsEmptyDirectory(src))
+            {
+                var alsoDelete = MessageBox.Show(OwnerForDialogs(),
+                    $"The source folder is empty:\n\n  {src}\n\nDelete it from disk as well?",
+                    "AresToys", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
+                if (alsoDelete == MessageBoxResult.Yes)
+                {
+                    try { Directory.Delete(src); }
+                    catch (Exception ex)
+                    {
+                        // Best-effort: a permission denied / locked-by-AV failure here shouldn't
+                        // block the wormhole record deletion below. Inform the user so they can
+                        // clean up by hand if they care.
+                        MessageBox.Show(OwnerForDialogs(),
+                            "The wormhole was deleted, but the empty folder couldn't be removed:\n" + ex.Message,
+                            "AresToys", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+            }
             DeleteRequested?.Invoke(this, _record.Id);
         };
         menu.Items.Add(delete);
@@ -310,9 +512,7 @@ public partial class WormholeWindow : Window
 
     private void OpenAssociatedFolder()
     {
-        var folder = _record.Kind == WormholeKind.Portal
-            ? _record.Portal?.SourcePath
-            : _shortcutsDirectory;
+        var folder = _record.Portal?.SourcePath;
         if (string.IsNullOrWhiteSpace(folder))
         {
             MessageBox.Show(OwnerForDialogs(),"No folder is associated with this wormhole.", "AresToys",
@@ -321,7 +521,6 @@ public partial class WormholeWindow : Window
         }
         try
         {
-            if (_record.Kind == WormholeKind.Data) Directory.CreateDirectory(folder);
             Process.Start(new ProcessStartInfo { FileName = folder, UseShellExecute = true });
         }
         catch (Exception ex)
@@ -331,9 +530,26 @@ public partial class WormholeWindow : Window
         }
     }
 
+    /// <summary>Toggle the wormhole into the "source folder unavailable" state — hides the
+    /// items + empty-state hint, surfaces the dedicated panel with the missing path and a
+    /// re-link button. Called from <see cref="RefreshPortalItems"/> when Directory.Exists
+    /// returns false. The watcher keeps the old path; if the folder reappears (USB plugged
+    /// back in, network share resumes) the next refresh tick clears this state automatically.</summary>
+    private void ShowSourceMissingState(string missingPath)
+    {
+        SourceMissingPath.Text = string.IsNullOrEmpty(missingPath) ? "(no path set)" : missingPath;
+        SourceMissingPanel.Visibility = Visibility.Visible;
+        EmptyStateHint.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>Re-link button on the source-missing error panel. Reuses the same folder-pick
+    /// flow as the hamburger "Change folder…" entry — keeps a single place where the
+    /// SourcePath mutation + persist + refresh live.</summary>
+    private void OnRelinkSourceClicked(object sender, RoutedEventArgs e) => OnChangeFolder();
+
     private void OnChangeFolder()
     {
-        if (_record.Kind != WormholeKind.Portal || _record.Portal is null) return;
+        if (_record.Portal is null) return;
         var dlg = new Microsoft.Win32.OpenFolderDialog
         {
             Title = "Pick the new source folder for this wormhole",
@@ -416,9 +632,7 @@ public partial class WormholeWindow : Window
         // Data wormhole always reads as Copy — the original source file is never touched, only
         // a .lnk is materialised. Cursor reflects this so the user can't confuse it with a
         // real file move.
-        if (_record.Kind != WormholeKind.Portal) return DragDropEffects.Copy;
-
-        // Portal mirrors Explorer's standard drag semantics:
+        // Explorer's standard drag semantics:
         //   - Ctrl  → force Copy
         //   - Shift → force Move
         //   - no modifier → Move if source and dest are on the same volume, Copy otherwise
@@ -466,62 +680,7 @@ public partial class WormholeWindow : Window
         var paths = (string[]?)e.Data.GetData(DataFormats.FileDrop);
         if (paths is null || paths.Length == 0) return;
         e.Handled = true;
-
-        if (_record.Kind == WormholeKind.Portal) DropOntoPortal(paths, e);
-        else DropOntoData(paths);
-    }
-
-    private void DropOntoData(string[] paths)
-    {
-        Directory.CreateDirectory(_shortcutsDirectory);
-        var added = 0;
-        var errors = new List<string>();
-        foreach (var path in paths)
-        {
-            try
-            {
-                var extension = Path.GetExtension(path);
-                var isShortcut = extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase);
-                var isUrl = extension.Equals(".url", StringComparison.OrdinalIgnoreCase);
-
-                string lnkPath;
-                if (isShortcut)
-                {
-                    lnkPath = ShortcutFactory.SuggestUniqueShortcutPath(_shortcutsDirectory, path, ".lnk");
-                    File.Copy(path, lnkPath, overwrite: false);
-                }
-                else if (isUrl)
-                {
-                    lnkPath = ShortcutFactory.SuggestUniqueShortcutPath(_shortcutsDirectory, path, ".url");
-                    File.Copy(path, lnkPath, overwrite: false);
-                }
-                else
-                {
-                    lnkPath = ShortcutFactory.SuggestUniqueShortcutPath(_shortcutsDirectory, path, ".lnk");
-                    ShortcutFactory.CreateLnk(lnkPath, path);
-                }
-
-                var item = new WormholeItem
-                {
-                    Id = Guid.NewGuid(),
-                    ShortcutPath = Path.GetRelativePath(_wormholesRoot, lnkPath),
-                    DisplayOrder = (_record.Data?.Items.Count ?? 0) + added,
-                };
-                _record.Data ??= new DataWormholeConfig();
-                _record.Data.Items.Add(item);
-                _items.Add(new WormholeItemViewModel(item, _wormholesRoot, _icons));
-                added++;
-            }
-            catch (Exception ex)
-            {
-                errors.Add($"{Path.GetFileName(path)}: {ex.Message}");
-            }
-        }
-        if (added > 0) _onPersist();
-        UpdateEmptyStateVisibility();
-        if (errors.Count > 0)
-            MessageBox.Show(OwnerForDialogs(),"Some items couldn't be added:\n\n" + string.Join("\n", errors),
-                "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
+        DropOntoPortal(paths, e);
     }
 
     private void DropOntoPortal(string[] paths, DragEventArgs e)
@@ -644,15 +803,53 @@ public partial class WormholeWindow : Window
     }
 
     // -----------------------------------------------------------------------------------------
-    // Items rendering
+    // Sort by — hamburger menu + persistence
     // -----------------------------------------------------------------------------------------
 
-    private void RebuildDataItems()
+    private string GetCurrentSortMode() => _record.Portal?.SortMode ?? "Name";
+
+    private void SetSortMode(string mode)
     {
-        _items.Clear();
-        if (_record.Data is null) return;
-        foreach (var item in _record.Data.Items.OrderBy(i => i.DisplayOrder))
-            _items.Add(new WormholeItemViewModel(item, _wormholesRoot, _icons));
+        if (string.IsNullOrEmpty(mode) || _record.Portal is null) return;
+        _record.Portal.SortMode = mode;
+        _onPersist();
+        RefreshPortalItems();
+    }
+
+    /// <summary>Order Portal entries: folders first (alphabetical), then files by chosen sort
+    /// mode. Folders-first mirrors Stardock and Explorer conventions — the user expects to see
+    /// directories grouped at the top regardless of the file-side sort.</summary>
+    private static IEnumerable<string> SortPortalEntries(IEnumerable<string> entries, string sortMode)
+    {
+        var materialised = entries as IList<string> ?? entries.ToList();
+        var folders = materialised.Where(Directory.Exists)
+            .OrderBy(p => Path.GetFileName(p.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
+                     StringComparer.CurrentCultureIgnoreCase);
+        var files = materialised.Where(p => !Directory.Exists(p));
+        files = sortMode switch
+        {
+            "Modified" => files.OrderByDescending(p => SafeLastWriteTime(p)),
+            "Type"     => files.OrderBy(p => Path.GetExtension(p), StringComparer.OrdinalIgnoreCase)
+                                .ThenBy(p => Path.GetFileName(p), StringComparer.CurrentCultureIgnoreCase),
+            _          => files.OrderBy(p => Path.GetFileName(p), StringComparer.CurrentCultureIgnoreCase),
+        };
+        return folders.Concat(files);
+    }
+
+    private static DateTime SafeLastWriteTime(string path)
+    {
+        try { return File.GetLastWriteTime(path); }
+        catch { return DateTime.MinValue; }
+    }
+
+    /// <summary>True if the directory exists and has zero entries (files OR subdirectories).
+    /// EnumerateFileSystemEntries is cheaper than GetFiles+GetDirectories — it streams the first
+    /// entry and we early-out. Any IO failure is treated as "not empty" so the delete-folder
+    /// prompt errs on the side of preserving the folder.</summary>
+    private static bool IsEmptyDirectory(string path)
+    {
+        try { return !Directory.EnumerateFileSystemEntries(path).Any(); }
+        catch { return false; }
     }
 
     private void UpdateEmptyStateVisibility()
@@ -665,6 +862,85 @@ public partial class WormholeWindow : Window
         if (e.ClickCount != 2) return;
         if (sender is not FrameworkElement fe) return;
         if (fe.DataContext is not WormholeItemViewModel vm) return;
+        OpenItem(vm);
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Per-item context menu — mirrors the hamburger pattern (built fresh on every right-click).
+    // Entries differ by Data vs Portal kind. Destructive entries (Remove, Rename for Portal,
+    // Move into a Portal target) all confirm before touching disk; non-destructive entries
+    // (Open, Open file location, Copy path) work even when the wormhole is locked because they
+    // don't mutate the wormhole or its source.
+    // -----------------------------------------------------------------------------------------
+
+    private void OnItemRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement fe) return;
+        if (fe.DataContext is not WormholeItemViewModel vm) return;
+        BuildItemContextMenu(vm, fe).IsOpen = true;
+        e.Handled = true;
+    }
+
+    private System.Windows.Controls.ContextMenu BuildItemContextMenu(WormholeItemViewModel vm, FrameworkElement target)
+    {
+        var menu = new System.Windows.Controls.ContextMenu { PlacementTarget = target };
+
+        var open = new System.Windows.Controls.MenuItem { Header = "Open" };
+        open.Click += (_, _) => OpenItem(vm);
+        menu.Items.Add(open);
+
+        var openLocation = new System.Windows.Controls.MenuItem { Header = "Open file location" };
+        openLocation.Click += (_, _) => OpenFileLocation(vm);
+        menu.Items.Add(openLocation);
+
+        var copyPath = new System.Windows.Controls.MenuItem { Header = "Copy path" };
+        copyPath.Click += (_, _) => CopyItemPath(vm);
+        menu.Items.Add(copyPath);
+
+        // Move to → <other wormhole>. Built only when the manager wired the callbacks AND
+        // there's at least one other wormhole to target. Empty submenu would look broken; we
+        // hide the entry instead so the menu height matches what the user can actually do.
+        if (_listOtherRecords is not null && _moveItemToWormhole is not null && !_record.IsLocked)
+        {
+            var others = _listOtherRecords().Where(r => r.Id != _record.Id).ToList();
+            if (others.Count > 0)
+            {
+                var moveTo = new System.Windows.Controls.MenuItem { Header = "Move to" };
+                foreach (var other in others)
+                {
+                    var captured = other;
+                    var entry = new System.Windows.Controls.MenuItem
+                    {
+                        Header = captured.Title,
+                    };
+                    entry.Click += async (_, _) => await PerformMoveAsync(vm, captured).ConfigureAwait(true);
+                    moveTo.Items.Add(entry);
+                }
+                menu.Items.Add(moveTo);
+            }
+        }
+
+        menu.Items.Add(new System.Windows.Controls.Separator());
+
+        // Rename / Remove are destructive: hidden entirely when locked rather than disabled so
+        // the menu height tracks usable surface (consistent with the chrome hamburger which
+        // hides "Delete wormhole" while locked).
+        if (!_record.IsLocked)
+        {
+            var rename = new System.Windows.Controls.MenuItem { Header = "Rename label…" };
+            rename.Click += (_, _) => RenameItem(vm);
+            menu.Items.Add(rename);
+
+            var remove = new System.Windows.Controls.MenuItem { Header = "Delete from disk…" };
+            remove.Click += async (_, _) => await RemoveItemAsync(vm).ConfigureAwait(true);
+            menu.Items.Add(remove);
+        }
+
+        return menu;
+    }
+
+    private void OpenItem(WormholeItemViewModel vm)
+    {
         try
         {
             Process.Start(new ProcessStartInfo { FileName = vm.AbsolutePath, UseShellExecute = true });
@@ -674,6 +950,212 @@ public partial class WormholeWindow : Window
             MessageBox.Show(OwnerForDialogs(),"Couldn't open the item:\n" + ex.Message,
                 "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    private void OpenFileLocation(WormholeItemViewModel vm)
+    {
+        // Both Data (.lnk inside our Shortcuts\) and Portal (real file) want Explorer opened
+        // with the entry pre-selected. /select,<path> is the documented gesture; Explorer
+        // refuses paths with embedded quotes so we wrap the whole arg in quotes and trust the
+        // file system not to contain literal quotes (Windows file naming forbids them).
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"/select,\"{vm.AbsolutePath}\"",
+                UseShellExecute = false,
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(OwnerForDialogs(),"Couldn't open the file location:\n" + ex.Message,
+                "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void CopyItemPath(WormholeItemViewModel vm)
+    {
+        try
+        {
+            System.Windows.Clipboard.SetText(vm.AbsolutePath);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(OwnerForDialogs(),"Couldn't copy the path:\n" + ex.Message,
+                "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void RenameItem(WormholeItemViewModel vm)
+    {
+        var initial = vm.DisplayName;
+        var next = PromptForString(OwnerForDialogs(), "AresToys — Rename", "Rename this file on disk to:", initial);
+        if (next is null) return;             // user cancelled
+        next = next.Trim();
+        if (string.IsNullOrEmpty(next) || string.Equals(next, initial, StringComparison.Ordinal)) return;
+
+        // Bail on any invalid filename char so File.Move doesn't surface the cryptic IOException.
+        if (next.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            MessageBox.Show(OwnerForDialogs(),"That name contains characters Windows doesn't allow in filenames.",
+                "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        // Preserve the extension if the user didn't include one — typical case is "rename
+        // Report.pdf to Q3 Report" expecting the .pdf to stick.
+        var sourcePath = vm.AbsolutePath;
+        var sourceExt = Path.GetExtension(sourcePath);
+        if (string.IsNullOrEmpty(Path.GetExtension(next)) && !string.IsNullOrEmpty(sourceExt))
+            next += sourceExt;
+        var dir = Path.GetDirectoryName(sourcePath);
+        if (string.IsNullOrEmpty(dir)) return;
+        var destPath = Path.Combine(dir, next);
+        if (File.Exists(destPath) || Directory.Exists(destPath))
+        {
+            MessageBox.Show(OwnerForDialogs(),"Another file with that name already exists in the folder.",
+                "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        var confirm = MessageBox.Show(OwnerForDialogs(),
+            $"Rename on disk:\n\n  {sourcePath}\n→ {destPath}",
+            "AresToys", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel);
+        if (confirm != MessageBoxResult.OK) return;
+        try
+        {
+            if (Directory.Exists(sourcePath)) Directory.Move(sourcePath, destPath);
+            else File.Move(sourcePath, destPath);
+            // FSW emits the rename → RefreshPortalItems picks up the new name in ~300 ms.
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(OwnerForDialogs(),"Rename failed:\n" + ex.Message,
+                "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async Task RemoveItemAsync(WormholeItemViewModel vm)
+    {
+        // Real file on disk → Recycle Bin (FOF_ALLOWUNDO) so the user can recover via Explorer.
+        // Confirm dialog spells out which file is going.
+        var confirm = MessageBox.Show(OwnerForDialogs(),
+            $"Send this file to the Recycle Bin?\n\n{vm.AbsolutePath}",
+            "AresToys", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel);
+        if (confirm != MessageBoxResult.OK) return;
+        if (!SendToRecycleBin(vm.AbsolutePath))
+        {
+            MessageBox.Show(OwnerForDialogs(),"Couldn't move the file to the Recycle Bin.",
+                "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        await Task.CompletedTask;
+    }
+
+    private async Task PerformMoveAsync(WormholeItemViewModel vm, WormholeRecord target)
+    {
+        if (_moveItemToWormhole is null) return;
+        try
+        {
+            // Manager owns the cross-wormhole move flow end-to-end (decision matrix per spec §7,
+            // confirm dialogs for destructive cases, refresh of both live windows). Return value
+            // is purely "succeeded?"; user-visible error / cancel toasts are already shown by the
+            // manager.
+            await _moveItemToWormhole(vm, target.Id, CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(OwnerForDialogs(),"Move failed:\n" + ex.Message,
+                "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // SHFileOperation P/Invoke — sends a single file/folder path to the Recycle Bin. We use
+    // this instead of File.Delete so users can recover from a mis-click via Explorer; SHFile-
+    // Operation is the only documented way to put items into the bin without a heavyweight
+    // dependency like Microsoft.VisualBasic. Wide-string variant; pFrom is double-null-
+    // terminated as the API requires.
+    // -----------------------------------------------------------------------------------------
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode, Pack = 1)]
+    private struct SHFILEOPSTRUCT
+    {
+        public IntPtr hwnd;
+        public uint wFunc;
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] public string pFrom;
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] public string? pTo;
+        public ushort fFlags;
+        public int fAnyOperationsAborted;
+        public IntPtr hNameMappings;
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] public string? lpszProgressTitle;
+    }
+    private const uint FO_DELETE = 0x0003;
+    private const ushort FOF_ALLOWUNDO = 0x0040;
+    private const ushort FOF_NOCONFIRMATION = 0x0010;
+    private const ushort FOF_WANTNUKEWARNING = 0x4000;
+
+    [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int SHFileOperation(ref SHFILEOPSTRUCT FileOp);
+
+    private static bool SendToRecycleBin(string path)
+    {
+        var op = new SHFILEOPSTRUCT
+        {
+            wFunc = FO_DELETE,
+            pFrom = path + '\0' + '\0',
+            fFlags = (ushort)(FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_WANTNUKEWARNING),
+        };
+        return SHFileOperation(ref op) == 0 && op.fAnyOperationsAborted == 0;
+    }
+
+    /// <summary>Modal single-line input prompt — owned by AresToys' MainWindow (not the wormhole
+    /// itself, since wormhole windows go to the desktop layer / behind everything else once
+    /// DesktopLayerHost re-enables). Returns the entered string on OK, or null on Cancel /
+    /// dialog close. Built programmatically rather than as a separate XAML file because it's a
+    /// single-shot reused only by this code path (Rename label).</summary>
+    private static string? PromptForString(Window? owner, string title, string prompt, string initialValue)
+    {
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 400, SizeToContent = SizeToContent.Height,
+            ResizeMode = ResizeMode.NoResize,
+            ShowInTaskbar = false,
+            WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+            Owner = owner,
+        };
+        var grid = new System.Windows.Controls.Grid { Margin = new Thickness(14) };
+        grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+        grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+        grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+
+        var label = new System.Windows.Controls.TextBlock { Text = prompt, Margin = new Thickness(0, 0, 0, 8), TextWrapping = TextWrapping.Wrap };
+        System.Windows.Controls.Grid.SetRow(label, 0);
+        grid.Children.Add(label);
+
+        var input = new System.Windows.Controls.TextBox { Text = initialValue ?? string.Empty };
+        System.Windows.Controls.Grid.SetRow(input, 1);
+        grid.Children.Add(input);
+
+        var buttons = new System.Windows.Controls.StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 14, 0, 0),
+        };
+        var ok = new System.Windows.Controls.Button { Content = "OK", Width = 90, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancel = new System.Windows.Controls.Button { Content = "Cancel", Width = 90, IsCancel = true };
+        string? result = null;
+        ok.Click += (_, _) => { result = input.Text; dialog.DialogResult = true; };
+        // IsCancel handles closing automatically; no Click handler needed for Cancel.
+        buttons.Children.Add(ok);
+        buttons.Children.Add(cancel);
+        System.Windows.Controls.Grid.SetRow(buttons, 2);
+        grid.Children.Add(buttons);
+
+        dialog.Content = grid;
+        input.Loaded += (_, _) => { input.Focus(); input.SelectAll(); };
+
+        return dialog.ShowDialog() == true ? result : null;
     }
 
     // -----------------------------------------------------------------------------------------
@@ -692,15 +1174,27 @@ public partial class WormholeWindow : Window
         if (_record.IsRolled)
         {
             ContentArea.Visibility = Visibility.Collapsed;
-            Height = 34;
+            // Window.MinHeight (80 in the XAML) silently clamps the rolled Height we set
+            // below — without dropping MinHeight first, the rolled wormhole stayed 80 px tall
+            // and showed ~46 px of body backdrop strip under the header. Drop it to 0 while
+            // rolled, restore on unroll.
+            //
+            // Target collapsed size: 32 (header) + 1+1 borders + ~14 strip ≈ 48 px. The thin
+            // strip is intentional — user-requested "circa il 50% dell'header" — to keep the
+            // wormhole feeling like an object that can be unrolled, not just the title bar.
+            MinHeight = 0;
+            Height = 48;
             ResizeMode = ResizeMode.NoResize;
             ChevronGlyph.Text = ChevronDownGlyph;
         }
         else
         {
             ContentArea.Visibility = Visibility.Visible;
+            // Restore MinHeight before Height so WPF lets the new Height through (resize order
+            // matters when the new value is larger than the current MinHeight).
+            MinHeight = 80;
             Height = _record.Geometry.UnrolledHeight;
-            ResizeMode = _record.IsLocked ? ResizeMode.NoResize : ResizeMode.CanResizeWithGrip;
+            ResizeMode = _record.IsLocked ? ResizeMode.NoResize : ResizeMode.CanResize;
             ChevronGlyph.Text = ChevronUpGlyph;
         }
     }
@@ -709,6 +1203,6 @@ public partial class WormholeWindow : Window
     {
         LockGlyph.Text = _record.IsLocked ? LockClosedGlyph : LockOpenGlyph;
         if (!_record.IsRolled)
-            ResizeMode = _record.IsLocked ? ResizeMode.NoResize : ResizeMode.CanResizeWithGrip;
+            ResizeMode = _record.IsLocked ? ResizeMode.NoResize : ResizeMode.CanResize;
     }
 }

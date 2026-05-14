@@ -2,16 +2,6 @@ using System.Text.Json.Serialization;
 
 namespace AresToys.App.Services.Wormholes;
 
-/// <summary>Type of wormhole. Decided at creation; never changes for an existing record (the
-/// user deletes + re-creates to switch). Data = curated list of shortcuts in a private folder;
-/// Portal = live mirror of an external folder via FileSystemWatcher (see docs/WormholesSpec.md
-/// §2). Note is reserved for fase 2 and is not part of the MVP enum.</summary>
-public enum WormholeKind
-{
-    Data,
-    Portal,
-}
-
 /// <summary>Runtime visibility state for a wormhole window. Not persisted — recalculated on
 /// every startup + every <c>WM_DISPLAYCHANGE</c>. <see cref="WormholeRecord.IsHidden"/> (which
 /// IS persisted) takes precedence: an <c>IsHidden=true</c> wormhole stays <see cref="UserHidden"/>
@@ -38,42 +28,32 @@ public sealed class WormholeGeometry
     public string? MonitorId { get; set; }
 }
 
-/// <summary>A single entry inside a Data wormhole. <see cref="ShortcutPath"/> is relative to the
-/// wormholes root (e.g. <c>Shortcuts\{wormholeId}\Notepad.lnk</c>) so a backup that zips the
-/// wormholes folder is self-contained — paths inside the wormhole survive a restore on another
-/// machine. For Portal wormholes the items are derived from the watched folder and not stored
-/// here; the JSON only carries the Portal config.</summary>
-public sealed class WormholeItem
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public string ShortcutPath { get; set; } = string.Empty;
-    public string? DisplayName { get; set; }
-    public int DisplayOrder { get; set; }
-}
-
-public sealed class DataWormholeConfig
-{
-    public List<WormholeItem> Items { get; set; } = new();
-}
-
+/// <summary>Configuration for the folder a wormhole mirrors. Every wormhole is a folder mirror
+/// now — the old "Shortcuts" variant was dropped as it boiled down to a folder mirror pointing
+/// at our own hidden Shortcuts\{guid}\ directory.</summary>
 public sealed class PortalWormholeConfig
 {
     public string SourcePath { get; set; } = string.Empty;
     public bool IncludeSubdirectoriesAsItems { get; set; } = true;
     /// <summary>Sort mode label as a string (not an enum) so future modes can be added without
-    /// breaking the persisted schema. Known values: <c>Name</c>, <c>Modified</c>, <c>Type</c>,
-    /// <c>Manual</c> (uses <see cref="WormholeItem.DisplayOrder"/>). Unknown values fall back to
-    /// <c>Name</c> at load time.</summary>
+    /// breaking the persisted schema. Known values: <c>Name</c>, <c>Modified</c>, <c>Type</c>.
+    /// Unknown values fall back to <c>Name</c> at load time.</summary>
     public string SortMode { get; set; } = "Name";
 }
 
-/// <summary>Per-wormhole appearance overrides. The MVP renders everything against the global
-/// theme; this record is present in the schema so future polish passes can add custom accent
-/// colours and opacity sliders without a migration. Nullable means "use the theme default".</summary>
+/// <summary>Per-wormhole appearance overrides. Anything that's nullable / 0-sentinel means
+/// "fall back to the app-wide default" (see <see cref="WormholeDefaultsService"/>). Per-record
+/// overrides win when present.</summary>
 public sealed class WormholeAppearance
 {
+    /// <summary>Reserved for the future "per-wormhole accent" feature: hex string like
+    /// <c>#80E1A0</c>. Null = use the global accent.</summary>
     public string? AccentOverride { get; set; }
-    public double Opacity { get; set; } = 0.85;
+
+    /// <summary>Per-wormhole opacity override. <c>null</c> = use the app-wide default from
+    /// <see cref="WormholeDefaultsService.DefaultOpacity"/>. Set via the chrome's appearance
+    /// slider; persisted through <see cref="IWormholeStore.SaveAsync"/>.</summary>
+    public double? OpacityOverride { get; set; }
 }
 
 /// <summary>Single wormhole record as persisted to <c>wormholes.json</c>. Lifecycle is owned by
@@ -84,17 +64,18 @@ public sealed class WormholeRecord
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Title { get; set; } = "Wormhole";
-    public WormholeKind Kind { get; set; } = WormholeKind.Data;
     public WormholeGeometry Geometry { get; set; } = new();
     public bool IsLocked { get; set; }
     public bool IsRolled { get; set; }
     public bool IsHidden { get; set; }
+    /// <summary>Per-wormhole icon-tile pixel size. 0 = "not set, use the system desktop icon
+    /// size at render time" (see <see cref="DesktopIconSize"/>). Any other value is the exact
+    /// pixel size the user dialed in via Ctrl+MouseWheel inside the wormhole. Persisted so the
+    /// next launch reopens at the same zoom. JSON-default 0 means existing pre-zoom wormholes
+    /// automatically pick up the desktop size without a migration step.</summary>
+    public int IconSizePx { get; set; }
     public WormholeAppearance Appearance { get; set; } = new();
-    /// <summary>Present only when <see cref="Kind"/> is <see cref="WormholeKind.Data"/>. Null
-    /// for Portal wormholes — the serializer drops null properties so a Portal record's JSON
-    /// stays clean.</summary>
-    public DataWormholeConfig? Data { get; set; }
-    public PortalWormholeConfig? Portal { get; set; }
+    public PortalWormholeConfig Portal { get; set; } = new();
 }
 
 /// <summary>Top-level container of <c>wormholes.json</c>. Carries an explicit

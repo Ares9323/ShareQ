@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using Microsoft.Extensions.Logging;
 using AresToys.App.Services.Launcher;
@@ -10,6 +11,7 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
     private readonly IWormholeStore _store;
     private readonly IconService _icons;
     private readonly DesktopLayerHost _desktopLayer;
+    private readonly WormholeDefaultsService _defaults;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<WormholeWindowManager> _logger;
     private readonly Dictionary<Guid, WormholeWindow> _live = new();
@@ -20,14 +22,44 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
         IWormholeStore store,
         IconService icons,
         DesktopLayerHost desktopLayer,
+        WormholeDefaultsService defaults,
         ILoggerFactory loggerFactory,
         ILogger<WormholeWindowManager> logger)
     {
         _store = store;
         _icons = icons;
         _desktopLayer = desktopLayer;
+        _defaults = defaults;
         _loggerFactory = loggerFactory;
         _logger = logger;
+        // Two separate paths so the cheap slider (opacity) doesn't pay the expensive rebuild
+        // (icons re-extracted via IShellItemImageFactory) the icon-size knob requires.
+        // Opacity drag was reported as laggy — fanning out RebuildItems on every slider tick
+        // was the culprit; only the backdrop opacity needs to refresh for that path.
+        _defaults.OpacityChanged     += (_, _) => RefreshAllLiveOpacity();
+        _defaults.IconSizeChanged    += (_, _) => RefreshAllLiveIconSize();
+        // TilePaddingChanged → rebuild items so the new TileWidth/TileHeight take effect. Icon
+        // cache is keyed on (path,size) and size didn't change, so re-extract is a no-op cache
+        // hit — much cheaper than the icon-size path.
+        _defaults.TilePaddingChanged += (_, _) => RefreshAllLiveIconSize();
+    }
+
+    private void RefreshAllLiveOpacity()
+    {
+        foreach (var (_, window) in _live)
+        {
+            try { window.RefreshOpacity(); }
+            catch (Exception ex) { _logger.LogWarning(ex, "RefreshOpacity failed during defaults change"); }
+        }
+    }
+
+    private void RefreshAllLiveIconSize()
+    {
+        foreach (var (_, window) in _live)
+        {
+            try { window.RefreshIconSize(); }
+            catch (Exception ex) { _logger.LogWarning(ex, "RefreshIconSize failed during defaults change"); }
+        }
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken)
@@ -57,40 +89,28 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
             try
             {
                 SpawnWindow(record);
-                _logger.LogInformation("Spawned wormhole {Id} kind={Kind} title={Title} source={Source}",
-                    record.Id, record.Kind, record.Title,
-                    record.Kind == WormholeKind.Portal ? record.Portal?.SourcePath : "<n/a>");
+                _logger.LogInformation("Spawned wormhole {Id} title={Title} source={Source}",
+                    record.Id, record.Title, record.Portal.SourcePath);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to spawn wormhole {Id} kind={Kind} title={Title}",
-                    record.Id, record.Kind, record.Title);
+                _logger.LogError(ex, "Failed to spawn wormhole {Id} title={Title}",
+                    record.Id, record.Title);
             }
         }
     }
 
-    public async Task<WormholeRecord> CreateAsync(string title, WormholeKind kind, CancellationToken cancellationToken)
+    public async Task<WormholeRecord> CreateAsync(string title, string sourceFolder, CancellationToken cancellationToken)
     {
-        // Portal-with-source overload lives below; this one stays as the simple-Data path for
-        // callers that don't know about source folders (e.g. older tray-menu stubs).
-        return await CreateAsync(title, kind, sourceFolder: null, cancellationToken).ConfigureAwait(true);
-    }
-
-    public async Task<WormholeRecord> CreateAsync(string title, WormholeKind kind, string? sourceFolder, CancellationToken cancellationToken)
-    {
-        if (kind == WormholeKind.Portal && string.IsNullOrWhiteSpace(sourceFolder))
-            throw new ArgumentException("Portal wormhole requires a source folder.", nameof(sourceFolder));
+        if (string.IsNullOrWhiteSpace(sourceFolder))
+            throw new ArgumentException("A wormhole needs a source folder.", nameof(sourceFolder));
 
         var record = new WormholeRecord
         {
             Id = Guid.NewGuid(),
             Title = string.IsNullOrWhiteSpace(title) ? "Wormhole" : title,
-            Kind = kind,
+            Portal = new PortalWormholeConfig { SourcePath = sourceFolder.Trim() },
         };
-        if (kind == WormholeKind.Data)
-            record.Data = new DataWormholeConfig();
-        else
-            record.Portal = new PortalWormholeConfig { SourcePath = sourceFolder!.Trim() };
 
         // Position roughly centred on the primary monitor, then cascade-offset so multiple
         // new wormholes don't stack perfectly on top of each other (the "I made 3 portals but
@@ -118,6 +138,7 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
 
         await _store.SaveAsync(record, cancellationToken).ConfigureAwait(true);
         SpawnWindow(record);
+        RecordChanged?.Invoke(this, record.Id);
         return record;
     }
 
@@ -170,7 +191,14 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
 
         async void PersistChange()
         {
-            try { await _store.SaveAsync(record, CancellationToken.None).ConfigureAwait(true); }
+            try
+            {
+                await _store.SaveAsync(record, CancellationToken.None).ConfigureAwait(true);
+                // Notify subscribers (Settings panel) on the UI thread. The Wormholes grid uses
+                // this to refresh its X / Y / W / H cells live as the user drags the chrome.
+                if (Application.Current is { } a) _ = a.Dispatcher.BeginInvoke(() => RecordChanged?.Invoke(this, record.Id));
+                else RecordChanged?.Invoke(this, record.Id);
+            }
             catch (Exception ex) { _logger.LogWarning(ex, "Wormhole save failed for {Id}", record.Id); }
         }
 
@@ -179,7 +207,17 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
             PersistChange,
             _icons,
             _store.WormholesRootPath,
-            _store.GetShortcutsDirectory(record.Id));
+            // "Move to →" submenu needs the list of other wormholes at click time — evaluating
+            // here lazily means new wormholes created during this window's lifetime show up
+            // without a respawn.
+            listOtherRecords: () => GetOtherRecords(record.Id),
+            // Cross-wormhole move runs end-to-end on the manager (decision matrix + persistence
+            // + refresh of both windows + confirm dialogs); the window just hands off the vm.
+            moveItemToWormhole: (vm, targetId, ct) => MoveItemAsync(record.Id, vm, targetId, ct),
+            // Shared defaults service (icon size + opacity). The window reads it on every
+            // EffectiveIconSize() / ApplyAppearance() call so the slider in Settings →
+            // Wormholes propagates live via DefaultsChanged → RefreshAllLiveAppearance above.
+            defaults: _defaults);
         window.DeleteRequested += async (_, id) =>
         {
             try { await DeleteAsync(id, CancellationToken.None).ConfigureAwait(true); }
@@ -187,10 +225,10 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
         };
         _live[record.Id] = window;
 
-        // Portal wiring: spin up a FolderWatcher pinned to this wormhole's source. The watcher
-        // fires Changed events on the dispatcher after a 300 ms quiet period; the window just
-        // re-enumerates its source folder each tick. Disposed in DeleteAsync / CloseAll.
-        if (record.Kind == WormholeKind.Portal && record.Portal is { SourcePath: { Length: > 0 } sourcePath })
+        // FolderWatcher pinned to this wormhole's source. The watcher fires Changed events on
+        // the dispatcher after a 300 ms quiet period; the window just re-enumerates its source
+        // folder each tick. Disposed in DeleteAsync / CloseAll.
+        if (record.Portal is { SourcePath: { Length: > 0 } sourcePath })
         {
             var watcher = new FolderWatcher(_loggerFactory.CreateLogger<FolderWatcher>());
             watcher.Changed += (_, _) =>
@@ -258,6 +296,8 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
         return true;
     }
 
+    public event EventHandler<Guid>? RecordChanged;
+
     public Task ReconcileAsync(WormholeRecord record, CancellationToken cancellationToken)
     {
         _live.TryGetValue(record.Id, out var window);
@@ -288,7 +328,20 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
             catch (Exception ex) { _logger.LogError(ex, "Reconcile spawn failed for {Id}", record.Id); }
             return Task.CompletedTask;
         }
-        try { window.RefreshFromRecord(); }
+        try
+        {
+            // Push geometry from record to live window. WPF's LocationChanged + SizeChanged
+            // will fire on the resulting Left/Top/Width changes; their handlers persist the
+            // same value back to the record (idempotent — saves the value we just wrote). The
+            // extra round-trip costs one SaveAsync but keeps the data flow simple (record is
+            // always the source of truth; the live window mirrors it).
+            if (Math.Abs(window.Left - record.Geometry.X) > 0.5) window.Left = record.Geometry.X;
+            if (Math.Abs(window.Top - record.Geometry.Y) > 0.5) window.Top = record.Geometry.Y;
+            if (Math.Abs(window.Width - record.Geometry.Width) > 0.5) window.Width = record.Geometry.Width;
+            if (!record.IsRolled && Math.Abs(window.Height - record.Geometry.Height) > 0.5)
+                window.Height = record.Geometry.Height;
+            window.RefreshFromRecord();
+        }
         catch (Exception ex) { _logger.LogWarning(ex, "Window refresh during reconcile failed"); }
         return Task.CompletedTask;
     }
@@ -298,6 +351,112 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
     /// recovery when wormholes end up off-screen (monitor disconnect, weird DPI scaling, layout
     /// rearrange between sessions). Each new position is also Activate()d to guarantee it ends
     /// up visible Z-order-wise.</summary>
+    public IReadOnlyList<WormholeRecord> GetOtherRecords(Guid exceptId)
+    {
+        // Synchronous snapshot via the store's in-memory cache. LoadAllAsync is idempotent and
+        // backed by a SemaphoreSlim — calling .Result here is safe because the cache is normally
+        // already hydrated (the manager called LoadAllAsync at startup) and there's no UI thread
+        // dependency in the load path.
+        var records = _store.LoadAllAsync(CancellationToken.None).GetAwaiter().GetResult();
+        return records.Where(r => r.Id != exceptId).ToList();
+    }
+
+    public async Task<bool> MoveItemAsync(Guid sourceWormholeId, WormholeItemViewModel item, Guid targetWormholeId, CancellationToken cancellationToken)
+    {
+        if (sourceWormholeId == targetWormholeId) return false;
+        var records = await _store.LoadAllAsync(cancellationToken).ConfigureAwait(true);
+        var source = records.FirstOrDefault(r => r.Id == sourceWormholeId);
+        var target = records.FirstOrDefault(r => r.Id == targetWormholeId);
+        if (source is null || target is null) return false;
+
+        return await MovePortalToPortalAsync(source, item, target, cancellationToken).ConfigureAwait(true);
+    }
+
+    private async Task<bool> MovePortalToPortalAsync(WormholeRecord source, WormholeItemViewModel vm, WormholeRecord target, CancellationToken ct)
+    {
+        if (source.Portal is null || target.Portal is null) return false;
+        var src = vm.AbsolutePath;
+        var exists = Directory.Exists(src) || File.Exists(src);
+        if (!exists)
+        {
+            ShowMoveError("The source file is no longer available.");
+            return false;
+        }
+        if (!Directory.Exists(target.Portal.SourcePath))
+        {
+            ShowMoveError($"The destination portal's source folder isn't currently available:\n{target.Portal.SourcePath}");
+            return false;
+        }
+
+        var name = Path.GetFileName(src.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var dst = UniquePath(Path.Combine(target.Portal.SourcePath, name));
+
+        var srcRoot = Path.GetPathRoot(Path.GetFullPath(src));
+        var dstRoot = Path.GetPathRoot(Path.GetFullPath(dst));
+        var crossVolume = !string.Equals(srcRoot, dstRoot, StringComparison.OrdinalIgnoreCase);
+        if (crossVolume)
+        {
+            // Cross-volume File.Move on Windows degrades to copy+delete and can be slow for big
+            // payloads — give the user a chance to back out rather than freeze on the dispatcher.
+            var confirm = MessageBox.Show(OwnerForDialogs(),
+                $"This move spans different drives:\n\n  From: {src}\n  To:   {dst}\n\n" +
+                "Large files may take a while.",
+                "AresToys", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel);
+            if (confirm != MessageBoxResult.OK) return false;
+        }
+
+        try
+        {
+            if (Directory.Exists(src)) Directory.Move(src, dst);
+            else File.Move(src, dst);
+        }
+        catch (Exception ex) { ShowMoveError("Move failed: " + ex.Message); return false; }
+        // Both source and destination Portal FSWs catch the change on their next debounce tick.
+        return true;
+    }
+
+    /// <summary>Pick a non-colliding path inside the destination folder. Mirrors the " (2)",
+    /// " (3)" suffixing logic the chrome's drop handler uses so the user experience stays
+    /// uniform between drop and "Move to". Falls back to a guid suffix after 999 collisions.</summary>
+    private static string UniquePath(string candidate)
+    {
+        if (!File.Exists(candidate) && !Directory.Exists(candidate)) return candidate;
+        var dir = Path.GetDirectoryName(candidate)!;
+        var stem = Path.GetFileNameWithoutExtension(candidate);
+        var ext = Path.GetExtension(candidate);
+        for (var n = 2; n < 1000; n++)
+        {
+            var next = Path.Combine(dir, $"{stem} ({n}){ext}");
+            if (!File.Exists(next) && !Directory.Exists(next)) return next;
+        }
+        return Path.Combine(dir, $"{stem}-{Guid.NewGuid():N}{ext}");
+    }
+
+    private void RefreshLiveWindowItems(Guid id)
+    {
+        if (!_live.TryGetValue(id, out var window)) return;
+        try { window.RebuildItems(); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Live items refresh failed for {Id}", id); }
+    }
+
+    /// <summary>Modal owner used by manager-side error / confirm dialogs. Matches the
+    /// <c>WormholeWindow.OwnerForDialogs</c> rule: never parent to a wormhole window (it lives
+    /// on the desktop layer / behind everything else once parenting is re-enabled). Falls back
+    /// to no owner if the AresToys main window doesn't have a created HWND.</summary>
+    private static Window? OwnerForDialogs()
+    {
+        var main = Application.Current?.MainWindow;
+        if (main is null) return null;
+        var helper = new System.Windows.Interop.WindowInteropHelper(main);
+        return helper.Handle != IntPtr.Zero ? main : null;
+    }
+
+    private static void ShowMoveError(string message)
+    {
+        MessageBox.Show(OwnerForDialogs(), message, "AresToys",
+            MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
     public void RecenterAll()
     {
         var screenW = SystemParameters.PrimaryScreenWidth;

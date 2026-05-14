@@ -23,6 +23,13 @@ public sealed partial class WormholeRowViewModel : ObservableObject
     [ObservableProperty] private string _title = string.Empty;
     [ObservableProperty] private bool _isLocked;
     [ObservableProperty] private bool _isHidden;
+    // Geometry fields are strings (not doubles) so the WPF TextBox bindings can hold partial /
+    // intermediate user input without immediately reverting. Commit happens on LostFocus (the
+    // default UpdateSourceTrigger), the partial-method setter parses + applies via the manager.
+    [ObservableProperty] private string _positionX = string.Empty;
+    [ObservableProperty] private string _positionY = string.Empty;
+    [ObservableProperty] private string _sizeW = string.Empty;
+    [ObservableProperty] private string _sizeH = string.Empty;
 
     public WormholeRowViewModel(
         WormholeRecord record,
@@ -42,25 +49,44 @@ public sealed partial class WormholeRowViewModel : ObservableObject
             Title = record.Title;
             IsLocked = record.IsLocked;
             IsHidden = record.IsHidden;
+            PositionX = FormatCoord(record.Geometry.X);
+            PositionY = FormatCoord(record.Geometry.Y);
+            SizeW    = FormatCoord(record.Geometry.Width);
+            SizeH    = FormatCoord(record.Geometry.Height);
         }
         finally { _suppressPersist = false; }
     }
 
     public Guid Id => Record.Id;
 
-    /// <summary>Badge label — "Shortcuts" or "Folder portal" matching the New wormhole dialog.</summary>
-    public string KindLabel => Record.Kind == WormholeKind.Portal ? "Folder portal" : "Shortcuts";
+    private static string FormatCoord(double v) => v.ToString("F0", System.Globalization.CultureInfo.InvariantCulture);
 
-    public string PositionX => $"{Record.Geometry.X:F0}";
-    public string PositionY => $"{Record.Geometry.Y:F0}";
-    public string SizeW => $"{Record.Geometry.Width:F0}";
-    public string SizeH => $"{Record.Geometry.Height:F0}";
+    /// <summary>Re-read every displayed property from the underlying record. Called by
+    /// <see cref="WormholesViewModel"/> in response to <see cref="IWormholeWindowManager.RecordChanged"/>,
+    /// which fires after the live chrome saves a drag/resize. Guarded by <see cref="_suppressPersist"/>
+    /// so the property setters don't re-persist the values we just read.</summary>
+    public void RefreshDisplay()
+    {
+        _suppressPersist = true;
+        try
+        {
+            if (Title != Record.Title) Title = Record.Title;
+            if (IsLocked != Record.IsLocked) IsLocked = Record.IsLocked;
+            if (IsHidden != Record.IsHidden) IsHidden = Record.IsHidden;
+            var x = FormatCoord(Record.Geometry.X);
+            var y = FormatCoord(Record.Geometry.Y);
+            var w = FormatCoord(Record.Geometry.Width);
+            var h = FormatCoord(Record.Geometry.Height);
+            if (PositionX != x) PositionX = x;
+            if (PositionY != y) PositionY = y;
+            if (SizeW    != w) SizeW    = w;
+            if (SizeH    != h) SizeH    = h;
+        }
+        finally { _suppressPersist = false; }
+    }
 
-    /// <summary>Tooltip shown over the Title cell — full folder path for Portal, "—" for Data
-    /// (the Shortcuts folder path is implementation-internal and not useful to surface).</summary>
-    public string Tooltip => Record.Kind == WormholeKind.Portal
-        ? (Record.Portal?.SourcePath ?? "(no source)")
-        : "Curated list of shortcuts";
+    /// <summary>Tooltip shown over the Title cell — full source folder path.</summary>
+    public string Tooltip => Record.Portal?.SourcePath ?? "(no source)";
 
     partial void OnIsLockedChanged(bool value)
     {
@@ -73,6 +99,35 @@ public sealed partial class WormholeRowViewModel : ObservableObject
     {
         if (_suppressPersist) return;
         Record.IsHidden = value;
+        Persist();
+    }
+
+    partial void OnPositionXChanged(string value) => CommitGeometryField(value, () => Record.Geometry.X, v => Record.Geometry.X = v);
+    partial void OnPositionYChanged(string value) => CommitGeometryField(value, () => Record.Geometry.Y, v => Record.Geometry.Y = v);
+    partial void OnSizeWChanged(string value)     => CommitGeometryField(value, () => Record.Geometry.Width, v =>
+    {
+        Record.Geometry.Width = v;
+    }, minimum: 80);
+    partial void OnSizeHChanged(string value)     => CommitGeometryField(value, () => Record.Geometry.Height, v =>
+    {
+        Record.Geometry.Height = v;
+        // Editing the size from the panel implies the user wants this height to stick — keep
+        // UnrolledHeight in sync so a future roll-up / unroll restores to this value.
+        if (!Record.IsRolled) Record.Geometry.UnrolledHeight = v;
+    }, minimum: 40);
+
+    /// <summary>Parse + clamp + apply a geometry textbox value. No-op when the parsed value
+    /// matches the current record state, or when the input doesn't parse (bad text just reverts
+    /// to the persisted value on next RefreshDisplay).</summary>
+    private void CommitGeometryField(string raw, Func<double> getCurrent, Action<double> apply, double minimum = 0)
+    {
+        if (_suppressPersist) return;
+        if (!double.TryParse(raw, System.Globalization.NumberStyles.Float,
+                             System.Globalization.CultureInfo.InvariantCulture, out var v))
+            return;
+        if (minimum > 0 && v < minimum) v = minimum;
+        if (Math.Abs(getCurrent() - v) < 0.5) return;
+        apply(v);
         Persist();
     }
 
@@ -89,13 +144,10 @@ public sealed partial class WormholeRowViewModel : ObservableObject
     [RelayCommand]
     private void OpenFolder()
     {
-        var folder = Record.Kind == WormholeKind.Portal
-            ? Record.Portal?.SourcePath
-            : _store.GetShortcutsDirectory(Record.Id);
+        var folder = Record.Portal?.SourcePath;
         if (string.IsNullOrWhiteSpace(folder)) return;
         try
         {
-            if (Record.Kind == WormholeKind.Data) Directory.CreateDirectory(folder);
             Process.Start(new ProcessStartInfo { FileName = folder, UseShellExecute = true });
         }
         catch (Exception ex)
@@ -109,9 +161,7 @@ public sealed partial class WormholeRowViewModel : ObservableObject
     private async Task DeleteAsync()
     {
         var confirm = MessageBox.Show(
-            Record.Kind == WormholeKind.Portal
-                ? $"Delete wormhole \"{Record.Title}\"?\n\nThe source folder on disk is NOT touched."
-                : $"Delete wormhole \"{Record.Title}\"? This cannot be undone.",
+            $"Delete wormhole \"{Record.Title}\"?\n\nThe source folder on disk is NOT touched.",
             "AresToys",
             MessageBoxButton.OKCancel, MessageBoxImage.Question,
             MessageBoxResult.Cancel);

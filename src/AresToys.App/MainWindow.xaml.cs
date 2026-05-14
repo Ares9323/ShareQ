@@ -205,6 +205,35 @@ public partial class MainWindow : FluentWindow
         _localization.CurrentTag = tag;
     }
 
+    /// <summary>Enter inside a Wormholes-tab geometry TextBox commits the current text via the
+    /// binding's UpdateSource and tabs to the next field. Without this, Enter would just stay
+    /// inside the TextBox and the user would have to click elsewhere to push the value through.</summary>
+    private void OnGeometryKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.Enter || sender is not System.Windows.Controls.TextBox tb) return;
+        var binding = tb.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty);
+        binding?.UpdateSource();
+        tb.MoveFocus(new System.Windows.Input.TraversalRequest(System.Windows.Input.FocusNavigationDirection.Next));
+        e.Handled = true;
+    }
+
+    /// <summary>Select-all on focus for the Wormholes-tab numeric inputs — usual text editor
+    /// gesture so retyping a value doesn't require dragging the selection. WPF doesn't do this
+    /// by default; <see cref="OnGeometryPreviewMouseDown"/> below handles the mouse-click case
+    /// (which otherwise places the caret at the click position before SelectAll runs).</summary>
+    private void OnGeometryGotFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TextBox tb) tb.SelectAll();
+    }
+
+    private void OnGeometryPreviewMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.TextBox tb) return;
+        if (tb.IsKeyboardFocusWithin) return; // already focused — let the user position the caret normally
+        e.Handled = true;
+        tb.Focus(); // triggers GotKeyboardFocus → OnGeometryGotFocus → SelectAll
+    }
+
     /// <summary>Re-spawn the app process and tear down the current one. Used by the language
     /// picker's "Restart" button: most surfaces re-translate live via {Markup:Loc} bindings, but
     /// already-rendered tray submenus and the few hard-coded labels we haven't migrated yet only

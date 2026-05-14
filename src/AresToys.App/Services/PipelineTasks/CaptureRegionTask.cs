@@ -50,8 +50,9 @@ public sealed class CaptureRegionTask : IPipelineTask
         // Per-workflow opt-in: when set, the overlay closes on the first valid mouse-up
         // (drag rect or snap-to-window click) without waiting for Enter — single-shot
         // semantics matching the pre-multi-region behaviour, useful for "rapid screenshot"
-        // workflows where the user never wants to add a second region.
-        var autoConfirm = (bool?)config?["autoConfirmOnFirstSelection"] ?? false;
+        // workflows where the user never wants to add a second region. Default true:
+        // multi-region is power-user opt-in, single-shot is the common case.
+        var autoConfirm = (bool?)config?["autoConfirmOnFirstSelection"] ?? true;
 
         // Snapshot synchronously BEFORE the dispatcher hop — by the time the overlay window
         // is constructed, focus has shifted to AresToys and transient UI like open dropdowns

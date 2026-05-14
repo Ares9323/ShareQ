@@ -35,6 +35,18 @@ public sealed class SingleInstanceGuard : IDisposable
     /// its ManualUpload pipeline without relaunching the whole shell.</summary>
     public const string UploadPrefix = "upload:";
 
+    /// <summary>Prefix for "create a wormhole pointing at this folder" — used by the Explorer
+    /// folder right-click context-menu entry. Secondary instance forwards the folder path, the
+    /// primary spawns a wormhole record + window with no dialog.</summary>
+    public const string CreateWormholePrefix = "create-wormhole:";
+
+    /// <summary>"Show the NewWormholeDialog so the user can pick a source folder." Used by the
+    /// Background variant of the shell verb (right-click on empty desktop / folder area) — there
+    /// the right-click target is the folder being viewed, which is rarely what the user wants
+    /// as the wormhole source (e.g. right-click on the desktop shouldn't auto-mirror Desktop).
+    /// No payload; the dialog handles folder selection itself.</summary>
+    public const string NewWormholeDialogMessage = "new-wormhole-dialog";
+
     private readonly Mutex _mutex;
     private readonly bool _isPrimary;
     private CancellationTokenSource? _serverCts;

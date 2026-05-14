@@ -68,6 +68,26 @@ public partial class App : Application
             }
         }
 
+        // --create-wormhole <folder>: folder right-click verb. Same forward-or-handle dance as
+        // --upload; the primary spawns a wormhole record with the folder as source + the folder
+        // name as title, no dialog.
+        string? createWormholePath = null;
+        for (var i = 0; i < e.Args.Length - 1; i++)
+        {
+            if (string.Equals(e.Args[i], "--create-wormhole", StringComparison.OrdinalIgnoreCase))
+            {
+                createWormholePath = e.Args[i + 1];
+                break;
+            }
+        }
+
+        // --new-wormhole-dialog: background-area right-click verb (empty space in a folder /
+        // desktop). Opens NewWormholeDialog so the user picks a folder; the folder being
+        // viewed at click time is rarely what they want to mirror (e.g. desktop background →
+        // shouldn't auto-create a Desktop-mirroring wormhole).
+        var newWormholeDialogRequested = e.Args.Any(a =>
+            string.Equals(a, "--new-wormhole-dialog", StringComparison.OrdinalIgnoreCase));
+
         var guard = new SingleInstanceGuard();
         if (!guard.IsPrimary)
         {
@@ -76,6 +96,10 @@ public partial class App : Application
             string msg;
             if (uploadPath is not null)
                 msg = SingleInstanceGuard.UploadPrefix + Path.GetFullPath(uploadPath);
+            else if (createWormholePath is not null)
+                msg = SingleInstanceGuard.CreateWormholePrefix + Path.GetFullPath(createWormholePath);
+            else if (newWormholeDialogRequested)
+                msg = SingleInstanceGuard.NewWormholeDialogMessage;
             else if (sxcuPath is not null)
                 msg = SingleInstanceGuard.SxcuPrefix + Path.GetFullPath(sxcuPath);
             else if (sxiePath is not null)
@@ -356,6 +380,7 @@ public partial class App : Application
                 services.AddSingleton<AresToys.App.Services.Wormholes.IWormholeStore,
                                       AresToys.App.Services.Wormholes.WormholeStoreJson>();
                 services.AddSingleton<AresToys.App.Services.Wormholes.DesktopLayerHost>();
+                services.AddSingleton<AresToys.App.Services.Wormholes.WormholeDefaultsService>();
                 services.AddSingleton<AresToys.App.Services.Wormholes.IWormholeWindowManager,
                                       AresToys.App.Services.Wormholes.WormholeWindowManager>();
             })
@@ -394,8 +419,22 @@ public partial class App : Application
             {
                 try
                 {
+                    // Hydrate the global wormhole defaults BEFORE the manager spawns windows —
+                    // otherwise the first frame of every wormhole renders at the built-in
+                    // fallback (95% opacity) and snaps to the persisted value a tick later.
+                    var defaults = _host!.Services.GetRequiredService<AresToys.App.Services.Wormholes.WormholeDefaultsService>();
+                    await defaults.LoadAsync(CancellationToken.None).ConfigureAwait(true);
+
                     var manager = _host!.Services.GetRequiredService<AresToys.App.Services.Wormholes.IWormholeWindowManager>();
                     await manager.InitializeAsync(CancellationToken.None);
+
+                    // Register the Explorer right-click "Create Wormhole" verb (idempotent, HKCU
+                    // — no admin). Done after the manager init so the verb only appears when
+                    // wormholes are actually working. The toggle-off side lives in the Modules
+                    // tab; when the user disables wormholes there we should unregister too —
+                    // wired through Settings UI separately.
+                    try { AresToys.App.Services.Wormholes.WormholeShellRegistration.Register(); }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"WormholeShellRegistration.Register failed: {ex}"); }
                 }
                 catch (Exception ex)
                 {
@@ -528,6 +567,15 @@ public partial class App : Application
                     var path = message[SingleInstanceGuard.UploadPrefix.Length..];
                     HandleUploadOpen(path);
                 }
+                else if (message.StartsWith(SingleInstanceGuard.CreateWormholePrefix, StringComparison.Ordinal))
+                {
+                    var path = message[SingleInstanceGuard.CreateWormholePrefix.Length..];
+                    HandleCreateWormhole(path);
+                }
+                else if (string.Equals(message, SingleInstanceGuard.NewWormholeDialogMessage, StringComparison.Ordinal))
+                {
+                    HandleNewWormholeDialog();
+                }
             });
         };
 
@@ -556,11 +604,25 @@ public partial class App : Application
             _ = Dispatcher.BeginInvoke(new Action(() => HandleUploadOpen(Path.GetFullPath(uploadPath))),
                 System.Windows.Threading.DispatcherPriority.Loaded);
         }
+        // Cold-start from the folder context-menu — "Create Wormhole" was clicked while AresToys
+        // wasn't running. Defer the spawn to Loaded priority so the wormhole manager has
+        // finished its own initialization (which itself is queued at Loaded priority above).
+        if (createWormholePath is not null)
+        {
+            _ = Dispatcher.BeginInvoke(new Action(() => HandleCreateWormhole(Path.GetFullPath(createWormholePath))),
+                System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+        if (newWormholeDialogRequested)
+        {
+            _ = Dispatcher.BeginInvoke(new Action(() => HandleNewWormholeDialog()),
+                System.Windows.Threading.DispatcherPriority.Loaded);
+        }
         guard.StartListening();
 
-        // Cold-start from the context menu (--upload) is silent: tray-only, no Settings popup.
-        // Sxcu / sxie still want the main window because their import dialogs need an Owner.
-        var startSilent = uploadPath is not null && sxcuPath is null && sxiePath is null;
+        // Cold-start from the context menu is silent: tray-only, no Settings popup. Sxcu / sxie
+        // still want the main window because their import dialogs need an Owner.
+        var startSilent = (uploadPath is not null || createWormholePath is not null || newWormholeDialogRequested)
+                          && sxcuPath is null && sxiePath is null;
         // User-controlled "Start minimized" (Settings → Settings tab): same effect as
         // --upload's silent start — tray-only on launch, the user pops the window via the
         // tray icon. Sxcu / sxie cold-starts override because their import dialogs need a
@@ -830,6 +892,95 @@ public partial class App : Application
         catch (Exception ex)
         {
             MessageBox.Show($"Couldn't start upload:\n{ex.Message}",
+                "AresToys", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>Spawn a wormhole pointing at <paramref name="folderPath"/>. Called from the
+    /// Explorer "Create Wormhole" folder right-click verb (cold-start via <c>--create-wormhole</c>
+    /// CLI or warm-forward via <see cref="SingleInstanceGuard.CreateWormholePrefix"/> on the
+    /// IPC pipe). Title defaults to the folder name; no dialog — the user already expressed
+    /// intent by clicking the menu entry. Wormholes module is auto-enabled if it was off.</summary>
+    private void HandleCreateWormhole(string folderPath)
+    {
+        try
+        {
+            if (!Directory.Exists(folderPath))
+            {
+                MessageBox.Show($"Folder not found:\n{folderPath}", "AresToys",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            var manager = _host?.Services.GetService(typeof(AresToys.App.Services.Wormholes.IWormholeWindowManager))
+                as AresToys.App.Services.Wormholes.IWormholeWindowManager;
+            if (manager is null)
+            {
+                MessageBox.Show("AresToys isn't fully initialised yet — try again in a moment.",
+                    "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            // If the module is currently off, flip it on for this process so the manager will
+            // actually spawn a window. Persisting the flag here means a future cold start picks
+            // it up automatically — the user clicked "Create Wormhole" so they want it enabled.
+            var modules = _host?.Services.GetService(typeof(ModuleSettings)) as ModuleSettings;
+            if (modules is not null && !modules.WormholesEnabled)
+            {
+                modules.WormholesEnabled = true;
+                var settingsStore = _host?.Services.GetService(typeof(AresToys.Storage.Settings.ISettingsStore))
+                    as AresToys.Storage.Settings.ISettingsStore;
+                _ = settingsStore?.SetAsync(ModuleSettings.WormholesKey, "true", sensitive: false, CancellationToken.None);
+                // The manager's InitializeAsync only runs once at startup; if Wormholes was off
+                // at boot we never spawned its DI graph. Trigger init now so the new wormhole
+                // joins a live manager.
+                _ = manager.InitializeAsync(CancellationToken.None);
+            }
+            var title = Path.GetFileName(folderPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (string.IsNullOrWhiteSpace(title)) title = "Wormhole";
+            _ = manager.CreateAsync(title, folderPath, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Couldn't create wormhole:\n{ex.Message}",
+                "AresToys", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>Open <see cref="AresToys.App.Views.NewWormholeDialog"/> so the user picks a
+    /// source folder, then spawn the wormhole. Triggered by the Background variant of the
+    /// shell verb — right-click on empty area, where the current folder is rarely what the
+    /// user wants to mirror. Pairs with <see cref="HandleCreateWormhole"/> for the auto-create
+    /// case (Item variant — right-click on a folder icon).</summary>
+    private void HandleNewWormholeDialog()
+    {
+        try
+        {
+            var manager = _host?.Services.GetService(typeof(AresToys.App.Services.Wormholes.IWormholeWindowManager))
+                as AresToys.App.Services.Wormholes.IWormholeWindowManager;
+            if (manager is null)
+            {
+                MessageBox.Show("AresToys isn't fully initialised yet — try again in a moment.",
+                    "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            // Auto-enable Wormholes module if off — the user clicked the menu so they want it on.
+            var modules = _host?.Services.GetService(typeof(ModuleSettings)) as ModuleSettings;
+            if (modules is not null && !modules.WormholesEnabled)
+            {
+                modules.WormholesEnabled = true;
+                var settingsStore = _host?.Services.GetService(typeof(AresToys.Storage.Settings.ISettingsStore))
+                    as AresToys.Storage.Settings.ISettingsStore;
+                _ = settingsStore?.SetAsync(ModuleSettings.WormholesKey, "true", sensitive: false, CancellationToken.None);
+                _ = manager.InitializeAsync(CancellationToken.None);
+            }
+
+            var dlg = new AresToys.App.Views.NewWormholeDialog();
+            if (dlg.ShowDialog() != true || dlg.Result is null) return;
+            var choice = dlg.Result;
+            _ = manager.CreateAsync(choice.Title, choice.SourceFolder, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Couldn't open the New Wormhole dialog:\n{ex.Message}",
                 "AresToys", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

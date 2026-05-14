@@ -82,10 +82,13 @@ public sealed class RecordingCoordinator
             if (!await EnsureFfmpegInstalledAsync(cancellationToken).ConfigureAwait(false)) return;
         }
 
-        // Re-use the region overlay we already use for screenshots.
+        // Re-use the region overlay we already use for screenshots, but force single-region
+        // semantics: recording a multi-region capture has no use case (ffmpeg records one
+        // contiguous rect), and the user reported the Enter-to-confirm step felt unnatural
+        // when starting a recording. AutoConfirm = first mouse-up commits the rect.
         var region = await Application.Current.Dispatcher.InvokeAsync(() =>
         {
-            var overlay = new RegionOverlayWindow();
+            var overlay = new RegionOverlayWindow { AutoConfirmOnFirstSelection = true };
             return overlay.PickRegion();
         }).Task.ConfigureAwait(false);
         if (region is null) return;

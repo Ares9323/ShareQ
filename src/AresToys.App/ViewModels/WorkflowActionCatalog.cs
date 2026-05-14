@@ -95,10 +95,13 @@ public static class WorkflowActionCatalog
             "Capture region",
             "Show the region selection overlay and capture the chosen rectangle. Skipped automatically when a payload is already in the bag (e.g. fullscreen / monitor entry-points).",
             "Capture",
-            DefaultConfigJson: "{\"autoConfirmOnFirstSelection\":false}",
+            // Default true: the multi-region workflow (drag-drag-drag-Enter) is the exception,
+            // not the rule — most users want a one-drag screenshot. Existing workflows that
+            // were saved with autoConfirmOnFirstSelection=false keep their explicit value.
+            DefaultConfigJson: "{\"autoConfirmOnFirstSelection\":true}",
             BoolParameters: new[]
             {
-                new BoolParameter("autoConfirmOnFirstSelection", "Auto-confirm on first selection (skip multi-region)", false),
+                new BoolParameter("autoConfirmOnFirstSelection", "Auto-confirm on first selection (skip multi-region)", true),
             }),
 
         new("arestoys.capture-active-window",

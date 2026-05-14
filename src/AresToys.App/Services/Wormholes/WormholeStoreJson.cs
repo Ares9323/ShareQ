@@ -53,34 +53,18 @@ public sealed class WormholeStoreJson : IWormholeStore, IDisposable
 
     public async Task<IReadOnlyList<WormholeRecord>> LoadAllAsync(CancellationToken cancellationToken)
     {
+        // Idempotent: the first caller deserializes the JSON, every subsequent call returns the
+        // cached <see cref="_cache"/>. Critical for record-reference stability: the manager
+        // hands the same WormholeRecord instance to a WormholeWindow at startup, and the
+        // Settings panel later reads from the same store; without the cache they'd get
+        // DIFFERENT instances of the same id and live-drag updates on one wouldn't be visible
+        // on the other (the panel's row VM would refresh from its stale clone). Only AresToys
+        // writes wormholes.json, so re-reading from disk on every call has no value.
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            Directory.CreateDirectory(WormholesRootPath);
-            var path = StoreFilePath;
-            if (!File.Exists(path))
-            {
-                _cache = new List<WormholeRecord>();
-                return _cache.AsReadOnly();
-            }
-
-            try
-            {
-                var raw = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
-                var file = JsonSerializer.Deserialize<WormholeStoreFile>(raw, JsonOptions);
-                _cache = file?.Wormholes ?? new List<WormholeRecord>();
-            }
-            catch (JsonException ex)
-            {
-                // Malformed file: rename it aside with a timestamp and start with an empty list.
-                // Better than crashing the module at every launch; the user can inspect the
-                // .corrupt copy if they want to recover anything by hand.
-                _logger.LogWarning(ex, "wormholes.json is malformed — renaming aside and starting fresh");
-                try { File.Move(path, path + $".corrupt-{DateTime.UtcNow:yyyyMMddHHmmss}", overwrite: false); }
-                catch (IOException) { /* best-effort */ }
-                _cache = new List<WormholeRecord>();
-            }
-            return _cache.AsReadOnly();
+            await EnsureCacheLoadedNoLockAsync(cancellationToken).ConfigureAwait(false);
+            return _cache!.AsReadOnly();
         }
         finally { _gate.Release(); }
     }
@@ -144,7 +128,17 @@ public sealed class WormholeStoreJson : IWormholeStore, IDisposable
             var raw = await File.ReadAllTextAsync(StoreFilePath, cancellationToken).ConfigureAwait(false);
             _cache = JsonSerializer.Deserialize<WormholeStoreFile>(raw, JsonOptions)?.Wormholes ?? new List<WormholeRecord>();
         }
-        catch (JsonException) { _cache = new List<WormholeRecord>(); }
+        catch (JsonException ex)
+        {
+            // Malformed file: rename aside with a timestamp and start fresh. Better than
+            // crashing the module on every launch; the .corrupt-<ts> copy is recoverable by
+            // hand. Best-effort rename — if the file is locked we still proceed with an
+            // empty in-memory cache so the app doesn't get stuck.
+            _logger.LogWarning(ex, "wormholes.json is malformed — renaming aside and starting fresh");
+            try { File.Move(StoreFilePath, StoreFilePath + $".corrupt-{DateTime.UtcNow:yyyyMMddHHmmss}", overwrite: false); }
+            catch (IOException) { /* best-effort */ }
+            _cache = new List<WormholeRecord>();
+        }
     }
 
     public void Dispose() => _gate.Dispose();

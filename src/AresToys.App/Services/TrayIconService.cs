@@ -227,7 +227,7 @@ public sealed class TrayIconService : IDisposable
                     var ok = dlg.ShowDialog() == true && dlg.Result is not null;
                     if (!ok) return;
                     var choice = dlg.Result!;
-                    _ = m.CreateAsync(choice.Title, choice.Kind, choice.SourceFolder, CancellationToken.None);
+                    _ = m.CreateAsync(choice.Title, choice.SourceFolder, CancellationToken.None);
                 })));
             // Recovery one-click when wormholes end up off-screen (multi-monitor rearrange,
             // monitor disconnect, weird DPI). Cascade-resets every live wormhole onto the

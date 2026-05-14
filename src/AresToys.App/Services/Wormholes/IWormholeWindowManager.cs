@@ -18,18 +18,12 @@ public interface IWormholeWindowManager
     /// flag.</summary>
     Task InitializeAsync(CancellationToken cancellationToken);
 
-    /// <summary>Creates a new wormhole record, persists it, spawns the window. For Data the
-    /// <paramref name="sourceFolder"/> parameter is ignored; for Portal it MUST point at an
-    /// existing folder to mirror (throws otherwise).</summary>
-    Task<WormholeRecord> CreateAsync(string title, WormholeKind kind, CancellationToken cancellationToken);
+    /// <summary>Creates a new wormhole record + window mirroring <paramref name="sourceFolder"/>.
+    /// Caller validates the folder exists.</summary>
+    Task<WormholeRecord> CreateAsync(string title, string sourceFolder, CancellationToken cancellationToken);
 
-    /// <summary>Portal-aware overload. <paramref name="sourceFolder"/> is required when
-    /// <paramref name="kind"/> is <see cref="WormholeKind.Portal"/> and ignored otherwise. The
-    /// folder is captured verbatim — caller validates existence via the New wormhole dialog.</summary>
-    Task<WormholeRecord> CreateAsync(string title, WormholeKind kind, string? sourceFolder, CancellationToken cancellationToken);
-
-    /// <summary>Removes the wormhole + its on-disk artifacts (Shortcuts folder for Data, just the
-    /// record for Portal) and closes the open window if any.</summary>
+    /// <summary>Removes the wormhole record (its on-disk folder content is owned by the user
+    /// and stays put) and closes the open window if any.</summary>
     Task DeleteAsync(Guid wormholeId, CancellationToken cancellationToken);
 
     /// <summary>Closes every live wormhole window without removing records — used by the module
@@ -43,9 +37,40 @@ public interface IWormholeWindowManager
     void RecenterAll();
 
     /// <summary>Reconcile the live window for <paramref name="record"/> with the record's
-    /// current state. Used by the Wormholes Settings panel after mutating Lock / Hidden / Title:
-    /// if IsHidden flipped true the live window is closed (record stays); if IsHidden flipped
-    /// false a new window is spawned; otherwise the live window's visuals are refreshed in
-    /// place. No-op when the wormhole module is disabled (no live windows exist).</summary>
+    /// current state. Used by the Wormholes Settings panel after mutating Lock / Hidden / Title
+    /// / Geometry: if IsHidden flipped true the live window is closed (record stays); if
+    /// IsHidden flipped false a new window is spawned; otherwise the live window's visuals are
+    /// refreshed in place AND its Left/Top/Width/Height are pushed from the record so the panel
+    /// can drive position from its TextBox inputs. No-op when the wormhole module is disabled
+    /// (no live windows exist).</summary>
     Task ReconcileAsync(WormholeRecord record, CancellationToken cancellationToken);
+
+    /// <summary>Raised when a wormhole record is persisted to disk — covers user drag/resize of
+    /// the chrome (every LocationChanged / SizeChanged on the live window flows through this),
+    /// lock / hidden / title mutations from the Settings panel, and the chrome's hamburger
+    /// actions. The Wormholes Settings tab subscribes to keep its grid display (especially the
+    /// X / Y / W / H cells) in sync with what the user does on the live wormhole. Fires on the
+    /// UI dispatcher thread.</summary>
+    event EventHandler<Guid>? RecordChanged;
+
+    /// <summary>Snapshot of every persisted wormhole record other than <paramref name="exceptId"/>.
+    /// Used by the per-item context menu in a live <c>WormholeWindow</c> to populate the
+    /// "Move to →" submenu without each window having to hold a back-reference to the store.</summary>
+    IReadOnlyList<WormholeRecord> GetOtherRecords(Guid exceptId);
+
+    /// <summary>Move a single item from <paramref name="sourceWormholeId"/> to the wormhole
+    /// identified by <paramref name="targetWormholeId"/>. Implements the spec §7 decision table:
+    /// <list type="bullet">
+    ///   <item><b>Data → Data</b>: move the <c>.lnk</c> between <c>Shortcuts\{id}\</c> folders,
+    ///         update both records.</item>
+    ///   <item><b>Data → Portal</b>: resolve the <c>.lnk</c> target, move the real file into the
+    ///         Portal's source folder (user confirm).</item>
+    ///   <item><b>Portal → Data</b>: create a <c>.lnk</c> in the target's Shortcuts folder
+    ///         pointing at the source file; source file is untouched.</item>
+    ///   <item><b>Portal → Portal</b>: move the real file between the two source folders
+    ///         (confirm dialog when crossing volumes).</item>
+    /// </list>
+    /// Returns true on success, false on user-cancel or aborted operation (error MessageBox is
+    /// surfaced inside this method).</summary>
+    Task<bool> MoveItemAsync(Guid sourceWormholeId, WormholeItemViewModel item, Guid targetWormholeId, CancellationToken cancellationToken);
 }
