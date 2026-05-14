@@ -218,12 +218,14 @@
                          so the user can confirm/discard from the keyboard regardless of
                          where focus sits. Pairs with Focusable=False on the brush radios +
                          reset buttons so those clicks don't steal focus from the default
-                         button. -->
-                    <ui:Button Content="{markup:Loc Common_Cancel}" Click="OnCancelClicked"
-                               IsCancel="True" Margin="0,0,8,0" />
+                         button. Affirmative-left / Cancel-right matches the rest of the app's
+                         dialogs (NewWormholeDialog, GradientEditorWindow, UploaderConfigDialog…). -->
                     <ui:Button x:Name="ApplyBtn" Content="{markup:Loc BgRemover_Apply}"
                                Appearance="Primary" Click="OnApplyClicked" IsDefault="True"
+                               Margin="0,0,8,0"
                                IsEnabled="{Binding IsInferenceRunning, Converter={StaticResource InverseBool}}" />
+                    <ui:Button Content="{markup:Loc Common_Cancel}" Click="OnCancelClicked"
+                               IsCancel="True" />
                 </StackPanel>
             </Border>
         </Grid>

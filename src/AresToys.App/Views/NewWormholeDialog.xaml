@@ -63,9 +63,9 @@
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <ui:Button Content="Cancel" Padding="14,4" Margin="0,0,8,0" Click="OnCancelClicked" />
-            <ui:Button x:Name="OkButton" Content="Create" Padding="14,4"
+            <ui:Button x:Name="OkButton" Content="Create" Padding="14,4" Margin="0,0,8,0"
                        Appearance="Primary" Click="OnOkClicked" />
+            <ui:Button Content="Cancel" Padding="14,4" Click="OnCancelClicked" />
         </StackPanel>
     </StackPanel>
 </Window>

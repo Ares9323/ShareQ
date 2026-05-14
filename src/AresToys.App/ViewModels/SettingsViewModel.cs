@@ -33,6 +33,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         ThemeViewModel theme,
         CategoriesViewModel categories,
         DebugViewModel debug,
+        WormholesViewModel wormholes,
         PopupWindowViewModel clipboardVm)
     {
         _autostart = autostart;
@@ -41,6 +42,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Theme = theme;
         Categories = categories;
         Debug = debug;
+        Wormholes = wormholes;
         // Initial state mirrors the registry. Future toggles persist via OnStartWithWindowsChanged.
         _suppressAutostartPersist = true;
         StartWithWindows = autostart.IsEnabled;
@@ -86,6 +88,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public ThemeViewModel Theme { get; }
     public CategoriesViewModel Categories { get; }
     public DebugViewModel Debug { get; }
+    public WormholesViewModel Wormholes { get; }
 
     [ObservableProperty]
     private SettingsTab _selectedTab = SettingsTab.Hotkeys;
@@ -287,6 +290,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool IsCaptureSelected   => SelectedTab == SettingsTab.Capture;
     public bool IsThemeSelected      => SelectedTab == SettingsTab.Theme;
     public bool IsCategoriesSelected => SelectedTab == SettingsTab.Categories;
+    public bool IsWormholesSelected  => SelectedTab == SettingsTab.Wormholes;
     public bool IsSettingsSelected   => SelectedTab == SettingsTab.Settings;
     public bool IsDebugSelected     => SelectedTab == SettingsTab.Debug;
     public bool IsAboutSelected     => SelectedTab == SettingsTab.About;
@@ -300,11 +304,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsCaptureSelected));
         OnPropertyChanged(nameof(IsThemeSelected));
         OnPropertyChanged(nameof(IsCategoriesSelected));
+        OnPropertyChanged(nameof(IsWormholesSelected));
         OnPropertyChanged(nameof(IsSettingsSelected));
         OnPropertyChanged(nameof(IsDebugSelected));
         OnPropertyChanged(nameof(IsAboutSelected));
         if (value == SettingsTab.Uploaders) _ = Uploaders.ReloadAsync();
         if (value == SettingsTab.Hotkeys) _ = Hotkeys.ReloadAsync();
+        if (value == SettingsTab.Wormholes) _ = Wormholes.ReloadAsync();
     }
 
     [RelayCommand] private void ShowUploaders() => SelectedTab = SettingsTab.Uploaders;
@@ -312,9 +318,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand] private void ShowCapture()   => SelectedTab = SettingsTab.Capture;
     [RelayCommand] private void ShowTheme()      => SelectedTab = SettingsTab.Theme;
     [RelayCommand] private void ShowCategories() => SelectedTab = SettingsTab.Categories;
+    [RelayCommand] private void ShowWormholes()  => SelectedTab = SettingsTab.Wormholes;
     [RelayCommand] private void ShowSettings()   => SelectedTab = SettingsTab.Settings;
     [RelayCommand] private void ShowDebug()     => SelectedTab = SettingsTab.Debug;
     [RelayCommand] private void ShowAbout()     => SelectedTab = SettingsTab.About;
 }
 
-public enum SettingsTab { Uploaders, Hotkeys, Capture, Theme, Categories, Settings, Debug, About }
+public enum SettingsTab { Uploaders, Hotkeys, Capture, Theme, Categories, Wormholes, Settings, Debug, About }

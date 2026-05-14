@@ -341,6 +341,7 @@ public partial class App : Application
                 services.AddSingleton<ThemeViewModel>();
                 services.AddSingleton<CategoriesViewModel>();
                 services.AddSingleton<DebugViewModel>();
+                services.AddSingleton<WormholesViewModel>();
                 services.AddSingleton<SettingsViewModel>();
                 services.AddSingleton<MainWindow>();
                 services.AddSingleton<TrayIconService>();
@@ -354,6 +355,7 @@ public partial class App : Application
                 // below gates the actual window spawning on modules.WormholesEnabled.
                 services.AddSingleton<AresToys.App.Services.Wormholes.IWormholeStore,
                                       AresToys.App.Services.Wormholes.WormholeStoreJson>();
+                services.AddSingleton<AresToys.App.Services.Wormholes.DesktopLayerHost>();
                 services.AddSingleton<AresToys.App.Services.Wormholes.IWormholeWindowManager,
                                       AresToys.App.Services.Wormholes.WormholeWindowManager>();
             })

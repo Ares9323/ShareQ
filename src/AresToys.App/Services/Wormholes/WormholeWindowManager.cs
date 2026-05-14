@@ -9,6 +9,7 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
 {
     private readonly IWormholeStore _store;
     private readonly IconService _icons;
+    private readonly DesktopLayerHost _desktopLayer;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<WormholeWindowManager> _logger;
     private readonly Dictionary<Guid, WormholeWindow> _live = new();
@@ -18,11 +19,13 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
     public WormholeWindowManager(
         IWormholeStore store,
         IconService icons,
+        DesktopLayerHost desktopLayer,
         ILoggerFactory loggerFactory,
         ILogger<WormholeWindowManager> logger)
     {
         _store = store;
         _icons = icons;
+        _desktopLayer = desktopLayer;
         _loggerFactory = loggerFactory;
         _logger = logger;
     }
@@ -154,6 +157,17 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
     private void SpawnWindow(WormholeRecord record)
     {
         if (_live.ContainsKey(record.Id)) return;
+        // Recover wormholes whose persisted geometry sits off the visible virtual screen — can
+        // happen after a monitor disconnect, a DPI-aware coord drift, or (the recent regression)
+        // a SetParent that shifted positions out of the visible range. Snap to primary monitor
+        // centre and persist the new coords so the next launch is clean.
+        if (SnapGeometryIfOffscreen(record))
+        {
+            _logger.LogWarning("Wormhole {Id} geometry was off-screen ({X}, {Y}); snapped to primary",
+                record.Id, record.Geometry.X, record.Geometry.Y);
+            _ = _store.SaveAsync(record, CancellationToken.None);
+        }
+
         async void PersistChange()
         {
             try { await _store.SaveAsync(record, CancellationToken.None).ConfigureAwait(true); }
@@ -193,10 +207,15 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
             _watchers[record.Id] = watcher;
         }
 
-        // Show + Activate: with Topmost=True the window should already be on top of everything,
-        // but on multi-monitor + PerMonitorV2 setups some users report wormholes spawning behind
-        // their other always-on-top windows. Activate() forces a focus pass that bumps Z order
-        // even when topmost alone wasn't enough.
+        // WorkerW / Progman parenting is temporarily disabled — see DesktopLayerHost.cs. The
+        // SetParent call succeeds on Win11 24H2+ via the Progman-child strategy, but the
+        // coordinate space of the reparented window shifts to the parent's client area which
+        // doesn't match WPF's screen-coord Left/Top from the persisted record. Result: every
+        // wormhole loads off-screen by the delta between virtual origin and Progman client
+        // origin. Until we add proper ScreenToClient conversion + persistence in client coords,
+        // wormholes ship as regular top-level WPF windows (not Topmost): they go behind every
+        // other app on click, and minimize on Win+D. Trade-off for the v1 — desktop-layer
+        // semantics (Win+D reveals, never minimized) come back once the coord conversion lands.
         if (Application.Current is { } current)
             current.Dispatcher.Invoke(() => { window.Show(); window.Activate(); });
         else { window.Show(); window.Activate(); }
@@ -209,6 +228,69 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
         _logger.LogInformation("Wormhole {Id} window placed at Left={Left} Top={Top} (asked X={X} Y={Y}), Width={W} Height={H}, IsVisible={Visible}, IsActive={Active}",
             record.Id, window.Left, window.Top, record.Geometry.X, record.Geometry.Y,
             window.Width, window.Height, window.IsVisible, window.IsActive);
+    }
+
+    /// <summary>If the wormhole's persisted geometry would render mostly off-screen against the
+    /// current virtual-screen rect, mutate the record's <see cref="WormholeGeometry"/> to a
+    /// safe centred position on the primary monitor. Returns true when a snap occurred so the
+    /// caller can persist the corrected geometry. Threshold = at least a small thumbnail
+    /// (32×80 px) of the window must be inside the virtual rect; below that we treat the
+    /// record as effectively invisible and recover.</summary>
+    private static bool SnapGeometryIfOffscreen(WormholeRecord record)
+    {
+        var virtualLeft = SystemParameters.VirtualScreenLeft;
+        var virtualTop = SystemParameters.VirtualScreenTop;
+        var virtualRight = virtualLeft + SystemParameters.VirtualScreenWidth;
+        var virtualBottom = virtualTop + SystemParameters.VirtualScreenHeight;
+
+        var visLeft = Math.Max(virtualLeft, record.Geometry.X);
+        var visTop = Math.Max(virtualTop, record.Geometry.Y);
+        var visRight = Math.Min(virtualRight, record.Geometry.X + record.Geometry.Width);
+        var visBottom = Math.Min(virtualBottom, record.Geometry.Y + record.Geometry.Height);
+        var visW = Math.Max(0, visRight - visLeft);
+        var visH = Math.Max(0, visBottom - visTop);
+        if (visW * visH >= 32 * 80) return false; // enough of the chrome is visible
+
+        var screenW = SystemParameters.PrimaryScreenWidth;
+        var screenH = SystemParameters.PrimaryScreenHeight;
+        record.Geometry.X = Math.Max(20, (screenW - record.Geometry.Width) / 2);
+        record.Geometry.Y = Math.Max(20, (screenH - record.Geometry.Height) / 2);
+        return true;
+    }
+
+    public Task ReconcileAsync(WormholeRecord record, CancellationToken cancellationToken)
+    {
+        _live.TryGetValue(record.Id, out var window);
+        if (record.IsHidden)
+        {
+            // Caller already persisted the record; closing the window here matches the chrome
+            // hamburger "Hide" path — record survives, window goes away. No-op if there was no
+            // live window (e.g. record was already hidden when the user toggled Hidden→Hidden).
+            if (window is not null)
+            {
+                _live.Remove(record.Id);
+                if (_watchers.TryGetValue(record.Id, out var w))
+                {
+                    _watchers.Remove(record.Id);
+                    try { w.Dispose(); } catch (Exception ex) { _logger.LogWarning(ex, "Watcher dispose during reconcile failed"); }
+                }
+                try { window.CloseFromManager(); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Window close during reconcile failed"); }
+            }
+            return Task.CompletedTask;
+        }
+
+        // record.IsHidden == false. If we don't already have a live window for it, spawn one;
+        // otherwise refresh the existing window's visual state (Lock toggle, Title rename).
+        if (window is null)
+        {
+            try { SpawnWindow(record); }
+            catch (Exception ex) { _logger.LogError(ex, "Reconcile spawn failed for {Id}", record.Id); }
+            return Task.CompletedTask;
+        }
+        try { window.RefreshFromRecord(); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Window refresh during reconcile failed"); }
+        return Task.CompletedTask;
     }
 
     /// <summary>Reposition every live wormhole onto the primary monitor in a cascade, then

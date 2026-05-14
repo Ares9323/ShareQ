@@ -240,13 +240,14 @@
                 </Border>
             </Grid>
 
-            <!-- OK / Cancel footer -->
+            <!-- OK / Cancel footer — affirmative on the left, Cancel on the right (project-wide
+                 convention; matches the other dialogs in src/AresToys.App/Views/). -->
             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"
                         Margin="12,0,12,12">
-                <ui:Button Content="{Markup:Loc Common_Cancel}" Width="90" Margin="0,0,8,0"
+                <ui:Button Content="{Markup:Loc Common_Ok}" Width="90" Margin="0,0,8,0"
+                           Appearance="Primary" IsDefault="True" Click="OnOkClicked" />
+                <ui:Button Content="{Markup:Loc Common_Cancel}" Width="90"
                            IsCancel="True" Click="OnCancelClicked" />
-                <ui:Button Content="{Markup:Loc Common_Ok}" Width="90" Appearance="Primary"
-                           IsDefault="True" Click="OnOkClicked" />
             </StackPanel>
         </Grid>
     </Border>

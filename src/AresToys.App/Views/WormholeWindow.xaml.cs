@@ -88,6 +88,33 @@ public partial class WormholeWindow : Window
         Close();
     }
 
+    /// <summary>Pick a sensible owner for MessageBox / sub-dialogs spawned from the wormhole.
+    /// We never use <c>this</c> because the wormhole is parented to <c>WorkerW</c> (desktop
+    /// layer) — a dialog inheriting that parenting falls behind every other app the moment it
+    /// shows. <c>Application.MainWindow</c> (the AresToys settings window) is normally hidden
+    /// but its handle is created, which is enough to give MessageBox a real top-level owner;
+    /// when it's null we let MessageBox position itself at screen centre, no owner.</summary>
+    private static Window? OwnerForDialogs()
+    {
+        var main = Application.Current?.MainWindow;
+        if (main is null) return null;
+        var helper = new System.Windows.Interop.WindowInteropHelper(main);
+        return helper.Handle != IntPtr.Zero ? main : null;
+    }
+
+    /// <summary>Re-apply title / lock / roll state from the underlying record. Called by
+    /// <see cref="AresToys.App.Services.Wormholes.WormholeWindowManager.ReconcileAsync"/> when the
+    /// record was mutated from outside the chrome (typically the Wormholes Settings tab toggling
+    /// Lock or renaming). <c>WormholeRecord</c> isn't INPC, so we force the DataContext re-bind
+    /// in the same way <see cref="CommitInlineRename"/> does.</summary>
+    public void RefreshFromRecord()
+    {
+        DataContext = null;
+        DataContext = _record;
+        ApplyLockState();
+        ApplyRollState();
+    }
+
     /// <summary>One-shot Loaded handler that subscribes the geometry-persist hooks AFTER the
     /// initial Show + reposition has settled. Self-unsubscribes so a re-Loaded event (rare for
     /// a top-level window but possible) doesn't double-subscribe and double-persist every drag.</summary>
@@ -288,7 +315,7 @@ public partial class WormholeWindow : Window
             : _shortcutsDirectory;
         if (string.IsNullOrWhiteSpace(folder))
         {
-            MessageBox.Show(this, "No folder is associated with this wormhole.", "AresToys",
+            MessageBox.Show(OwnerForDialogs(),"No folder is associated with this wormhole.", "AresToys",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -299,7 +326,7 @@ public partial class WormholeWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, "Couldn't open the folder:\n" + ex.Message,
+            MessageBox.Show(OwnerForDialogs(),"Couldn't open the folder:\n" + ex.Message,
                 "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
@@ -493,7 +520,7 @@ public partial class WormholeWindow : Window
         if (added > 0) _onPersist();
         UpdateEmptyStateVisibility();
         if (errors.Count > 0)
-            MessageBox.Show(this, "Some items couldn't be added:\n\n" + string.Join("\n", errors),
+            MessageBox.Show(OwnerForDialogs(),"Some items couldn't be added:\n\n" + string.Join("\n", errors),
                 "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
@@ -503,7 +530,7 @@ public partial class WormholeWindow : Window
         var dest = _record.Portal.SourcePath;
         if (!Directory.Exists(dest))
         {
-            MessageBox.Show(this, "The Portal source folder isn't currently available.",
+            MessageBox.Show(OwnerForDialogs(),"The Portal source folder isn't currently available.",
                 "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -566,7 +593,7 @@ public partial class WormholeWindow : Window
         // No manual refresh — the FolderWatcher will pick the changes up after its 300 ms tick
         // and the manager calls RefreshPortalItems(). Only show errors here.
         if (errors.Count > 0)
-            MessageBox.Show(this, "Some items couldn't be moved/copied:\n\n" + string.Join("\n", errors),
+            MessageBox.Show(OwnerForDialogs(),"Some items couldn't be moved/copied:\n\n" + string.Join("\n", errors),
                 "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
@@ -644,7 +671,7 @@ public partial class WormholeWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, "Couldn't open the item:\n" + ex.Message,
+            MessageBox.Show(OwnerForDialogs(),"Couldn't open the item:\n" + ex.Message,
                 "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }

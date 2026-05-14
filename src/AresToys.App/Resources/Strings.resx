@@ -84,6 +84,17 @@
   <data name="Tray_NewWormhole" xml:space="preserve"><value>New wormhole…</value></data>
   <data name="Tray_RecenterWormholes" xml:space="preserve"><value>Bring all wormholes here</value></data>
   <data name="Tray_Wormholes" xml:space="preserve"><value>Wormholes</value></data>
+  <data name="Sidebar_Wormholes" xml:space="preserve"><value>Wormholes</value></data>
+  <data name="Wormholes_Blurb" xml:space="preserve"><value>Manage every wormhole you own. Toggle visibility, lock the geometry, open the underlying folder, or remove a wormhole entirely.</value></data>
+  <data name="Wormholes_NewButton" xml:space="preserve"><value>+ New wormhole</value></data>
+  <data name="Wormholes_RefreshButton" xml:space="preserve"><value>Refresh</value></data>
+  <data name="Wormholes_ColTitle" xml:space="preserve"><value>Title</value></data>
+  <data name="Wormholes_ColKind" xml:space="preserve"><value>Type</value></data>
+  <data name="Wormholes_ColLock" xml:space="preserve"><value>Lock</value></data>
+  <data name="Wormholes_ColHidden" xml:space="preserve"><value>Hidden</value></data>
+  <data name="Wormholes_EmptyState" xml:space="preserve"><value>No wormholes yet. Click "+ New wormhole" or use the tray menu to create one.</value></data>
+  <data name="Wormholes_OpenFolderTooltip" xml:space="preserve"><value>Open the underlying folder in Explorer</value></data>
+  <data name="Wormholes_DeleteTooltip" xml:space="preserve"><value>Delete this wormhole (the source folder on disk is not touched)</value></data>
   <data name="Tray_UploadFile" xml:space="preserve"><value>Upload file…</value></data>
   <data name="Tray_UploadFromClipboard" xml:space="preserve"><value>Upload from clipboard</value></data>
   <data name="Tray_OpenClipboard" xml:space="preserve"><value>Open clipboard</value></data>

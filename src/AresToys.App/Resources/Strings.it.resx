@@ -83,6 +83,17 @@
   <data name="Tray_NewWormhole" xml:space="preserve"><value>Nuovo wormhole…</value></data>
   <data name="Tray_RecenterWormholes" xml:space="preserve"><value>Porta qui tutti i wormhole</value></data>
   <data name="Tray_Wormholes" xml:space="preserve"><value>Wormholes</value></data>
+  <data name="Sidebar_Wormholes" xml:space="preserve"><value>Wormholes</value></data>
+  <data name="Wormholes_Blurb" xml:space="preserve"><value>Gestisci tutti i wormhole che possiedi. Nascondi o mostra, blocca la geometria, apri la cartella sottostante, o eliminane uno.</value></data>
+  <data name="Wormholes_NewButton" xml:space="preserve"><value>+ Nuovo wormhole</value></data>
+  <data name="Wormholes_RefreshButton" xml:space="preserve"><value>Aggiorna</value></data>
+  <data name="Wormholes_ColTitle" xml:space="preserve"><value>Titolo</value></data>
+  <data name="Wormholes_ColKind" xml:space="preserve"><value>Tipo</value></data>
+  <data name="Wormholes_ColLock" xml:space="preserve"><value>Blocco</value></data>
+  <data name="Wormholes_ColHidden" xml:space="preserve"><value>Nascosto</value></data>
+  <data name="Wormholes_EmptyState" xml:space="preserve"><value>Nessun wormhole. Clicca "+ Nuovo wormhole" o usa il menu tray per crearne uno.</value></data>
+  <data name="Wormholes_OpenFolderTooltip" xml:space="preserve"><value>Apri in Explorer la cartella sottostante</value></data>
+  <data name="Wormholes_DeleteTooltip" xml:space="preserve"><value>Elimina il wormhole (la cartella sorgente sul disco non viene toccata)</value></data>
   <data name="Tray_UploadFile" xml:space="preserve"><value>Upload file…</value></data>
   <data name="Tray_UploadFromClipboard" xml:space="preserve"><value>Upload dagli appunti</value></data>
   <data name="Tray_OpenClipboard" xml:space="preserve"><value>Apri appunti</value></data>

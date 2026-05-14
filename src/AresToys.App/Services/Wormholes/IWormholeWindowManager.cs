@@ -41,4 +41,11 @@ public interface IWormholeWindowManager
     /// off-screen — monitor disconnect, weird DPI scaling, multi-monitor layout change between
     /// sessions.</summary>
     void RecenterAll();
+
+    /// <summary>Reconcile the live window for <paramref name="record"/> with the record's
+    /// current state. Used by the Wormholes Settings panel after mutating Lock / Hidden / Title:
+    /// if IsHidden flipped true the live window is closed (record stays); if IsHidden flipped
+    /// false a new window is spawned; otherwise the live window's visuals are refreshed in
+    /// place. No-op when the wormhole module is disabled (no live windows exist).</summary>
+    Task ReconcileAsync(WormholeRecord record, CancellationToken cancellationToken);
 }
