@@ -208,6 +208,17 @@ public sealed class TrayIconService : IDisposable
                 win.Show();
                 win.Activate();
             })))));
+        // Wormholes entry under Tools — gated on the module flag. The full New / Manage flow
+        // (dialog, list grid in Settings) lands in a follow-up; the skeleton just exposes a
+        // one-click "spawn a default Data wormhole at the cursor" so the user can verify the
+        // chassis works end-to-end.
+        if (_modules.WormholesEnabled)
+        {
+            tools.Items.Add(BuildMenuItem(Strings.Tray_NewWormhole,
+                () => Run<AresToys.App.Services.Wormholes.IWormholeWindowManager>(m =>
+                    _ = m.CreateAsync("Wormhole", AresToys.App.Services.Wormholes.WormholeKind.Data,
+                                       CancellationToken.None))));
+        }
         menu.Items.Add(tools);
 
         menu.Items.Add(new Separator());

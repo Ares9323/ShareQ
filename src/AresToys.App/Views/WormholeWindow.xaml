@@ -1,0 +1,144 @@
+<Window x:Class="AresToys.App.Views.WormholeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:markup="clr-namespace:AresToys.App.Markup"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        ResizeMode="CanResizeWithGrip"
+        Width="320" Height="240"
+        MinWidth="220" MinHeight="80"
+        Title="Wormhole">
+    <Window.Resources>
+        <!-- Roll-up animation. Duration kept short (200 ms) per the spec — anything longer
+             reads as sluggish for a header-button click. -->
+        <Storyboard x:Key="RollUpStoryboard">
+            <DoubleAnimation Storyboard.TargetName="ContentArea"
+                             Storyboard.TargetProperty="(FrameworkElement.Height)"
+                             Duration="0:0:0.2"
+                             To="0" />
+        </Storyboard>
+    </Window.Resources>
+
+    <!-- Outer border: rounded corners + theme accent. The fence chrome reads against the
+         desktop wallpaper, so we keep it slightly transparent to feel like a "soft layer"
+         rather than a hard floating panel. Border + shadow combo done with DropShadowEffect
+         for cheap perceived depth (no ShadowDepth=0 GPU cost worth optimising further). -->
+    <Border CornerRadius="6"
+            Background="{DynamicResource Surface1Brush}"
+            Opacity="0.92"
+            BorderBrush="{DynamicResource AccentBackgroundBrush}"
+            BorderThickness="1"
+            MouseDown="OnContentAreaMouseDown">
+        <Border.Effect>
+            <DropShadowEffect Color="Black" BlurRadius="12" ShadowDepth="0" Opacity="0.45" />
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Header chrome. Layout: [chevron] [title-as-drag-handle] [spacer] [lock] [hamburger].
+                 Buttons sit at fixed slots so muscle memory is consistent across wormholes.
+                 Wrapped in a Border with matching top CornerRadius (6,6,0,0): WPF children don't
+                 inherit the parent Border's clip, so an opaque header Grid would paint over the
+                 outer rounded corners. The Border here is what gives the header its top-corner
+                 rounding; the bottom corners stay sharp to butt against the content area. -->
+            <Border Grid.Row="0" Height="32" CornerRadius="6,6,0,0"
+                    Background="{DynamicResource Surface2Brush}"
+                    MouseLeftButtonDown="OnHeaderMouseDown"
+                    MouseLeftButtonUp="OnHeaderMouseUp">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Chevron: toggle roll-up. Caret rotates ⌃↔⌄ via RenderTransform set from
+                     code-behind so the same button serves both states. -->
+                <Button x:Name="ChevronButton"
+                        Grid.Column="0"
+                        Width="28" Height="28"
+                        Margin="2,2,0,2"
+                        Padding="0"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Click="OnChevronClicked"
+                        ToolTip="Roll up / unroll">
+                    <TextBlock x:Name="ChevronGlyph"
+                               Text="&#xE70E;"
+                               FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="12"
+                               Foreground="{DynamicResource AccentForegroundBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+
+                <!-- Title: inline rename comes in M-Wormholes-A polish pass; for the skeleton it's
+                     a TextBlock + the click is captured by the parent Grid for drag handling. -->
+                <TextBlock x:Name="TitleText"
+                           Grid.Column="1"
+                           Text="{Binding Title}"
+                           Foreground="{DynamicResource AccentForegroundBrush}"
+                           FontSize="13" FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Margin="6,0,8,0"
+                           TextTrimming="CharacterEllipsis" />
+
+                <Button x:Name="LockButton"
+                        Grid.Column="2"
+                        Width="28" Height="28"
+                        Margin="0,2"
+                        Padding="0"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Click="OnLockClicked"
+                        ToolTip="Lock / unlock">
+                    <TextBlock x:Name="LockGlyph"
+                               Text="&#xE785;"
+                               FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="12"
+                               Foreground="{DynamicResource AccentForegroundBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+
+                <Button x:Name="HamburgerButton"
+                        Grid.Column="3"
+                        Width="28" Height="28"
+                        Margin="0,2,4,2"
+                        Padding="0"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Click="OnHamburgerClicked"
+                        ToolTip="Menu">
+                    <TextBlock Text="&#xE700;"
+                               FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                               FontSize="14"
+                               Foreground="{DynamicResource AccentForegroundBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+            </Grid>
+            </Border>
+
+            <!-- Content area: placeholder for the items WrapPanel. Items rendering lands in the
+                 next pass (alongside DataDropPolicy). For the skeleton we just show a hint so
+                 the empty wormhole still has something visible to confirm the window spawned. -->
+            <Border x:Name="ContentArea"
+                    Grid.Row="1"
+                    Padding="12"
+                    Background="Transparent">
+                <TextBlock Text="No items yet — drop files here (coming next)."
+                           Foreground="{DynamicResource AccentForegroundDarkBrush}"
+                           FontSize="11"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           TextWrapping="Wrap" TextAlignment="Center" />
+            </Border>
+        </Grid>
+    </Border>
+</Window>

@@ -348,6 +348,14 @@ public partial class App : Application
                 // (Clipboard, Launcher, Wormholes). Populated below from the persisted settings
                 // keys *after* the host is built, before any eager init runs.
                 services.AddSingleton<ModuleSettings>();
+
+                // Wormholes (M-Wormholes-A skeleton — see docs/WormholesSpec.md). Registered
+                // unconditionally so the services resolve from anywhere; the eager init path
+                // below gates the actual window spawning on modules.WormholesEnabled.
+                services.AddSingleton<AresToys.App.Services.Wormholes.IWormholeStore,
+                                      AresToys.App.Services.Wormholes.WormholeStoreJson>();
+                services.AddSingleton<AresToys.App.Services.Wormholes.IWormholeWindowManager,
+                                      AresToys.App.Services.Wormholes.WormholeWindowManager>();
             })
             .Build();
 
@@ -372,6 +380,27 @@ public partial class App : Application
         modules.ClipboardEnabled = !string.Equals(clipboardModuleRaw, "false", StringComparison.OrdinalIgnoreCase);
         modules.LauncherEnabled  = !string.Equals(launcherModuleRaw,  "false", StringComparison.OrdinalIgnoreCase);
         modules.WormholesEnabled =  string.Equals(wormholesModuleRaw, "true",  StringComparison.OrdinalIgnoreCase);
+
+        // Wormholes manager init: hydrates records from wormholes.json and spawns a window per
+        // non-hidden record. Skipped entirely when the module is off — the JSON file is never
+        // even touched so the disk + memory footprint of disabled wormholes is zero. Run on a
+        // Loaded-priority dispatcher continuation so the main window is up first; the wormhole
+        // windows can take their time hydrating in the background.
+        if (modules.WormholesEnabled)
+        {
+            _ = Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, async () =>
+            {
+                try
+                {
+                    var manager = _host!.Services.GetRequiredService<AresToys.App.Services.Wormholes.IWormholeWindowManager>();
+                    await manager.InitializeAsync(CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    _host!.Services.GetService<ILogger<App>>()?.LogWarning(ex, "Wormholes init failed");
+                }
+            });
+        }
 
         // Apply the user's theme BEFORE any window resolves: ThemeService writes to App.Resources
         // and to WPF-UI's accent manager, both of which are read at control-template instantiation
@@ -879,6 +908,10 @@ public partial class App : Application
             _host.Services.GetService<ClipboardIngestionService>()?.Dispose();
             _host.Services.GetService<IClipboardListener>()?.Dispose();
             _host.Services.GetService<TrayIconService>()?.Dispose();
+            // Close any live wormhole windows so their Closing handler doesn't try to persist
+            // mid-shutdown. The records are already in sync (every geometry change flushes); a
+            // no-op CloseAll on a module that was never initialised is intentional.
+            _host.Services.GetService<AresToys.App.Services.Wormholes.IWormholeWindowManager>()?.CloseAll();
             _host.Services.GetService<SingleInstanceGuard>()?.Dispose();
             _host.Services.GetService<ExternalTextEditorService>()?.Dispose();
             await _host.StopAsync(TimeSpan.FromSeconds(2));

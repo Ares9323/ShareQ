@@ -1534,7 +1534,16 @@ namespace AresToys.App.Resources {
                 return ResourceManager.GetString("Tray_QrGenerator", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to New wormhole….
+        /// </summary>
+        public static string Tray_NewWormhole {
+            get {
+                return ResourceManager.GetString("Tray_NewWormhole", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Quit.
         /// </summary>
