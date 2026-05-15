@@ -41,6 +41,17 @@ public partial class WormholeWindow : Window
     private bool _isClosingFromManager;
     private bool _portalItemCapReached;
 
+    /// <summary>Paths currently in the "cut" state — tile shown at 50 % opacity. Tracked
+    /// separately from the VM list because the VMs are recreated on every refresh tick (so
+    /// the IsCutMarked flag would lose its setting on the next FileSystemWatcher pulse);
+    /// after each rebuild we re-apply the flag from this set. Cleared when the clipboard
+    /// stops carrying our cut payload (WM_CLIPBOARDUPDATE detects the takeover).</summary>
+    private readonly HashSet<string> _cutPaths = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>HWND of this window — cached at SourceInitialized so the Closed handler can
+    /// unregister the clipboard listener without re-resolving the HwndSource.</summary>
+    private IntPtr _clipboardOwnerHwnd;
+
     /// <summary>Live filter applied on top of <see cref="_items"/> via the default CollectionView.
     /// Empty / whitespace → no filter (every item passes). Refreshed on debounce-tick after the
     /// user finishes typing in <c>SearchBox</c>. Match is a case-insensitive substring against
@@ -120,6 +131,18 @@ public partial class WormholeWindow : Window
             var helper = new System.Windows.Interop.WindowInteropHelper(this);
             var src = System.Windows.Interop.HwndSource.FromHwnd(helper.Handle);
             src?.AddHook(WindowProcResizeHook);
+            // Register for clipboard change notifications so we can clear the "cut" tint on
+            // selected items when the clipboard's content stops being ours (the user pressed
+            // Ctrl+X then copied/cut something else, or some other process took over). The
+            // hook stays installed for the window's lifetime; Closed unregisters.
+            _clipboardOwnerHwnd = helper.Handle;
+            _ = AddClipboardFormatListener(_clipboardOwnerHwnd);
+            src?.AddHook(WindowProcClipboardHook);
+        };
+        Closed += (_, _) =>
+        {
+            if (_clipboardOwnerHwnd != IntPtr.Zero)
+                _ = RemoveClipboardFormatListener(_clipboardOwnerHwnd);
         };
     }
 
@@ -366,6 +389,10 @@ public partial class WormholeWindow : Window
                 }
                 _items.Add(new WormholeItemViewModel(path, _icons, EffectiveIconSize(), EffectiveTilePadding()));
             }
+            // Re-apply the "cut" tint on the freshly-built VMs — the previous instances were
+            // dropped along with their IsCutMarked flag, but the path set is still live as
+            // long as the clipboard carries it.
+            ReapplyCutMarks();
         }
         catch (UnauthorizedAccessException)
         {
@@ -775,14 +802,23 @@ public partial class WormholeWindow : Window
     // Drop handling — branches on Data vs Portal kind
     // -----------------------------------------------------------------------------------------
 
+    /// <summary>Latched flag tracking whether the in-progress drag is using the right mouse
+    /// button. We sample it on every DragOver tick because at OnDrop time the button is already
+    /// being released and the flag in the final <see cref="DragEventArgs.KeyStates"/> may have
+    /// cleared. Used to switch the drop path from "default move/copy" to the Explorer-style
+    /// "Copy here / Move here / Create shortcut here / Cancel" context menu.</summary>
+    private bool _lastDragWasRightButton;
+
     private void OnDragEnter(object sender, DragEventArgs e)
     {
+        _lastDragWasRightButton = (e.KeyStates & DragDropKeyStates.RightMouseButton) != 0;
         e.Effects = ResolveDropEffect(e);
         e.Handled = true;
     }
 
     private void OnDragOver(object sender, DragEventArgs e)
     {
+        _lastDragWasRightButton = (e.KeyStates & DragDropKeyStates.RightMouseButton) != 0;
         e.Effects = ResolveDropEffect(e);
         e.Handled = true;
     }
@@ -842,10 +878,63 @@ public partial class WormholeWindow : Window
         var paths = (string[]?)e.Data.GetData(DataFormats.FileDrop);
         if (paths is null || paths.Length == 0) return;
         e.Handled = true;
-        DropOntoPortal(paths, e);
+
+        // Right-button drag → show the Explorer-style choice menu instead of executing the
+        // default move/copy heuristic. Latched in DragOver above because the right button has
+        // already been released by the time OnDrop fires, so reading e.KeyStates here would
+        // give a false negative.
+        if (_lastDragWasRightButton)
+        {
+            ShowRightDragDropMenu(paths);
+            _lastDragWasRightButton = false;
+            return;
+        }
+        _lastDragWasRightButton = false;
+        DropOntoPortal(paths, RightDragChoice.None,
+            ctrl:  (e.KeyStates & DragDropKeyStates.ControlKey) == DragDropKeyStates.ControlKey,
+            shift: (e.KeyStates & DragDropKeyStates.ShiftKey)   == DragDropKeyStates.ShiftKey);
     }
 
-    private void DropOntoPortal(string[] paths, DragEventArgs e)
+    /// <summary>Forced choice for a right-button drag-and-drop. None = use the legacy
+    /// Move/Copy heuristic (Ctrl/Shift modifiers + same-volume rule); the other values bypass
+    /// the heuristic and run the requested operation on every source path.</summary>
+    private enum RightDragChoice { None, Copy, Move, Shortcut }
+
+    /// <summary>Build + show the Explorer-style "Copy here / Move here / Create shortcut here /
+    /// Cancel" menu at the current mouse position. Uses a plain WPF ContextMenu — wpf-ui's
+    /// dark theme picks it up automatically, so the chrome matches the rest of AresToys
+    /// without a custom template. Each entry routes back through <see cref="DropOntoPortal"/>
+    /// with the forced choice set.</summary>
+    private void ShowRightDragDropMenu(string[] paths)
+    {
+        var menu = new System.Windows.Controls.ContextMenu
+        {
+            Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint,
+        };
+
+        var copy = new System.Windows.Controls.MenuItem { Header = "Copy here" };
+        copy.Click += (_, _) => DropOntoPortal(paths, RightDragChoice.Copy, ctrl: false, shift: false);
+        menu.Items.Add(copy);
+
+        var move = new System.Windows.Controls.MenuItem { Header = "Move here" };
+        move.Click += (_, _) => DropOntoPortal(paths, RightDragChoice.Move, ctrl: false, shift: false);
+        menu.Items.Add(move);
+
+        var shortcut = new System.Windows.Controls.MenuItem { Header = "Create shortcut here" };
+        shortcut.Click += (_, _) => DropOntoPortal(paths, RightDragChoice.Shortcut, ctrl: false, shift: false);
+        menu.Items.Add(shortcut);
+
+        menu.Items.Add(new System.Windows.Controls.Separator());
+
+        // Cancel = dismiss the menu, do nothing. The menu auto-closes on click anywhere else
+        // (Esc / click-outside), Cancel just gives the user an explicit out to match Explorer.
+        var cancel = new System.Windows.Controls.MenuItem { Header = "Cancel" };
+        menu.Items.Add(cancel);
+
+        menu.IsOpen = true;
+    }
+
+    private void DropOntoPortal(string[] paths, RightDragChoice choice, bool ctrl, bool shift)
     {
         if (_record.Portal is null || string.IsNullOrWhiteSpace(_record.Portal.SourcePath)) return;
         var dest = _record.Portal.SourcePath;
@@ -860,10 +949,16 @@ public partial class WormholeWindow : Window
         // Ctrl forces Copy, Shift forces Move, otherwise same-volume drags Move and cross-volume
         // drags Copy. Evaluated per item so a mixed-volume batch (e.g. user drags 2 files from
         // C:\ and 1 from D:\ at the same time) gets the right behaviour for each.
-        var ctrl  = (e.KeyStates & DragDropKeyStates.ControlKey) == DragDropKeyStates.ControlKey;
-        var shift = (e.KeyStates & DragDropKeyStates.ShiftKey)   == DragDropKeyStates.ShiftKey;
-        bool ShouldMove(string source) =>
-            !ctrl && (shift || IsSameVolume(source, dest));
+        //
+        // RightDragChoice (when the menu picked an explicit verb) overrides everything: the
+        // user told us exactly what to do, no heuristics.
+        bool ShouldMove(string source) => choice switch
+        {
+            RightDragChoice.Move     => true,
+            RightDragChoice.Copy     => false,
+            RightDragChoice.Shortcut => false, // shortcut path handled separately below
+            _                        => !ctrl && (shift || IsSameVolume(source, dest)),
+        };
 
         var errors = new List<string>();
         foreach (var source in paths)
@@ -872,11 +967,13 @@ public partial class WormholeWindow : Window
             {
                 // Skip a self-drop (dragging an item from the same source folder back in) —
                 // the operation would either be a same-path Move (NOP) or a Copy that would
-                // create "name (2)" pointlessly.
+                // create "name (2)" pointlessly. Exception: Shortcut creation on a self-drop
+                // is still valid (creates a .lnk next to the original — same as Explorer).
                 var srcDir = Directory.Exists(source)
                     ? Path.GetDirectoryName(source.TrimEnd(Path.DirectorySeparatorChar))
                     : Path.GetDirectoryName(source);
-                if (string.Equals(srcDir, dest, StringComparison.OrdinalIgnoreCase)) continue;
+                if (string.Equals(srcDir, dest, StringComparison.OrdinalIgnoreCase)
+                    && choice != RightDragChoice.Shortcut) continue;
 
                 // Block any drop that would put a folder inside itself or one of its descendants
                 // (recursion-into-self). Catches: dropping the wormhole's own source folder onto
@@ -891,6 +988,18 @@ public partial class WormholeWindow : Window
                 }
 
                 var name = Path.GetFileName(source.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+
+                // Shortcut path: write a .lnk next to the source path. Explorer uses
+                // "<name> - Shortcut.lnk" as the default filename when creating shortcuts via
+                // its right-click drag menu; we match that for consistency.
+                if (choice == RightDragChoice.Shortcut)
+                {
+                    var shortcutName = $"{name} - Shortcut.lnk";
+                    var shortcutPath = UniqueTargetPath(Path.Combine(dest, shortcutName));
+                    CreateShellShortcut(source, shortcutPath);
+                    continue;
+                }
+
                 var targetPath = Path.Combine(dest, name);
                 targetPath = UniqueTargetPath(targetPath);
 
@@ -1085,6 +1194,7 @@ public partial class WormholeWindow : Window
             var paths = SelectedItemPaths();
             if (paths.Length == 0) return;
             SetClipboardFiles(paths, cut: true);
+            MarkPathsAsCut(paths);
             e.Handled = true;
             return;
         }
@@ -1106,6 +1216,98 @@ public partial class WormholeWindow : Window
         .Select(vm => vm.AbsolutePath)
         .Where(p => !string.IsNullOrEmpty(p))
         .ToArray();
+
+    /// <summary>Mark a batch of paths as "in cut state" — their tiles render at 50 % opacity
+    /// (binding driven by <see cref="WormholeItemViewModel.IsCutMarked"/>). Also stamps the
+    /// paths into <see cref="_cutPaths"/> so a refresh-driven VM rebuild can re-apply the
+    /// flag. Clears any previously-marked items first so a new Ctrl+X supersedes the old
+    /// selection — Explorer behaves the same way.</summary>
+    private void MarkPathsAsCut(string[] paths)
+    {
+        // Drop the previous cut set first so a fresh Ctrl+X doesn't leave stale fade-out on
+        // items from the last gesture.
+        foreach (var vm in _items)
+        {
+            if (vm.IsCutMarked) vm.IsCutMarked = false;
+        }
+        _cutPaths.Clear();
+        foreach (var p in paths) _cutPaths.Add(p);
+        foreach (var vm in _items)
+        {
+            if (_cutPaths.Contains(vm.AbsolutePath)) vm.IsCutMarked = true;
+        }
+    }
+
+    /// <summary>Drop the cut state on every tile and forget the cached path set. Called when
+    /// the clipboard no longer carries our paths (paste happened somewhere, or another app
+    /// took over the clipboard).</summary>
+    private void ClearCutState()
+    {
+        if (_cutPaths.Count == 0) return;
+        _cutPaths.Clear();
+        foreach (var vm in _items)
+        {
+            if (vm.IsCutMarked) vm.IsCutMarked = false;
+        }
+    }
+
+    /// <summary>Re-apply <see cref="_cutPaths"/> against the current <see cref="_items"/> set
+    /// after the FileSystemWatcher-driven rebuild. The new VM instances start with IsCutMarked
+    /// = false; we flip them back to true for any path still in the cut set. Called from
+    /// RebuildItems / RefreshPortalItems after the collection has been repopulated.</summary>
+    internal void ReapplyCutMarks()
+    {
+        if (_cutPaths.Count == 0) return;
+        foreach (var vm in _items)
+        {
+            if (_cutPaths.Contains(vm.AbsolutePath) && !vm.IsCutMarked)
+                vm.IsCutMarked = true;
+        }
+    }
+
+    /// <summary>WM_CLIPBOARDUPDATE arrives whenever the clipboard's owner changes. If the new
+    /// payload no longer matches the FileDrop list we wrote (Ctrl+X session is over —
+    /// pasted, replaced, or someone else copied something), clear the cut tint. The check
+    /// reads the live clipboard once and compares against our cached path set; mismatch =
+    /// drop the marks.</summary>
+    private IntPtr WindowProcClipboardHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int WM_CLIPBOARDUPDATE = 0x031D;
+        if (msg != WM_CLIPBOARDUPDATE) return IntPtr.Zero;
+        if (_cutPaths.Count == 0) return IntPtr.Zero;
+        try
+        {
+            if (!System.Windows.Clipboard.ContainsFileDropList())
+            {
+                ClearCutState();
+                return IntPtr.Zero;
+            }
+            var list = System.Windows.Clipboard.GetFileDropList();
+            var live = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in list) if (p is not null) live.Add(p);
+            // Mismatch on count or content → our session is over.
+            if (live.Count != _cutPaths.Count || !live.SetEquals(_cutPaths))
+            {
+                ClearCutState();
+            }
+        }
+        catch
+        {
+            // Clipboard race / locked by another app — be conservative and drop the marks.
+            // Worst case the user sees the cut highlight disappear once; better than a stale
+            // fade that never recovers.
+            ClearCutState();
+        }
+        return IntPtr.Zero;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool AddClipboardFormatListener(IntPtr hwnd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
 
     /// <summary>Push a list of filesystem paths onto the Windows clipboard in the standard
     /// CF_HDROP format Explorer also writes. The <c>Preferred DropEffect</c> shell-clipboard
@@ -1177,17 +1379,31 @@ public partial class WormholeWindow : Window
     // Explorer surfaces.
     // -----------------------------------------------------------------------------------------
 
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode, Pack = 1)]
+    // pFrom / pTo are IntPtr (not C# string) because the LPWStr marshaller would truncate the
+    // wide-string at the first embedded NUL — which is exactly the byte SHFileOperation uses
+    // to separate paths in the multi-file list AND to mark the end of the list (double NUL).
+    // String marshalling delivers the kernel a buffer with just the first path's content
+    // followed by a single NUL, after which the shell scans into uninitialised memory looking
+    // for the second NUL terminator → reliable 0xC0000005 access violation. Manual HGlobal
+    // allocation of the full double-NUL-terminated buffer is the documented workaround.
+    //
+    // No `Pack = 1` here: older pinvoke.net snippets carry the attribute over from the 32-bit
+    // era when shellapi.h shipped the struct inside a #pragma pack(1) block, but on x64 the
+    // IntPtr / pointer fields require natural 8-byte alignment — forcing 1-byte packing makes
+    // SHFileOperation read pFrom from a misaligned address and access-violate. The CLR's
+    // default sequential layout naturally aligns each field on its size, which matches the
+    // shellapi.h struct on modern 64-bit builds.
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
     private struct SHFILEOPSTRUCT
     {
         public IntPtr hwnd;
         public uint wFunc;
-        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] public string pFrom;
-        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] public string? pTo;
+        public IntPtr pFrom;
+        public IntPtr pTo;
         public ushort fFlags;
         public int fAnyOperationsAborted;
         public IntPtr hNameMappings;
-        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] public string? lpszProgressTitle;
+        public IntPtr lpszProgressTitle;
     }
     private const uint FO_MOVE   = 0x0001;
     private const uint FO_COPY   = 0x0002;
@@ -1200,21 +1416,124 @@ public partial class WormholeWindow : Window
     [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
     private static extern int SHFileOperation(ref SHFILEOPSTRUCT FileOp);
 
+    // -----------------------------------------------------------------------------------------
+    // IShellLink / IPersistFile — used by the right-button drag "Create shortcut here" path.
+    // Two COM interfaces give us everything we need: IShellLinkW.SetPath fills the target,
+    // IPersistFile.Save writes the .lnk to disk. No third-party deps, ~25 lines of marshalling.
+    // -----------------------------------------------------------------------------------------
+
+    [System.Runtime.InteropServices.ComImport]
+    [System.Runtime.InteropServices.Guid("00021401-0000-0000-C000-000000000046")]
+    private class CShellLink { }
+
+    [System.Runtime.InteropServices.ComImport]
+    [System.Runtime.InteropServices.Guid("000214F9-0000-0000-C000-000000000046")]
+    [System.Runtime.InteropServices.InterfaceType(System.Runtime.InteropServices.ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellLinkW
+    {
+        // Declared in vtable order; only SetPath / SetIconLocation are called below but the
+        // earlier slots must be present so the indices line up. Using IntPtr for unused
+        // out-parameter buffers keeps the marshalling cheap and self-contained.
+        void GetPath(IntPtr pszFile, int cch, IntPtr pfd, uint fFlags);
+        void GetIDList(out IntPtr ppidl);
+        void SetIDList(IntPtr pidl);
+        void GetDescription(IntPtr pszName, int cch);
+        void SetDescription([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string pszName);
+        void GetWorkingDirectory(IntPtr pszDir, int cch);
+        void SetWorkingDirectory([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string pszDir);
+        void GetArguments(IntPtr pszArgs, int cch);
+        void SetArguments([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string pszArgs);
+        void GetHotkey(out ushort pwHotkey);
+        void SetHotkey(ushort wHotkey);
+        void GetShowCmd(out int piShowCmd);
+        void SetShowCmd(int iShowCmd);
+        void GetIconLocation(IntPtr pszIconPath, int cch, out int piIcon);
+        void SetIconLocation([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string pszIconPath, int iIcon);
+        void SetRelativePath([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string pszPathRel, uint dwReserved);
+        void Resolve(IntPtr hwnd, uint fFlags);
+        void SetPath([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string pszFile);
+    }
+
+    [System.Runtime.InteropServices.ComImport]
+    [System.Runtime.InteropServices.Guid("0000010B-0000-0000-C000-000000000046")]
+    [System.Runtime.InteropServices.InterfaceType(System.Runtime.InteropServices.ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IPersistFile
+    {
+        void GetClassID(out Guid pClassID);
+        [System.Runtime.InteropServices.PreserveSig] int IsDirty();
+        void Load([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string pszFileName, uint dwMode);
+        void Save([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string pszFileName, [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)] bool fRemember);
+        void SaveCompleted([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string pszFileName);
+        void GetCurFile([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] out string ppszFileName);
+    }
+
+    /// <summary>Write a Windows .lnk shortcut at <paramref name="shortcutPath"/> pointing at
+    /// <paramref name="targetPath"/>. Mirrors what Explorer does when the user picks
+    /// "Create shortcut here" from the right-button drag menu — same icon, same working
+    /// directory (the target's parent).</summary>
+    private static void CreateShellShortcut(string targetPath, string shortcutPath)
+    {
+        var link = (IShellLinkW)new CShellLink();
+        try
+        {
+            link.SetPath(targetPath);
+            var workingDir = System.IO.Path.GetDirectoryName(targetPath);
+            if (!string.IsNullOrEmpty(workingDir)) link.SetWorkingDirectory(workingDir);
+            // Inherit the target's icon — Explorer's default for .lnk creation. Index 0 picks
+            // the first icon from the target's icon resource (or the file-type association for
+            // non-PE files / folders).
+            link.SetIconLocation(targetPath, 0);
+            ((IPersistFile)link).Save(shortcutPath, true);
+        }
+        finally
+        {
+            System.Runtime.InteropServices.Marshal.ReleaseComObject(link);
+        }
+    }
+
+    /// <summary>Allocate an unmanaged double-NUL-terminated UTF-16 path list in the format
+    /// SHFileOperation expects: <c>path1\0path2\0…\0pathN\0\0</c>. Caller MUST free with
+    /// <see cref="System.Runtime.InteropServices.Marshal.FreeHGlobal"/>. Pre-computes the total
+    /// char count so the buffer size is exact (no overallocation).</summary>
+    private static IntPtr AllocDoubleNullTerminatedList(string[] paths)
+    {
+        var totalChars = 1; // final terminating NUL
+        foreach (var p in paths) totalChars += p.Length + 1;
+        var buffer = System.Runtime.InteropServices.Marshal.AllocHGlobal(totalChars * sizeof(char));
+        var offset = 0;
+        foreach (var p in paths)
+        {
+            for (var i = 0; i < p.Length; i++)
+            {
+                System.Runtime.InteropServices.Marshal.WriteInt16(buffer, offset, (short)p[i]);
+                offset += sizeof(char);
+            }
+            System.Runtime.InteropServices.Marshal.WriteInt16(buffer, offset, 0); // per-path NUL
+            offset += sizeof(char);
+        }
+        System.Runtime.InteropServices.Marshal.WriteInt16(buffer, offset, 0); // final NUL (the "double null" marker)
+        return buffer;
+    }
+
     /// <summary>Send one or more paths to the Recycle Bin (or permanently delete when
-    /// <paramref name="permanent"/> is true). pFrom needs a double-null terminator and per-path
-    /// NUL separators — that's the wide-string convention SHFileOperation expects.</summary>
+    /// <paramref name="permanent"/> is true). Multi-select supported via the double-NUL path
+    /// list format SHFileOperation expects.</summary>
     private static void SendPathsToRecycleBin(string[] paths, bool permanent)
     {
         if (paths.Length == 0) return;
-        var pFrom = string.Join('\0', paths) + "\0\0";
-        var flags = permanent
-            ? (ushort)FOF_WANTNUKEWARNING                       // user gets the shell's permanent-delete prompt
-            : (ushort)(FOF_ALLOWUNDO | FOF_NOCONFIRMATION);     // silent recycle, recoverable
-        var op = new SHFILEOPSTRUCT { wFunc = FO_DELETE, pFrom = pFrom, fFlags = flags };
-        // Return is non-zero on shell-side error / user-cancel — irrelevant here, the shell
-        // already surfaced whatever message it wanted to. Discard explicitly to silence the
-        // CA1806 analyzer.
-        _ = SHFileOperation(ref op);
+        var pFrom = AllocDoubleNullTerminatedList(paths);
+        try
+        {
+            var flags = permanent
+                ? (ushort)FOF_WANTNUKEWARNING                       // user gets the shell's permanent-delete prompt
+                : (ushort)(FOF_ALLOWUNDO | FOF_NOCONFIRMATION);     // silent recycle, recoverable
+            var op = new SHFILEOPSTRUCT { wFunc = FO_DELETE, pFrom = pFrom, fFlags = flags };
+            // Return is non-zero on shell-side error / user-cancel — irrelevant here, the shell
+            // already surfaced whatever message it wanted to. Discard explicitly to silence the
+            // CA1806 analyzer.
+            _ = SHFileOperation(ref op);
+        }
+        finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(pFrom); }
     }
 
     /// <summary>Move-or-copy a batch of paths into a destination directory. The shell's
@@ -1223,21 +1542,29 @@ public partial class WormholeWindow : Window
     private static void ShellCopyOrMove(string[] paths, string destFolder, bool move)
     {
         if (paths.Length == 0) return;
-        var pFrom = string.Join('\0', paths) + "\0\0";
-        var pTo   = destFolder + "\0\0";
-        var op = new SHFILEOPSTRUCT
+        var pFrom = AllocDoubleNullTerminatedList(paths);
+        var pTo   = AllocDoubleNullTerminatedList(new[] { destFolder });
+        try
         {
-            wFunc = move ? FO_MOVE : FO_COPY,
-            pFrom = pFrom,
-            pTo   = pTo,
-            fFlags = FOF_ALLOWUNDO,
-        };
-        _ = SHFileOperation(ref op);
+            var op = new SHFILEOPSTRUCT
+            {
+                wFunc = move ? FO_MOVE : FO_COPY,
+                pFrom = pFrom,
+                pTo   = pTo,
+                fFlags = FOF_ALLOWUNDO,
+            };
+            _ = SHFileOperation(ref op);
+        }
+        finally
+        {
+            System.Runtime.InteropServices.Marshal.FreeHGlobal(pFrom);
+            System.Runtime.InteropServices.Marshal.FreeHGlobal(pTo);
+        }
     }
 
     /// <summary>Launch the item via shell verb — the default verb (Open) for the file type.
     /// Wired to the double-click handler on each tile; never called from the right-click flow
-    /// any more (which goes straight to the shell context menu and lets the user pick Open
+    /// anymore (which goes straight to the shell context menu and lets the user pick Open
     /// themselves).</summary>
     private void OpenItem(WormholeItemViewModel vm)
     {

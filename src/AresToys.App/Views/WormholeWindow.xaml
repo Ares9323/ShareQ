@@ -254,6 +254,7 @@
                                         Cursor="Hand"
                                         Width="{Binding TileWidth}"
                                         Height="{Binding TileHeight}"
+                                        Opacity="{Binding IsCutMarked, Converter={StaticResource BoolToOpacity}}"
                                         MouseLeftButtonDown="OnItemMouseDown"
                                         MouseRightButtonUp="OnItemRightButtonUp">
                                     <!-- Grid (not StackPanel) for the icon+label split: row 0 sizes

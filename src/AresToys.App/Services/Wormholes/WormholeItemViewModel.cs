@@ -42,6 +42,15 @@ public sealed partial class WormholeItemViewModel : ObservableObject
     [ObservableProperty]
     private BitmapSource? _icon;
 
+    /// <summary>True while this item is in the "cut" state — the user pressed Ctrl+X in the
+    /// hosting wormhole and the clipboard still carries the corresponding CF_HDROP. Bound to
+    /// the tile's Opacity via the BoolToOpacityConverter so cut items render at 50 % opacity,
+    /// matching Explorer's behaviour. Reset when the user pastes elsewhere or when something
+    /// else takes over the clipboard (detected by the hosting window's WM_CLIPBOARDUPDATE
+    /// hook). Does not persist across restarts — purely an in-memory UI hint.</summary>
+    [ObservableProperty]
+    private bool _isCutMarked;
+
     public WormholeItemViewModel(string absolutePath, IconService icons, int iconSizePx, int tilePaddingPx)
     {
         AbsolutePath = absolutePath;
