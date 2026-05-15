@@ -74,6 +74,7 @@ public sealed partial class HotkeysViewModel : ObservableObject
     public ObservableCollection<HotkeyItemViewModel> ClipboardItems { get; } = [];
     public ObservableCollection<HotkeyItemViewModel> UploadItems { get; } = [];
     public ObservableCollection<HotkeyItemViewModel> ToolsItems { get; } = [];
+    public ObservableCollection<HotkeyItemViewModel> WormholeItems { get; } = [];
 
     public ObservableCollection<HotkeyItemViewModel> CustomItems { get; }
 
@@ -130,7 +131,7 @@ public sealed partial class HotkeysViewModel : ObservableObject
 
     /// <summary>Order in which categories render. Anything not listed is appended at the end in
     /// alphabetical order (so a future built-in we forget to categorise still shows up).</summary>
-    private static readonly string[] CategoryOrder = ["Capture", "Clipboard", "Upload", "Tools"];
+    private static readonly string[] CategoryOrder = ["Capture", "Clipboard", "Upload", "Tools", "Wormholes"];
 
     private void RebuildBuiltInGroups()
     {
@@ -139,6 +140,7 @@ public sealed partial class HotkeysViewModel : ObservableObject
         ClipboardItems.Clear();
         UploadItems.Clear();
         ToolsItems.Clear();
+        WormholeItems.Clear();
 
         // Bucket every built-in item by its category. Items whose id isn't in the map fall under
         // DefaultCategory so we never silently drop a workflow from the UI.
@@ -163,9 +165,10 @@ public sealed partial class HotkeysViewModel : ObservableObject
         if (byCategory.TryGetValue("Clipboard", out var clip)) foreach (var i in clip) ClipboardItems.Add(i);
         if (byCategory.TryGetValue("Upload", out var up)) foreach (var i in up) UploadItems.Add(i);
         if (byCategory.TryGetValue("Tools", out var tools)) foreach (var i in tools) ToolsItems.Add(i);
+        if (byCategory.TryGetValue("Wormholes", out var wh)) foreach (var i in wh) WormholeItems.Add(i);
         foreach (var (cat, list) in byCategory)
         {
-            if (cat is "Capture" or "Clipboard" or "Upload" or "Tools") continue;
+            if (cat is "Capture" or "Clipboard" or "Upload" or "Tools" or "Wormholes") continue;
             foreach (var i in list) ToolsItems.Add(i);
         }
 

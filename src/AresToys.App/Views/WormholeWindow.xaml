@@ -215,20 +215,22 @@
                                         Height="{Binding TileHeight}"
                                         MouseLeftButtonDown="OnItemMouseDown"
                                         MouseRightButtonUp="OnItemRightButtonUp">
-                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Top">
+                                    <!-- HorizontalAlignment=Stretch on the StackPanel forces it
+                                         to fill the parent Border's Width (TileWidth). With
+                                         Center the panel was shrink-wrapping to its widest
+                                         child (= the Image), giving TextWrapping=Wrap a too-
+                                         narrow constraint and stripping the label to a
+                                         single-line ellipsis. The Image keeps its own
+                                         HorizontalAlignment=Center so it stays centered inside
+                                         the now-wider stack. -->
+                                    <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Top">
                                         <Image Source="{Binding Icon}"
                                                Width="{Binding IconSizePx}"
                                                Height="{Binding IconSizePx}"
+                                               HorizontalAlignment="Center"
                                                Margin="{Binding IconMargin}"
                                                RenderOptions.BitmapScalingMode="HighQuality" />
-                                        <!-- Explicit Width=TileWidth so TextWrapping=Wrap has a
-                                             constraint to wrap against. Without it, StackPanel
-                                             HorizontalAlignment=Center collapses the TextBlock
-                                             to its single-line content size, so wrapping never
-                                             triggers and we get a one-line ellipsis instead of
-                                             the 2-line Explorer/Portals look. -->
                                         <TextBlock Text="{Binding DisplayName}"
-                                                   Width="{Binding TileWidth}"
                                                    Foreground="{DynamicResource AccentForegroundBrush}"
                                                    FontSize="11"
                                                    TextAlignment="Center"

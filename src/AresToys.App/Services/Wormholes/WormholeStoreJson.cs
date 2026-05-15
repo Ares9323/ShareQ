@@ -84,6 +84,17 @@ public sealed class WormholeStoreJson : IWormholeStore, IDisposable
         finally { _gate.Release(); }
     }
 
+    public async Task FlushAsync(CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await EnsureCacheLoadedNoLockAsync(cancellationToken).ConfigureAwait(false);
+            await FlushNoLockAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally { _gate.Release(); }
+    }
+
     public async Task DeleteAsync(Guid wormholeId, CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);

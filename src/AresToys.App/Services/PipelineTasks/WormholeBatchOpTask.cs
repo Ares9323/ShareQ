@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using AresToys.App.Services.Wormholes;
@@ -44,6 +45,9 @@ public sealed class WormholeBatchOpTask : IPipelineTask
             case "unlock-all":     await _manager.SetAllLockedAsync(false, cancellationToken).ConfigureAwait(false); break;
             case "collapse-all":   await _manager.SetAllRolledAsync(true,  cancellationToken).ConfigureAwait(false); break;
             case "uncollapse-all": await _manager.SetAllRolledAsync(false, cancellationToken).ConfigureAwait(false); break;
+            case "toggle-hide":     await _manager.ToggleAllHiddenAsync(cancellationToken).ConfigureAwait(false); break;
+            case "toggle-lock":     await _manager.ToggleAllLockedAsync(cancellationToken).ConfigureAwait(false); break;
+            case "toggle-collapse": await _manager.ToggleAllRolledAsync(cancellationToken).ConfigureAwait(false); break;
             default:
                 _logger.LogWarning("WormholeBatchOpTask: unknown op '{Op}' — no-op", op);
                 break;

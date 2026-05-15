@@ -74,10 +74,16 @@ public sealed class WormholeCreateTask : IPipelineTask
         }).Task.ConfigureAwait(false);
     }
 
-    /// <summary>Walk Shell.Application.Windows() to find the foreground Explorer's single
-    /// selected folder. Returns null when: no Explorer in foreground, no selection, multiple
-    /// items selected, the selected item isn't a folder, or any COM call throws. The caller
-    /// treats null as "open the dialog instead".</summary>
+    /// <summary>Walk Shell.Application.Windows() to find the foreground Explorer's folder:
+    /// either the single selected folder, or — when nothing is selected — the folder currently
+    /// being viewed. Returns null when: no Explorer in foreground, multiple items selected,
+    /// the selected item isn't a folder, or any COM call throws. The caller treats null as
+    /// "open the dialog instead".
+    ///
+    /// We trust <c>Directory.Exists(item.Path)</c> rather than <c>item.IsFolder</c> alone:
+    /// some shell namespace extensions (Quick Access pinned entries, OneDrive, mapped network
+    /// drives) report IsFolder inconsistently across Windows versions, and a disk-level check
+    /// is the ground truth we actually care about for creating a wormhole.</summary>
     private string? ResolveExplorerSelectedFolder()
     {
         var foreground = GetForegroundWindow();
@@ -102,29 +108,35 @@ public sealed class WormholeCreateTask : IPipelineTask
                 try { document = window.Document; }
                 catch { continue; }
 
-                dynamic items;
-                try { items = document.SelectedItems(); }
-                catch { return null; }
+                // Selection branch — preferred when present. Count + first-item capture in a
+                // single pass; bail on multi-select.
+                dynamic? items = null;
+                try { items = document.SelectedItems(); } catch { items = null; }
 
-                // Single folder selected → use it. We deliberately don't fall back to the
-                // currently-displayed folder when nothing is selected — opening the dialog is
-                // the right escape valve there (the user might want a different folder).
-                int count = 0;
-                string? lastPath = null;
-                bool lastIsFolder = false;
-                foreach (dynamic item in items)
+                if (items is not null)
                 {
-                    count++;
-                    if (count > 1) return null; // multi-select bails
-                    try
+                    int count = 0;
+                    string? selectedPath = null;
+                    foreach (dynamic item in items)
                     {
-                        lastPath = item.Path as string;
-                        lastIsFolder = (bool)item.IsFolder;
+                        count++;
+                        if (count > 1) return null; // multi-select bails to dialog
+                        try { selectedPath = item.Path as string; } catch { }
                     }
-                    catch { return null; }
+                    if (count == 1 && !string.IsNullOrEmpty(selectedPath) && Directory.Exists(selectedPath))
+                        return selectedPath;
+                    if (count >= 1) return null; // selection present but not a folder → dialog
                 }
-                if (count == 1 && lastIsFolder && !string.IsNullOrEmpty(lastPath))
-                    return lastPath;
+
+                // Nothing selected → fall back to the currently-displayed folder. Matches user
+                // mental model: "I'm inside the folder I want, just make a wormhole for it".
+                try
+                {
+                    string? currentPath = document.Folder.Self.Path as string;
+                    if (!string.IsNullOrEmpty(currentPath) && Directory.Exists(currentPath))
+                        return currentPath;
+                }
+                catch { /* shell folder without a filesystem path (Quick Access, etc.) */ }
                 return null;
             }
             return null;

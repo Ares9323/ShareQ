@@ -169,6 +169,21 @@ public static class WorkflowActionCatalog
             "Restore every rolled-up wormhole to its previous height.",
             "Wormholes",
             DefaultConfigJson: "{\"op\":\"uncollapse-all\"}"),
+        new("arestoys.wormhole-batch-op",
+            "Wormholes: toggle hide / show",
+            "If any wormhole is currently visible, hide them all; otherwise show them all. Single-key 'clean up the desktop / bring them back' gesture.",
+            "Wormholes",
+            DefaultConfigJson: "{\"op\":\"toggle-hide\"}"),
+        new("arestoys.wormhole-batch-op",
+            "Wormholes: toggle lock / unlock",
+            "If any wormhole is unlocked, lock them all; otherwise unlock them all.",
+            "Wormholes",
+            DefaultConfigJson: "{\"op\":\"toggle-lock\"}"),
+        new("arestoys.wormhole-batch-op",
+            "Wormholes: toggle collapse / uncollapse",
+            "If any wormhole is uncollapsed, collapse them all; otherwise uncollapse them all.",
+            "Wormholes",
+            DefaultConfigJson: "{\"op\":\"toggle-collapse\"}"),
         new("arestoys.wormhole-create",
             "Wormholes: create wormhole",
             "Create a new wormhole. If a single folder is selected in the foreground Explorer window, uses that folder automatically. Otherwise opens the New Wormhole dialog so the user picks a folder.",
@@ -491,7 +506,7 @@ public static class WorkflowActionCatalog
         var matches = catalog.Where(a => a.TaskId == step.TaskId).ToList();
         if (matches.Count == 0) return null;
         if (matches.Count == 1) return matches[0];
-        foreach (var key in new[] { "uploader", "category", "format", "key" })
+        foreach (var key in new[] { "uploader", "category", "format", "key", "op" })
         {
             var stepValue = (string?)step.Config?[key];
             if (string.IsNullOrEmpty(stepValue)) continue;

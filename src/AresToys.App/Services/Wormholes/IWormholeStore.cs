@@ -16,6 +16,13 @@ public interface IWormholeStore
     /// half-written JSON behind.</summary>
     Task SaveAsync(WormholeRecord record, CancellationToken cancellationToken);
 
+    /// <summary>Flush the current in-memory cache (whatever the manager's mutated) to disk in
+    /// one atomic temp-rename write. Used by batch operations like "Hide all" / "Show all" so
+    /// the manager can mutate every record's flag in memory, then persist with a single JSON
+    /// write instead of N — which is what made batch ops feel gradual: each per-record
+    /// SaveAsync flushed the whole file separately, serialized through the store's semaphore.</summary>
+    Task FlushAsync(CancellationToken cancellationToken);
+
     /// <summary>Removes the record and its <c>Shortcuts\{id}\</c> folder (Data fences) or just
     /// the record (Portal fences — the watched source folder isn't ours to touch). Safe to call
     /// for an id that doesn't exist (no-op).</summary>

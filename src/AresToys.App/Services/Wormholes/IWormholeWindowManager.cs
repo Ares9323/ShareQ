@@ -73,6 +73,18 @@ public interface IWormholeWindowManager
     /// desktop space without hiding the wormholes outright.</summary>
     Task SetAllRolledAsync(bool rolled, CancellationToken cancellationToken);
 
+    /// <summary>Smart-toggle: if ANY wormhole is currently visible (IsHidden=false), hide all;
+    /// otherwise (everything already hidden) show all. The "any" semantics matches user mental
+    /// model — "make them go away" is the dominant gesture when at least one is in the way.</summary>
+    Task ToggleAllHiddenAsync(CancellationToken cancellationToken);
+
+    /// <summary>Smart-toggle: if ANY wormhole is unlocked, lock all; otherwise unlock all.</summary>
+    Task ToggleAllLockedAsync(CancellationToken cancellationToken);
+
+    /// <summary>Smart-toggle: if ANY wormhole is uncollapsed, collapse all; otherwise uncollapse
+    /// all.</summary>
+    Task ToggleAllRolledAsync(CancellationToken cancellationToken);
+
     /// <summary>Move a single item from <paramref name="sourceWormholeId"/> to the wormhole
     /// identified by <paramref name="targetWormholeId"/>. Implements the spec §7 decision table:
     /// <list type="bullet">

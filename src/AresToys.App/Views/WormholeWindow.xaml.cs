@@ -1212,10 +1212,14 @@ public partial class WormholeWindow : Window
         else
         {
             ContentArea.Visibility = Visibility.Visible;
-            // Restore MinHeight before Height so WPF lets the new Height through (resize order
-            // matters when the new value is larger than the current MinHeight).
-            MinHeight = 80;
+            // Order matters: set Height FIRST while MinHeight is still 0 (from the previous
+            // rolled state). Setting MinHeight=80 first would leave a pending "clamp Height up
+            // to 80" pass that interleaves badly with our explicit Height=UnrolledHeight
+            // assignment — the user reported the wormhole staying ~80 px tall instead of
+            // restoring to the saved height. Once Height matches UnrolledHeight (>= 80) we can
+            // safely raise MinHeight back to 80 without re-clamping.
             Height = _record.Geometry.UnrolledHeight;
+            MinHeight = 80;
             ResizeMode = _record.IsLocked ? ResizeMode.NoResize : ResizeMode.CanResize;
             ChevronGlyph.Text = ChevronUpGlyph;
         }

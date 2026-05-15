@@ -353,44 +353,103 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
     /// up visible Z-order-wise.</summary>
     public async Task SetAllHiddenAsync(bool hidden, CancellationToken cancellationToken)
     {
-        var records = await _store.LoadAllAsync(cancellationToken).ConfigureAwait(true);
-        // Snapshot to a list because ReconcileAsync below may trigger SaveAsync which mutates
-        // the cache the IReadOnlyList wraps — same hazard as InitializeAsync's foreach.
-        foreach (var record in records.ToList())
+        var records = (await _store.LoadAllAsync(cancellationToken).ConfigureAwait(true)).ToList();
+        var changed = records.Where(r => r.IsHidden != hidden).ToList();
+        if (changed.Count == 0) return;
+
+        // Phase 1 — mutate every record's flag in memory. No I/O yet.
+        foreach (var r in changed) r.IsHidden = hidden;
+
+        // Phase 2 — tight UI-thread loop to spawn / close windows. SpawnWindow is essentially
+        // "new WormholeWindow + Show()"; Show() is non-blocking (queues a render), so the loop
+        // returns in microseconds and WPF batch-renders the lot in the same dispatcher tick
+        // instead of the gradient cascade you'd get awaiting ReconcileAsync per-record.
+        foreach (var r in changed)
         {
-            if (record.IsHidden == hidden) continue;
-            record.IsHidden = hidden;
-            await _store.SaveAsync(record, cancellationToken).ConfigureAwait(true);
-            await ReconcileAsync(record, cancellationToken).ConfigureAwait(true);
-            RecordChanged?.Invoke(this, record.Id);
+            if (r.IsHidden)
+            {
+                if (_live.TryGetValue(r.Id, out var w))
+                {
+                    _live.Remove(r.Id);
+                    if (_watchers.Remove(r.Id, out var watch))
+                    {
+                        try { watch.Dispose(); } catch (Exception ex) { _logger.LogWarning(ex, "Watcher dispose batch failed for {Id}", r.Id); }
+                    }
+                    try { w.CloseFromManager(); } catch (Exception ex) { _logger.LogWarning(ex, "CloseFromManager batch failed for {Id}", r.Id); }
+                }
+            }
+            else
+            {
+                if (!_live.ContainsKey(r.Id))
+                {
+                    try { SpawnWindow(r); } catch (Exception ex) { _logger.LogWarning(ex, "SpawnWindow batch failed for {Id}", r.Id); }
+                }
+            }
         }
+
+        // Phase 3 — one bulk JSON flush instead of N. The user sees the visual change already;
+        // persistence catches up asynchronously without holding up the spawn loop.
+        await _store.FlushAsync(cancellationToken).ConfigureAwait(true);
+        foreach (var r in changed) RecordChanged?.Invoke(this, r.Id);
     }
 
     public async Task SetAllLockedAsync(bool locked, CancellationToken cancellationToken)
     {
-        var records = await _store.LoadAllAsync(cancellationToken).ConfigureAwait(true);
-        foreach (var record in records.ToList())
+        var records = (await _store.LoadAllAsync(cancellationToken).ConfigureAwait(true)).ToList();
+        var changed = records.Where(r => r.IsLocked != locked).ToList();
+        if (changed.Count == 0) return;
+        foreach (var r in changed) r.IsLocked = locked;
+        foreach (var r in changed)
         {
-            if (record.IsLocked == locked) continue;
-            record.IsLocked = locked;
-            await _store.SaveAsync(record, cancellationToken).ConfigureAwait(true);
-            // ReconcileAsync re-applies lock state on the live window via RefreshFromRecord.
-            await ReconcileAsync(record, cancellationToken).ConfigureAwait(true);
-            RecordChanged?.Invoke(this, record.Id);
+            if (_live.TryGetValue(r.Id, out var w))
+            {
+                try { w.RefreshFromRecord(); } catch (Exception ex) { _logger.LogWarning(ex, "Refresh batch failed for {Id}", r.Id); }
+            }
         }
+        await _store.FlushAsync(cancellationToken).ConfigureAwait(true);
+        foreach (var r in changed) RecordChanged?.Invoke(this, r.Id);
     }
 
     public async Task SetAllRolledAsync(bool rolled, CancellationToken cancellationToken)
     {
-        var records = await _store.LoadAllAsync(cancellationToken).ConfigureAwait(true);
-        foreach (var record in records.ToList())
+        var records = (await _store.LoadAllAsync(cancellationToken).ConfigureAwait(true)).ToList();
+        var changed = records.Where(r => r.IsRolled != rolled).ToList();
+        if (changed.Count == 0) return;
+        foreach (var r in changed) r.IsRolled = rolled;
+        foreach (var r in changed)
         {
-            if (record.IsRolled == rolled) continue;
-            record.IsRolled = rolled;
-            await _store.SaveAsync(record, cancellationToken).ConfigureAwait(true);
-            await ReconcileAsync(record, cancellationToken).ConfigureAwait(true);
-            RecordChanged?.Invoke(this, record.Id);
+            if (_live.TryGetValue(r.Id, out var w))
+            {
+                try { w.RefreshFromRecord(); } catch (Exception ex) { _logger.LogWarning(ex, "Refresh batch failed for {Id}", r.Id); }
+            }
         }
+        await _store.FlushAsync(cancellationToken).ConfigureAwait(true);
+        foreach (var r in changed) RecordChanged?.Invoke(this, r.Id);
+    }
+
+    public async Task ToggleAllHiddenAsync(CancellationToken cancellationToken)
+    {
+        var records = await _store.LoadAllAsync(cancellationToken).ConfigureAwait(true);
+        // "Any visible → hide everything" is the natural gesture: pressing the hotkey while at
+        // least one wormhole is on-screen reads as "clean up the desktop"; pressing it while
+        // they're all hidden reads as "bring them back". Both branches reach a fixed point
+        // after one press, so a second press always flips it.
+        var anyVisible = records.Any(r => !r.IsHidden);
+        await SetAllHiddenAsync(anyVisible, cancellationToken).ConfigureAwait(true);
+    }
+
+    public async Task ToggleAllLockedAsync(CancellationToken cancellationToken)
+    {
+        var records = await _store.LoadAllAsync(cancellationToken).ConfigureAwait(true);
+        var anyUnlocked = records.Any(r => !r.IsLocked);
+        await SetAllLockedAsync(anyUnlocked, cancellationToken).ConfigureAwait(true);
+    }
+
+    public async Task ToggleAllRolledAsync(CancellationToken cancellationToken)
+    {
+        var records = await _store.LoadAllAsync(cancellationToken).ConfigureAwait(true);
+        var anyUnrolled = records.Any(r => !r.IsRolled);
+        await SetAllRolledAsync(anyUnrolled, cancellationToken).ConfigureAwait(true);
     }
 
     public IReadOnlyList<WormholeRecord> GetOtherRecords(Guid exceptId)
