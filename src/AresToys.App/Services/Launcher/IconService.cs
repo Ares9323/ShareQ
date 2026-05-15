@@ -209,7 +209,12 @@ public sealed class IconService
         // We drop it when the path resolves on disk so .lnk targets / custom .ico associations
         // come through. SYSICONINDEX returns iIcon = imagelist index; OVERLAYINDEX packs the
         // overlay index into the high byte of iIcon (Windows convention).
-        var flags = SHGFI_SYSICONINDEX | SHGFI_OVERLAYINDEX;
+        //
+        // SHGFI_ICON is required by MSDN for SHGFI_OVERLAYINDEX to populate the overlay byte;
+        // without it some Windows versions silently report overlayIndex=0 even for .lnk files.
+        // We don't use the returned HICON (we extract via ImageList_GetIcon below) but we DO
+        // destroy it in the finally — leaking it would burn a GDI handle per cached icon.
+        var flags = SHGFI_ICON | SHGFI_SYSICONINDEX | SHGFI_OVERLAYINDEX;
         uint attrs = 0;
         try
         {
@@ -228,6 +233,12 @@ public sealed class IconService
         var info = default(SHFILEINFO);
         if (SHGetFileInfo(path, attrs, ref info, (uint)Marshal.SizeOf<SHFILEINFO>(), flags) == IntPtr.Zero)
             return null;
+
+        // SHGFI_ICON populated info.hIcon — we don't use it (we extract via ImageList_GetIcon
+        // below) but we own the handle and must release it. Burning the handle is the cost of
+        // forcing SHGFI_OVERLAYINDEX to populate reliably; without SHGFI_ICON in the flags
+        // some Windows versions return overlayIndex=0 even for .lnk files.
+        if (info.hIcon != IntPtr.Zero) DestroyIcon(info.hIcon);
 
         // iIcon: low 24 bits = imagelist index, high 8 bits = overlay index (1-based; 0 = no
         // overlay). The link arrow is overlay 2 by convention; OneDrive sync icons use 1/3/4.

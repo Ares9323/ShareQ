@@ -119,9 +119,31 @@ public partial class WormholeWindow : Window
     // appropriate cursor — no further code needed on our side. Skipped when the wormhole is
     // locked (must not resize) or rolled (only the header strip is visible; resize would
     // expose a torn layout).
+    //
+    // We also intercept WM_NCLBUTTONDBLCLK on those same edge codes: Windows' default is to
+    // maximise vertically on HTTOP/HTBOTTOM dblclick (and horizontally on HTLEFT/HTRIGHT).
+    // For a wormhole that's the wrong gesture — the user is usually trying to dblclick the
+    // header to roll up but accidentally clipping the 8 px resize edge. Swallowing the
+    // message keeps the vertical-maximise out of the way without disabling resize-drag.
     private IntPtr WindowProcResizeHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         const int WM_NCHITTEST = 0x0084;
+        const int WM_NCLBUTTONDBLCLK = 0x00A3;
+
+        if (msg == WM_NCLBUTTONDBLCLK)
+        {
+            int ht = wParam.ToInt32();
+            // Any edge or corner dblclick → swallow. HTCAPTION (=2) double-click is the
+            // normal restore/maximise gesture and isn't returned by our hit test, so it
+            // wouldn't land here anyway; this matches every HT code we DO return from below.
+            if (ht is 10 or 11 or 12 or 13 or 14 or 15 or 16 or 17)
+            {
+                handled = true;
+                return IntPtr.Zero;
+            }
+            return IntPtr.Zero;
+        }
+
         if (msg != WM_NCHITTEST) return IntPtr.Zero;
         if (_record.IsLocked || _record.IsRolled) return IntPtr.Zero;
 

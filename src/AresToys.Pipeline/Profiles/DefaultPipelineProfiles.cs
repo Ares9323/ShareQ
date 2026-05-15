@@ -27,6 +27,17 @@ public static class DefaultPipelineProfiles
     public const string QrReadFromRegionId     = "qr-read-from-region";
     public const string SaveQrToHistoryId      = "save-qr-to-history";
 
+    // Wormholes batch ops + smart-create. All ship with no default hotkey — user binds the
+    // ones they want from the Hotkeys tab. The ids share the "wormholes-" prefix so the
+    // category gate below picks them up uniformly.
+    public const string WormholesHideAllId     = "wormholes-hide-all";
+    public const string WormholesShowAllId     = "wormholes-show-all";
+    public const string WormholesLockAllId     = "wormholes-lock-all";
+    public const string WormholesUnlockAllId   = "wormholes-unlock-all";
+    public const string WormholesCollapseAllId = "wormholes-collapse-all";
+    public const string WormholesUncollapseAllId = "wormholes-uncollapse-all";
+    public const string WormholesCreateId      = "wormholes-create";
+
     // Task IDs whose implementations live in AresToys.App (resolved at runtime by the registry).
     public const string CopyImageToClipboardTaskId = "arestoys.copy-image-to-clipboard";
     public const string CopyTextToClipboardTaskId  = "arestoys.copy-text-to-clipboard";
@@ -49,6 +60,8 @@ public static class DefaultPipelineProfiles
     public const string OpenLauncherMenuTaskId     = "arestoys.open-launcher-menu";
     public const string OpenSettingsTaskId         = "arestoys.open-settings";
     public const string UploadClipboardTextTaskId  = "arestoys.upload-clipboard-text";
+    public const string WormholeBatchOpTaskId      = "arestoys.wormhole-batch-op";
+    public const string WormholeCreateTaskId       = "arestoys.wormhole-create";
 
     // Task IDs from AresToys.Plugins.
     public const string UploadTaskId = "arestoys.upload";
@@ -90,6 +103,14 @@ public static class DefaultPipelineProfiles
         [OpenSettingsId]          = "Tools",
         [QrReadFromRegionId]      = "Tools",
         [SaveQrToHistoryId]       = "Tools",
+
+        [WormholesHideAllId]       = "Wormholes",
+        [WormholesShowAllId]       = "Wormholes",
+        [WormholesLockAllId]       = "Wormholes",
+        [WormholesUnlockAllId]     = "Wormholes",
+        [WormholesCollapseAllId]   = "Wormholes",
+        [WormholesUncollapseAllId] = "Wormholes",
+        [WormholesCreateId]        = "Wormholes",
     };
 
     private static IReadOnlyList<PipelineProfile> BuildAll() =>
@@ -413,6 +434,53 @@ public static class DefaultPipelineProfiles
                 new PipelineStep(CopyImageToClipboardTaskId, Id: "copy-image"),
                 new PipelineStep(NotifyToastTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"title\":\"AresToys\",\"message\":\"Saved {bag.local_path}\"}"), Id: "toast")
             ],
+            IsBuiltIn: true),
+
+        // Wormholes built-in workflows. Single-step each, no default hotkey — they appear in
+        // the Hotkeys list under category "Wormholes" so the user can bind whichever they want.
+        // Trigger strings use the menu: prefix because there's no event/hotkey defaulted on for
+        // these (clipboard, capture etc. all use a real trigger).
+        new PipelineProfile(
+            Id: WormholesHideAllId,
+            DisplayName: "Wormholes — Hide all",
+            Trigger: "menu:wormholes-hide-all",
+            Steps: [new PipelineStep(WormholeBatchOpTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"op\":\"hide-all\"}"), Id: "op")],
+            IsBuiltIn: true),
+        new PipelineProfile(
+            Id: WormholesShowAllId,
+            DisplayName: "Wormholes — Show all",
+            Trigger: "menu:wormholes-show-all",
+            Steps: [new PipelineStep(WormholeBatchOpTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"op\":\"show-all\"}"), Id: "op")],
+            IsBuiltIn: true),
+        new PipelineProfile(
+            Id: WormholesLockAllId,
+            DisplayName: "Wormholes — Lock all",
+            Trigger: "menu:wormholes-lock-all",
+            Steps: [new PipelineStep(WormholeBatchOpTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"op\":\"lock-all\"}"), Id: "op")],
+            IsBuiltIn: true),
+        new PipelineProfile(
+            Id: WormholesUnlockAllId,
+            DisplayName: "Wormholes — Unlock all",
+            Trigger: "menu:wormholes-unlock-all",
+            Steps: [new PipelineStep(WormholeBatchOpTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"op\":\"unlock-all\"}"), Id: "op")],
+            IsBuiltIn: true),
+        new PipelineProfile(
+            Id: WormholesCollapseAllId,
+            DisplayName: "Wormholes — Collapse all",
+            Trigger: "menu:wormholes-collapse-all",
+            Steps: [new PipelineStep(WormholeBatchOpTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"op\":\"collapse-all\"}"), Id: "op")],
+            IsBuiltIn: true),
+        new PipelineProfile(
+            Id: WormholesUncollapseAllId,
+            DisplayName: "Wormholes — Uncollapse all",
+            Trigger: "menu:wormholes-uncollapse-all",
+            Steps: [new PipelineStep(WormholeBatchOpTaskId, Config: System.Text.Json.Nodes.JsonNode.Parse("{\"op\":\"uncollapse-all\"}"), Id: "op")],
+            IsBuiltIn: true),
+        new PipelineProfile(
+            Id: WormholesCreateId,
+            DisplayName: "Wormholes — Create wormhole",
+            Trigger: "menu:wormholes-create",
+            Steps: [new PipelineStep(WormholeCreateTaskId, Id: "create")],
             IsBuiltIn: true),
     ];
 }

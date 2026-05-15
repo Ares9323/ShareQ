@@ -271,6 +271,8 @@ public partial class App : Application
                 services.AddHostedService<CategoryRotationScheduler>();
 
                 services.AddSingleton<IPipelineTask, CaptureRegionTask>();
+                services.AddSingleton<IPipelineTask, WormholeBatchOpTask>();
+                services.AddSingleton<IPipelineTask, WormholeCreateTask>();
                 services.AddSingleton<IPipelineTask, CaptureActiveWindowTask>();
                 services.AddSingleton<IPipelineTask, CaptureActiveMonitorTask>();
                 services.AddSingleton<IPipelineTask, CaptureWebpageTask>();

@@ -58,6 +58,21 @@ public interface IWormholeWindowManager
     /// "Move to →" submenu without each window having to hold a back-reference to the store.</summary>
     IReadOnlyList<WormholeRecord> GetOtherRecords(Guid exceptId);
 
+    /// <summary>Flip <see cref="WormholeRecord.IsHidden"/> on every persisted record. Hidden
+    /// wormholes have their live window closed (record stays); un-hidden wormholes get a fresh
+    /// window spawned. Used by the workflow "Hide all / Show all" tasks and by the future
+    /// global hotkey of the same name.</summary>
+    Task SetAllHiddenAsync(bool hidden, CancellationToken cancellationToken);
+
+    /// <summary>Flip <see cref="WormholeRecord.IsLocked"/> on every record. Locked wormholes
+    /// can't be dragged or resized; the lock glyph in the chrome reflects the new state.</summary>
+    Task SetAllLockedAsync(bool locked, CancellationToken cancellationToken);
+
+    /// <summary>Flip <see cref="WormholeRecord.IsRolled"/> on every record — collapses each
+    /// wormhole to header-only height (or restores to UnrolledHeight). Useful for reclaiming
+    /// desktop space without hiding the wormholes outright.</summary>
+    Task SetAllRolledAsync(bool rolled, CancellationToken cancellationToken);
+
     /// <summary>Move a single item from <paramref name="sourceWormholeId"/> to the wormhole
     /// identified by <paramref name="targetWormholeId"/>. Implements the spec §7 decision table:
     /// <list type="bullet">

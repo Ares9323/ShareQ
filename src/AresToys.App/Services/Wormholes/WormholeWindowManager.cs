@@ -351,6 +351,48 @@ public sealed class WormholeWindowManager : IWormholeWindowManager
     /// recovery when wormholes end up off-screen (monitor disconnect, weird DPI scaling, layout
     /// rearrange between sessions). Each new position is also Activate()d to guarantee it ends
     /// up visible Z-order-wise.</summary>
+    public async Task SetAllHiddenAsync(bool hidden, CancellationToken cancellationToken)
+    {
+        var records = await _store.LoadAllAsync(cancellationToken).ConfigureAwait(true);
+        // Snapshot to a list because ReconcileAsync below may trigger SaveAsync which mutates
+        // the cache the IReadOnlyList wraps — same hazard as InitializeAsync's foreach.
+        foreach (var record in records.ToList())
+        {
+            if (record.IsHidden == hidden) continue;
+            record.IsHidden = hidden;
+            await _store.SaveAsync(record, cancellationToken).ConfigureAwait(true);
+            await ReconcileAsync(record, cancellationToken).ConfigureAwait(true);
+            RecordChanged?.Invoke(this, record.Id);
+        }
+    }
+
+    public async Task SetAllLockedAsync(bool locked, CancellationToken cancellationToken)
+    {
+        var records = await _store.LoadAllAsync(cancellationToken).ConfigureAwait(true);
+        foreach (var record in records.ToList())
+        {
+            if (record.IsLocked == locked) continue;
+            record.IsLocked = locked;
+            await _store.SaveAsync(record, cancellationToken).ConfigureAwait(true);
+            // ReconcileAsync re-applies lock state on the live window via RefreshFromRecord.
+            await ReconcileAsync(record, cancellationToken).ConfigureAwait(true);
+            RecordChanged?.Invoke(this, record.Id);
+        }
+    }
+
+    public async Task SetAllRolledAsync(bool rolled, CancellationToken cancellationToken)
+    {
+        var records = await _store.LoadAllAsync(cancellationToken).ConfigureAwait(true);
+        foreach (var record in records.ToList())
+        {
+            if (record.IsRolled == rolled) continue;
+            record.IsRolled = rolled;
+            await _store.SaveAsync(record, cancellationToken).ConfigureAwait(true);
+            await ReconcileAsync(record, cancellationToken).ConfigureAwait(true);
+            RecordChanged?.Invoke(this, record.Id);
+        }
+    }
+
     public IReadOnlyList<WormholeRecord> GetOtherRecords(Guid exceptId)
     {
         // Synchronous snapshot via the store's in-memory cache. LoadAllAsync is idempotent and
