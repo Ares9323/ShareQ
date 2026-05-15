@@ -255,6 +255,10 @@
                                         Width="{Binding TileWidth}"
                                         Height="{Binding TileHeight}"
                                         Opacity="{Binding IsCutMarked, Converter={StaticResource BoolToOpacity}}"
+                                        AllowDrop="True"
+                                        DragEnter="OnItemDragEnter"
+                                        DragOver="OnItemDragOver"
+                                        Drop="OnItemDrop"
                                         MouseLeftButtonDown="OnItemMouseDown"
                                         MouseRightButtonUp="OnItemRightButtonUp">
                                     <!-- Grid (not StackPanel) for the icon+label split: row 0 sizes

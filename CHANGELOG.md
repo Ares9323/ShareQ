@@ -3,7 +3,108 @@
 All notable changes to AresToys. Format loosely follows [Keep a Changelog](https://keepachangelog.com/),
 versions follow [SemVer](https://semver.org/).
 
-## [0.1.12] — Unreleased
+## [0.1.13] — 2026-05-15
+
+Two new pipeline tasks (Trigger launcher key, Paste clipboard entry), per-item
+drop routing on wormhole tiles, a handful of paste-pipeline fixes that surfaced
+together (HTML truncation, ASCII-art whitespace, Rider's headers-only CF_HTML,
+echo-back duplicates, first-run target capture) and a Menu-key hotkey
+suppression fix.
+
+### Pipeline / workflows — new tasks
+- **Trigger launcher key** — workflow step that fires a specific launcher cell
+  by tab + key, same effect as opening the launcher and pressing the key
+  manually. F1-F10 force the function-strip namespace regardless of the
+  selected tab. Toast "Launcher cell X:Y is empty." surfaces when the cell
+  has no binding so the workflow doesn't silently no-op.
+- **Paste clipboard entry** — workflow counterpart of the popup's Ctrl+1..9
+  quick-paste: category + 1-based entry index. Empty category string targets
+  the unified history (popup's "All" tab). Toast `"{Category} is empty."` /
+  `"{Category} has only N entries — can't paste #X."` for the missing cases.
+- Extracted `LauncherActionService` from `LauncherWindow.FireCell` so the new
+  pipeline task can drive a launcher cell headlessly without instantiating
+  the overlay window.
+- Workflow editor's `key` dropdown for Trigger launcher key shows
+  layout-localized glyphs (Italian `;` → `Ò`, etc.) via the existing
+  `KeyboardLayoutMapper.GetDisplayChar` used by the launcher window — new
+  `LocalizeOptionsAsLauncherKey` flag on the StringParameter descriptor.
+
+### Wormhole — per-item drop routing
+- Dragging a file directly onto a wormhole **tile** now routes by the tile's
+  target type:
+  - Folder (or `.lnk` pointing at a folder) → drop **inside** that folder
+    via the existing shell copy/move flow, with the right-button drag menu
+    still applying for Copy/Move/Shortcut choice.
+  - Executable / script (`.exe`, `.bat`, `.cmd`, `.ps1`, `.vbs`, `.js`,
+    `.wsf`, `.com`) or a `.lnk` to one → launch the target with the dropped
+    file as a quoted argument (Photoshop opens a dropped image, a `.bat`
+    receives the file as `%1`, etc.).
+  - Anything else → bubble to the wormhole container so the existing drop-
+    into-the-wormhole-folder behaviour kicks in unchanged.
+- `.lnk` resolution uses `IShellLinkW` + `IPersistFile` to walk the shortcut
+  to its real target before deciding the routing, so a wormhole tile that is
+  a shortcut to a folder behaves like the folder itself.
+
+### Hotkeys — Menu key (VK_APPS) suppression
+- Using the Application / Menu key (`VK_APPS = 0x5D`) as a hotkey used to
+  still open the Windows context menu under the cursor: the low-level hook
+  was suppressing the KEYDOWN but `CallNextHookEx`-forwarding the KEYUP, and
+  Windows opens the menu on KEYUP, not KEYDOWN.
+- `KeyboardHook` now tracks a per-vk "suppressed KEYUPs" set: when a KEYDOWN
+  is matched + swallowed by a hotkey, the corresponding KEYUP for that vk is
+  also swallowed on the way back through the hook. Generic enough to fix any
+  future KEYUP-triggered system gesture, but the immediate target is VK_APPS.
+
+### Clipboard — paste pipeline fixes
+- **HTML / RTF truncation on paste** — `AutoPaster` was sourcing the paste
+  text from `record.SearchText`, which is the 256-char + "…" preview written
+  by `Win32ClipboardReader.TruncatePreview()` for the FTS index. Long HTML
+  or RTF payloads (ASCII art, long pre-blocks) arrived at the target app cut
+  short with a trailing ellipsis. AutoPaster now runs the live HTML/RTF
+  stripper on the full `record.Payload` and only falls back to SearchText
+  when the live extraction returns empty.
+- **ASCII-art whitespace** — `ClipboardCleaning.HtmlToPlain` used to replace
+  every tag with a space and then collapse `\s+` to a single space, which
+  flattened both the newlines and the in-line spaces of any pre-formatted
+  block (the user's "ARES9323" ASCII banana from Code.exe came through as a
+  single line of single-spaced characters). Block-level tags
+  (`<br>`/`<p>`/`<div>`/`<tr>`/`<li>`/`<h1..6>`/`<pre>`/`<blockquote>`/
+  `<article>`/`<section>`/`<header>`/`<footer>`/`<nav>`/`<aside>`/`<table>`/
+  `<thead>`/`<tbody>`/`<tfoot>`/`<ul>`/`<ol>`/`<dl>`/`<dt>`/`<dd>`/`<figure>`/
+  `<figcaption>`) now convert to `\n` before the generic tag-strip, inline
+  tags are removed with empty replacement (no spurious space between adjacent
+  characters) and the only whitespace collapse left is `\n{3,}` → `\n\n`.
+- **CF_HTML header strip** — some producers (Rider64.exe in particular) write
+  CF_HTML with only the standard `Version:1.0 / StartHTML:N / EndHTML:N /
+  StartFragment:N / EndFragment:N / SourceURL:...` header lines followed by
+  raw body text, **without** the `<!--StartFragment-->` / `<!--EndFragment-->`
+  comment markers `HtmlToPlain` relied on. The headers were pasting through
+  verbatim ("Version:1.0\nStartHTML:0000000128\n…Whitelist"). New preamble
+  pass skips header lines (`Word:Value\r\n` with no `<` before the colon)
+  whenever the payload starts with `Version:`, so the marker-less case lands
+  at the body just like the well-formed one.
+- **Re-ingestion of pasted content as a new history item** — `AutoPaster`'s
+  own `SetText` / `SetPng` call to publish the chosen item to the system
+  clipboard fired `WM_CLIPBOARDUPDATE`, which the clipboard listener picked
+  up and stored as a fresh history entry (a `Text` row labelled with the
+  paste target's process name). Result: every workflow paste produced a
+  visible duplicate of the source item. AutoPaster now takes an optional
+  `IClipboardListener` dependency and calls `SuppressNext()` immediately
+  before `SetText`/`SetPng`; the listener drops exactly one upcoming
+  clipboard update event and the next genuine copy is captured normally.
+  Dependency is nullable to keep the paste path working when the clipboard
+  module is disabled via Settings → Modules (listener singleton not
+  registered in that case).
+- **First-run paste-from-shortcut no-op** — `TargetWindowTracker._captured`
+  starts at `IntPtr.Zero` and is only primed when the clipboard popup opens.
+  Workflows triggered by a hotkey without ever showing the popup hit
+  `TryRestoreCaptured() → false` on the first invocation and AutoPaster
+  bailed before sending Ctrl+V. `PasteClipboardEntryTask` now mirrors
+  `PasteHistoryItemTask`: capture the current foreground window at task
+  entry (the keyboard hook didn't change focus, so the foreground at that
+  point IS the user's intended paste target) before delegating to AutoPaster.
+
+## [0.1.12] — 2026-05-15
 
 Three pieces of wormhole polish: Explorer-style right-button drag menu, the
 crash fix for the Del shortcut on shortcut (.lnk) items, and Cut visual

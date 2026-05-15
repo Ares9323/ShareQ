@@ -17,6 +17,15 @@ public sealed class KeyboardHook : IDisposable
     /// otherwise re-trigger the hotkey callback indefinitely.</summary>
     private readonly HashSet<uint> _heldKeys = [];
     private readonly object _heldKeysLock = new();
+
+    /// <summary>vkCodes whose KEYDOWN we've already suppressed for a matching hotkey — their
+    /// matching KEYUP must be suppressed too, otherwise keys with "on release" semantics (most
+    /// notably VK_APPS = the Menu key, which opens the active window's context menu on KEYUP,
+    /// not KEYDOWN) leak the post-action to the foreground app. Modifier-only keys (Alt, Win)
+    /// also fire taskbar-focus / startmenu on the up edge, so the pair-up matters for any
+    /// suppressed combo, not just VK_APPS.</summary>
+    private readonly HashSet<uint> _suppressedKeyUps = [];
+    private readonly object _suppressedKeyUpsLock = new();
     private readonly LowLevelKeyboardProc _hookProc;
     private IntPtr _hookHandle = IntPtr.Zero;
 
@@ -85,6 +94,13 @@ public sealed class KeyboardHook : IDisposable
         if (isKeyUp)
         {
             lock (_heldKeysLock) _heldKeys.Remove(data.vkCode);
+            // If the matching KEYDOWN was suppressed for a hotkey match, swallow the KEYUP too.
+            // VK_APPS (Menu key) is the canonical case: its "open context menu" trigger fires
+            // on key release, so a KEYDOWN-only suppression leaks the menu pop to the active
+            // window every time the user fires a hotkey bound to the Menu key.
+            bool wasSuppressed;
+            lock (_suppressedKeyUpsLock) wasSuppressed = _suppressedKeyUps.Remove(data.vkCode);
+            if (wasSuppressed) return (IntPtr)1;
             // Special-case: Windows consumes WM_KEYDOWN before the low-level hook gets it for a
             // handful of system keys — only the KEYUP reaches us. PrintScreen and Pause/Break
             // are the two we care about for hotkey binding; the rest are unbindable by design
@@ -134,6 +150,11 @@ public sealed class KeyboardHook : IDisposable
         }
 
         if (!matched.Suppress) return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+
+        // Track the suppressed KEYDOWN so the matching KEYUP also gets swallowed — see the
+        // _suppressedKeyUps remark above for why this matters (VK_APPS on-release menu pop is
+        // the headline case, modifier-only releases hit the start menu / taskbar focus too).
+        lock (_suppressedKeyUpsLock) _suppressedKeyUps.Add(data.vkCode);
 
         // Some shortcuts (Win+Shift+S, Win+L, Win+G, …) are tracked by the Windows shell at a layer
         // that's NOT bypassed by simply returning 1 from this hook. Same fix PowerToys

@@ -871,6 +871,176 @@ public partial class WormholeWindow : Window
         }
     }
 
+    // -----------------------------------------------------------------------------------------
+    // Per-item drop routing — when the user drops something on a SPECIFIC tile (not the empty
+    // wormhole area), behaviour switches based on the tile's target:
+    //   - Folder (or .lnk → folder): file goes INSIDE the folder, not into the wormhole's
+    //     source folder. Same gesture Explorer / Portals / Stardock Fences use.
+    //   - Executable / script (or .lnk → executable): file is passed as an argument to that
+    //     program, so dragging an image onto a Photoshop shortcut opens the image in
+    //     Photoshop, dragging a path onto a .bat passes the path as %1, etc.
+    //   - Anything else (text file, doc, image with no associated handler we recognise):
+    //     fall back to the wormhole-level drop (copy into source folder) so the user isn't
+    //     left without a sensible default.
+    // e.Handled = true on the item path stops the event bubbling up to the container's
+    // OnDrop, so the wormhole doesn't double-process the same drop.
+    // -----------------------------------------------------------------------------------------
+
+    private void OnItemDragEnter(object sender, DragEventArgs e)
+    {
+        e.Effects = ResolveItemDropEffect(sender, e);
+        e.Handled = true;
+    }
+
+    private void OnItemDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = ResolveItemDropEffect(sender, e);
+        e.Handled = true;
+    }
+
+    /// <summary>Pick the drop effect cursor when hovering a specific tile. Folder targets show
+    /// Move/Copy (same heuristic as the wormhole-level drop); executable targets show Link
+    /// (the closest cursor for "drop = open with this program"). Locked wormholes still allow
+    /// drops on individual items — dropping a file onto Photoshop.lnk inside a locked
+    /// wormhole has no side effect on the wormhole itself, so the lock state is irrelevant.</summary>
+    private DragDropEffects ResolveItemDropEffect(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return DragDropEffects.None;
+        if (sender is not FrameworkElement fe || fe.DataContext is not WormholeItemViewModel vm)
+            return DragDropEffects.None;
+
+        var resolved = ResolveShellTarget(vm.AbsolutePath);
+        if (Directory.Exists(resolved))
+        {
+            // Folder drop — same Move/Copy heuristic as the wormhole-level drop
+            var ctrl  = (e.KeyStates & DragDropKeyStates.ControlKey) == DragDropKeyStates.ControlKey;
+            var shift = (e.KeyStates & DragDropKeyStates.ShiftKey)   == DragDropKeyStates.ShiftKey;
+            if (ctrl) return DragDropEffects.Copy;
+            if (shift) return DragDropEffects.Move;
+            var paths = (string[]?)e.Data.GetData(DataFormats.FileDrop);
+            if (paths is null || paths.Length == 0) return DragDropEffects.Copy;
+            return IsSameVolume(paths[0], resolved) ? DragDropEffects.Move : DragDropEffects.Copy;
+        }
+        if (IsExecutableTarget(resolved))
+        {
+            // "Open with this program" — Link cursor is what Explorer shows when you drag a
+            // file onto an executable. Drop fires the exe with the dropped file as argument.
+            return DragDropEffects.Link;
+        }
+        // Unknown target type — let the wormhole-level handler take over by signalling None
+        // here. The event still bubbles because we don't set Handled in the None branch.
+        return DragDropEffects.None;
+    }
+
+    private void OnItemDrop(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+        if (sender is not FrameworkElement fe || fe.DataContext is not WormholeItemViewModel vm) return;
+        var paths = (string[]?)e.Data.GetData(DataFormats.FileDrop);
+        if (paths is null || paths.Length == 0) return;
+
+        var resolved = ResolveShellTarget(vm.AbsolutePath);
+
+        // Folder target → drop the files inside it. SHFileOperation handles the shell prompts
+        // (rename on conflict, progress for big batches) automatically.
+        if (Directory.Exists(resolved))
+        {
+            var ctrl  = (e.KeyStates & DragDropKeyStates.ControlKey) == DragDropKeyStates.ControlKey;
+            var shift = (e.KeyStates & DragDropKeyStates.ShiftKey)   == DragDropKeyStates.ShiftKey;
+            // Per-file Move-vs-Copy mirrors the wormhole-level rule.
+            var move = !ctrl && (shift || IsSameVolume(paths[0], resolved));
+            ShellCopyOrMove(paths, resolved, move);
+            e.Handled = true;
+            return;
+        }
+
+        // Executable / script target → launch it with the dropped file as argument(s).
+        // Multiple files become a space-separated list, each quoted so paths-with-spaces stay
+        // intact. UseShellExecute = true so .lnk resolution / Verb=runas still apply if the
+        // user pinned that on the shortcut itself.
+        if (IsExecutableTarget(resolved))
+        {
+            try
+            {
+                var args = string.Join(' ', paths.Select(p => $"\"{p}\""));
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = vm.AbsolutePath, // launch via the cell's actual path so .lnk
+                                                 // working dir + args + verb get applied;
+                                                 // resolving to the target would strip those.
+                    Arguments = args,
+                    UseShellExecute = true,
+                    WorkingDirectory = Path.GetDirectoryName(resolved) ?? string.Empty,
+                };
+                System.Diagnostics.Process.Start(psi);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(OwnerForDialogs(),
+                    $"Couldn't open with {Path.GetFileName(resolved)}:\n{ex.Message}",
+                    "AresToys", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            e.Handled = true;
+            return;
+        }
+
+        // Unknown target — let the container-level drop take over (copy into the source
+        // folder). NOT marking e.Handled = true lets the event bubble.
+    }
+
+    /// <summary>Recognised executable / script extensions that accept a file path as their
+    /// first argument. Drop-target detection uses this; anything outside the set falls back
+    /// to the wormhole-level drop. Lowercase + leading dot for direct comparison against
+    /// Path.GetExtension output.</summary>
+    private static readonly HashSet<string> ExecutableExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".exe", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".wsf", ".com",
+    };
+
+    private static bool IsExecutableTarget(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return false;
+        if (Directory.Exists(path)) return false;
+        var ext = Path.GetExtension(path);
+        return !string.IsNullOrEmpty(ext) && ExecutableExtensions.Contains(ext);
+    }
+
+    /// <summary>Walk through a .lnk to get the underlying target path. Returns the input path
+    /// untouched for non-.lnk inputs. .url files (web shortcuts) are NOT resolved — Process.
+    /// Start handles them by launching the browser, no resolution needed. Failures during
+    /// COM resolution fall back to the raw path, which is correct enough for the executable-
+    /// vs-folder branching downstream (a broken .lnk falls through to the "unknown" branch
+    /// and goes via container drop).</summary>
+    private static string ResolveShellTarget(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return path;
+        if (!string.Equals(Path.GetExtension(path), ".lnk", StringComparison.OrdinalIgnoreCase))
+            return path;
+        try
+        {
+            var link = (IShellLinkW)new CShellLink();
+            try
+            {
+                ((IPersistFile)link).Load(path, 0);
+                var buffer = System.Runtime.InteropServices.Marshal.AllocHGlobal(260 * 2); // MAX_PATH wide
+                try
+                {
+                    link.GetPath(buffer, 260, IntPtr.Zero, 0);
+                    var resolved = System.Runtime.InteropServices.Marshal.PtrToStringUni(buffer);
+                    return string.IsNullOrEmpty(resolved) ? path : resolved;
+                }
+                finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(buffer); }
+            }
+            finally { System.Runtime.InteropServices.Marshal.ReleaseComObject(link); }
+        }
+        catch
+        {
+            // Broken .lnk / COM unavailable → return the raw path. Lets the caller decide
+            // the fallback (unknown target type → bubble to container drop).
+            return path;
+        }
+    }
+
     private void OnDrop(object sender, DragEventArgs e)
     {
         if (_record.IsLocked) return;

@@ -85,7 +85,7 @@ public sealed partial class WorkflowStepViewModel : ObservableObject
                     catch { options = Array.Empty<string>(); }
                 }
                 StringParameters.Add(new StringParameterEntry(sp.Key, sp.Label, sp.Placeholder, initial,
-                    sp.Picker, options, sp.IsEditable, sp.LocalizeOptionsAsEnum,
+                    sp.Picker, options, sp.IsEditable, sp.LocalizeOptionsAsEnum, sp.LocalizeOptionsAsLauncherKey,
                     (key, value) => _onStringParameterChanged?.Invoke(this, key, value)));
             }
         }
@@ -233,6 +233,7 @@ public sealed partial class StringParameterEntry : ObservableObject
         IReadOnlyList<string>? options,
         bool isEditable,
         bool localizeOptionsAsEnum,
+        bool localizeOptionsAsLauncherKey,
         Action<string, string> onChanged)
     {
         Key = key;
@@ -242,9 +243,11 @@ public sealed partial class StringParameterEntry : ObservableObject
         IsEditable = isEditable;
         // Build OptionEntries with Raw/Display pairs. When LocalizeOptionsAsEnum is true the
         // Display passes through ImageEffectLocalizer (EnumValue_<raw>) — Crop / Rectangle /
-        // … render in the active culture. The empty entry keeps an explicit "(use last)"
-        // label so the user understands what selecting it does — without that, an empty row
-        // looks like a UI glitch.
+        // … render in the active culture. LocalizeOptionsAsLauncherKey instead routes through
+        // KeyboardLayoutMapper so the user sees the glyph their keycaps print (italian
+        // ";"→"Ò", "/"→"-", etc.) while the Raw value stays US-canonical. The empty entry
+        // keeps an explicit "(use last)" label so the user understands what selecting it
+        // does — without that, an empty row looks like a UI glitch.
         if (options is { Count: > 0 })
         {
             var list = new List<OptionEntry>(options.Count);
@@ -258,6 +261,10 @@ public sealed partial class StringParameterEntry : ObservableObject
                 else if (localizeOptionsAsEnum)
                 {
                     display = Services.ImageEffectLocalizer.LocalizeEnumValue(raw, raw);
+                }
+                else if (localizeOptionsAsLauncherKey)
+                {
+                    display = Services.Launcher.KeyboardLayoutMapper.GetDisplayChar(raw);
                 }
                 else
                 {

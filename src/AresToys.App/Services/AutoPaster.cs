@@ -2,6 +2,7 @@ using System.Text;
 using System.Windows;
 using Microsoft.Extensions.Logging;
 using AresToys.App.Native;
+using AresToys.Clipboard;
 using AresToys.Core.Domain;
 using AresToys.Storage.Items;
 
@@ -11,13 +12,18 @@ public sealed class AutoPaster
 {
     private readonly IItemStore _items;
     private readonly TargetWindowTracker _target;
+    private readonly IClipboardListener? _listener;
     private readonly ILogger<AutoPaster> _logger;
 
-    public AutoPaster(IItemStore items, TargetWindowTracker target, ILogger<AutoPaster> logger)
+    public AutoPaster(IItemStore items, TargetWindowTracker target, ILogger<AutoPaster> logger, IClipboardListener? listener = null)
     {
         _items = items;
         _target = target;
         _logger = logger;
+        // Optional — when the clipboard module is disabled (Settings → Modules) the listener
+        // singleton isn't registered. We still want the paste to work; just skip the
+        // SuppressNext call and accept the round-trip ingestion in that edge case.
+        _listener = listener;
     }
 
     public async Task PasteAsync(long itemId, CancellationToken cancellationToken)
@@ -29,6 +35,12 @@ public sealed class AutoPaster
         // the foreground state consistent. SendInput then fires after a short settle delay.
         var ok = await Application.Current.Dispatcher.InvokeAsync(() =>
         {
+            // Tell the clipboard listener to drop the next ingestion — without this our own
+            // SetText / SetPng below would echo back through Win32ClipboardReader and land as
+            // a NEW item in the history every time the user pastes, producing a duplicate
+            // entry on every Ctrl+V / hotkey paste.
+            _listener?.SuppressNext();
+
             switch (record.Kind)
             {
                 case ItemKind.Text:
@@ -37,19 +49,27 @@ public sealed class AutoPaster
                     break;
 
                 case ItemKind.Html:
-                    // SearchText (CF_UNICODETEXT or HTML-stripped fallback) is the clean plaintext we
-                    // captured at copy time. Pasting raw HTML payload as text would dump <p>/<span>
-                    // markup into the target.
-                    var htmlPlain = !string.IsNullOrEmpty(record.SearchText)
-                        ? record.SearchText
-                        : ClipboardCleaning.HtmlToPlain(Encoding.UTF8.GetString(record.Payload.Span));
+                    // Strip HTML on the full payload at paste time — NOT from record.SearchText.
+                    // SearchText is the truncated 256-char preview written by Win32ClipboardReader
+                    // for the FTS index + row label; using it as the paste source means long HTML
+                    // payloads (ASCII art from a web page, long blocks of pre-formatted text)
+                    // arrive at the target app cut short with a "…" tacked on. Falling back to
+                    // SearchText is only safe when the live extraction returns empty.
+                    var htmlPayload = Encoding.UTF8.GetString(record.Payload.Span);
+                    var htmlPlain = ClipboardCleaning.HtmlToPlain(htmlPayload);
+                    if (string.IsNullOrEmpty(htmlPlain) && !string.IsNullOrEmpty(record.SearchText))
+                        htmlPlain = record.SearchText;
                     System.Windows.Clipboard.SetText(htmlPlain);
                     break;
 
                 case ItemKind.Rtf:
-                    var rtfPlain = !string.IsNullOrEmpty(record.SearchText)
-                        ? record.SearchText
-                        : ClipboardCleaning.RtfToPlain(Encoding.UTF8.GetString(record.Payload.Span));
+                    // Same rationale as the HTML branch above — run the live RTF stripper on
+                    // the full payload so long RTF documents don't paste with the SearchText
+                    // truncation suffix.
+                    var rtfPayload = Encoding.UTF8.GetString(record.Payload.Span);
+                    var rtfPlain = ClipboardCleaning.RtfToPlain(rtfPayload);
+                    if (string.IsNullOrEmpty(rtfPlain) && !string.IsNullOrEmpty(record.SearchText))
+                        rtfPlain = record.SearchText;
                     System.Windows.Clipboard.SetText(rtfPlain);
                     break;
 

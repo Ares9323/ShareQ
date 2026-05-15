@@ -302,6 +302,11 @@ public partial class App : Application
                 services.AddSingleton<IPipelineTask, OpenLauncherDragModeTask>();
                 services.AddSingleton<IPipelineTask, OpenClipboardWindowTask>();
                 services.AddSingleton<IPipelineTask, OpenSettingsTask>();
+                // Headless launcher firing (no overlay) + Nth-clipboard-entry paste — both
+                // surface a toast on empty target so a missed binding doesn't fail silently.
+                services.AddSingleton<AresToys.App.Services.Launcher.LauncherActionService>();
+                services.AddSingleton<IPipelineTask, LauncherTriggerKeyTask>();
+                services.AddSingleton<IPipelineTask, PasteClipboardEntryTask>();
                 // Singleton + Hide (not Close) for snappy reopen on the global shortcut —
                 // same lifetime pattern the launcher uses.
                 services.AddSingleton<AresToys.App.Views.ClipboardWindow>();
@@ -515,6 +520,41 @@ public partial class App : Application
         // user last left selected in EditorDefaultsStore); explicit value preselects that tool
         // on open. List = the EditorTool enum minus the Select pointer (not a drawing tool —
         // confusingly close to the empty "use last" entry) and Image (one-shot file picker).
+        // Launcher tab + key dropdowns for the Trigger-launcher-key workflow task. Tabs are
+        // the 10 numeric user tabs ("1".."9","0") — the F-strip isn't a "tab", function keys
+        // live in their own namespace and the runtime ignores the tab field when the key is
+        // F1..F10. Keys: F-row + the 30 QWERTY/punctuation cells from LauncherKeyboardLayout.
+        AresToys.App.ViewModels.WorkflowActionCatalog.OptionsProviders["launcher_tabs"] = () =>
+            AresToys.App.Services.Launcher.LauncherKeyboardLayout.TabKeys.ToArray();
+        AresToys.App.ViewModels.WorkflowActionCatalog.OptionsProviders["launcher_keys"] = () =>
+        {
+            var list = new List<string>(AresToys.App.Services.Launcher.LauncherKeyboardLayout.FunctionKeys.Count + 30);
+            list.AddRange(AresToys.App.Services.Launcher.LauncherKeyboardLayout.FunctionKeys);
+            list.AddRange(AresToys.App.Services.Launcher.LauncherKeyboardLayout.AllTabKeyChars());
+            return list;
+        };
+
+        // Clipboard categories — fed from the live category store so renames / additions show
+        // up the next time the user opens the Workflow editor without app restart. The list is
+        // re-evaluated at the moment the row materialises (see OptionsProviders contract).
+        var categoriesStore = _host.Services.GetRequiredService<AresToys.Storage.Items.ICategoryStore>();
+        AresToys.App.ViewModels.WorkflowActionCatalog.OptionsProviders["clipboard_categories"] = () =>
+        {
+            try
+            {
+                var cats = categoriesStore.ListAsync(CancellationToken.None).GetAwaiter().GetResult();
+                // Empty string at the top = "all categories" — paste from the global "All"
+                // view, matching the popup's All tab semantics.
+                var list = new List<string> { string.Empty };
+                foreach (var c in cats) list.Add(c.Name);
+                return list;
+            }
+            catch
+            {
+                return new[] { string.Empty };
+            }
+        };
+
         AresToys.App.ViewModels.WorkflowActionCatalog.OptionsProviders["editor_tools"] = () =>
             new[]
             {
@@ -575,6 +615,16 @@ public partial class App : Application
                     // resulted in "no toast, no install, no log". Now any download/apply
                     // failure falls back to the regular toast so the user can at least retry
                     // manually instead of staring at nothing happening.
+                    //
+                    // Heads-up toast fires BEFORE the download starts so the user sees a
+                    // persistent Action-Center entry explaining what just happened — without
+                    // it the app would silently quit + relaunch and a casual user wouldn't
+                    // know AresToys hadn't crashed. The toast stays in the notification
+                    // history after the auto-update completes, so even if it lands during a
+                    // distraction the user can scroll back and see the version transition.
+                    notifier.Show(
+                        "AresToys updating",
+                        $"Auto-updating to version {args.Version}. AresToys will restart in a moment.");
                     _ = Task.Run(async () =>
                     {
                         try

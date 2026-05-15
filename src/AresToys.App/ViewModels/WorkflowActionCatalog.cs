@@ -48,7 +48,14 @@ public sealed record StringParameter(
     /// keys via <see cref="Services.ImageEffectLocalizer.LocalizeEnumValue"/>. The Value
     /// stored in step.Config remains the raw enum name so .sxie / DB round-trip stays
     /// stable.</summary>
-    bool LocalizeOptionsAsEnum = false);
+    bool LocalizeOptionsAsEnum = false,
+    /// <summary>When true, dropdown labels are passed through
+    /// <see cref="Services.Launcher.KeyboardLayoutMapper.GetDisplayChar"/> so the user sees
+    /// the glyph their physical keyboard prints (italian ";"→"Ò", "/"→"-", etc.) while the
+    /// Raw value persisted in step.Config stays the US-canonical storage key — same trick
+    /// the launcher uses for cell labels, so storage portability is preserved across
+    /// keyboard-layout changes.</summary>
+    bool LocalizeOptionsAsLauncherKey = false);
 
 /// <summary>One entry in the "+ Add step" picker for workflows. Maps a pipeline task id to
 /// human-readable metadata + a default config to apply when the user adds the action.</summary>
@@ -515,6 +522,32 @@ public static class WorkflowActionCatalog
             "Open launcher (drag mode)",
             "Show the launcher overlay already in drag-and-drop mode: the panel stays open while you drag files / folders / shortcuts from Explorer onto cells to map them. Esc exits drag mode (the launcher stays open in normal mode); a second Esc closes it.",
             "Launch"),
+
+        new("arestoys.launcher.trigger-key",
+            "Trigger launcher key",
+            "Fire a launcher cell programmatically — same as opening the launcher and pressing the key, but without the overlay. Pick a tab (1-9 / 0) and a key (Q-P, A-;, Z-/, or F1-F10). F1-F10 are global: the tab is ignored when the key is a function key. Toast appears if the slot is empty.",
+            "Launch",
+            DefaultConfigJson: "{\"tab\":\"1\",\"key\":\"Q\"}",
+            StringParameters: new[]
+            {
+                new StringParameter("tab", "Tab", "1",
+                    Placeholder: "1", OptionsKey: "launcher_tabs", IsEditable: false),
+                new StringParameter("key", "Key", "Q",
+                    Placeholder: "Q", OptionsKey: "launcher_keys", IsEditable: false,
+                    LocalizeOptionsAsLauncherKey: true),
+            }),
+
+        new("arestoys.clipboard.paste-entry",
+            "Paste clipboard entry",
+            "Paste the N-th entry from a clipboard category — same gesture as opening the popup on that category and pressing Ctrl+N. Leave Category empty for the global 'All' view. Toast appears if the category is empty or has fewer entries than requested.",
+            "Clipboard",
+            DefaultConfigJson: "{\"category\":\"\",\"entry\":1}",
+            IntParameter: new IntParameter("entry", "Entry #", 1, 1, 9),
+            StringParameters: new[]
+            {
+                new StringParameter("category", "Category", string.Empty,
+                    Placeholder: "(all)", OptionsKey: "clipboard_categories", IsEditable: false),
+            }),
 
     ];
 
