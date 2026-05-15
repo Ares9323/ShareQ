@@ -63,6 +63,13 @@ public partial class WormholeWindow : Window
     /// off the typing path so even a folder with thousands of items doesn't lag the box.</summary>
     private readonly DispatcherTimer _searchDebounce;
 
+    /// <summary>Drag-out gesture state. Captured on PreviewMouseLeftButtonDown over a tile,
+    /// promoted to a real <c>DoDragDrop</c> on PreviewMouseMove once the OS drag threshold is
+    /// exceeded. Without this the ListBox's Extended-selection rubber-band swallows the gesture
+    /// and the user sees no file-cursor preview / no drop target acceptance outside the window.</summary>
+    private Point? _itemDragStart;
+    private WormholeItemViewModel? _itemDragSourceVm;
+
     public WormholeWindow(
         WormholeRecord record,
         Action onPersist,
@@ -1304,6 +1311,94 @@ public partial class WormholeWindow : Window
         if (sender is not FrameworkElement fe) return;
         if (fe.DataContext is not WormholeItemViewModel vm) return;
         OpenItem(vm);
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Drag-out gesture — drag a tile out of the wormhole into Explorer / desktop / another
+    // wormhole. Without this handler the inner ListBox's Extended-selection rubber-band would
+    // swallow the gesture: the user would see selection extend across other tiles instead of
+    // the standard file-cursor preview, and dropping outside the window would land nowhere.
+    //
+    // Preview* variants so we run BEFORE the ListBoxItem's bubbling MouseLeftButtonDown handler
+    // (which is what kicks off marquee selection). We only RECORD the start point on Down —
+    // selection still updates normally because we don't set Handled. PreviewMouseMove promotes
+    // to DoDragDrop once SystemParameters.MinimumHorizontal/VerticalDragDistance is exceeded,
+    // so a quick click without movement still selects/double-clicks normally.
+    //
+    // Payload: DataFormats.FileDrop with absolute paths — this is what makes Windows show the
+    // file-icon preview cursor and lets Explorer / desktop / other wormholes accept the drop.
+    // Multi-select: if the armed item is part of the current selection we drag every selected
+    // path (Explorer multi-drag); otherwise just the armed one. Locked wormholes restrict the
+    // allowed effects to Copy|Link so the source folder can't be mutated by a Move drop.
+    // -----------------------------------------------------------------------------------------
+
+    private void OnItemPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement fe) { _itemDragStart = null; _itemDragSourceVm = null; return; }
+        if (fe.DataContext is not WormholeItemViewModel vm) { _itemDragStart = null; _itemDragSourceVm = null; return; }
+        _itemDragStart = e.GetPosition(this);
+        _itemDragSourceVm = vm;
+    }
+
+    private void OnItemPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        _itemDragStart = null;
+        _itemDragSourceVm = null;
+    }
+
+    private void OnItemPreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_itemDragStart is null || _itemDragSourceVm is null) return;
+        if (e.LeftButton != MouseButtonState.Pressed) { _itemDragStart = null; _itemDragSourceVm = null; return; }
+        var pos = e.GetPosition(this);
+        var dx = Math.Abs(pos.X - _itemDragStart.Value.X);
+        var dy = Math.Abs(pos.Y - _itemDragStart.Value.Y);
+        if (dx < SystemParameters.MinimumHorizontalDragDistance &&
+            dy < SystemParameters.MinimumVerticalDragDistance) return;
+
+        var armedVm = _itemDragSourceVm;
+        _itemDragStart = null;
+        _itemDragSourceVm = null;
+        if (sender is not FrameworkElement fe) return;
+
+        // Multi-drag if armed item is part of the live selection; otherwise single-item drag.
+        // Mirrors Explorer: clicking an unselected item then dragging drags only that item.
+        string[] paths;
+        if (ItemsHost.SelectedItems.Contains(armedVm))
+        {
+            paths = ItemsHost.SelectedItems
+                .OfType<WormholeItemViewModel>()
+                .Select(v => v.AbsolutePath)
+                .Where(p => !string.IsNullOrEmpty(p))
+                .ToArray();
+        }
+        else
+        {
+            paths = string.IsNullOrEmpty(armedVm.AbsolutePath)
+                ? Array.Empty<string>()
+                : new[] { armedVm.AbsolutePath };
+        }
+        if (paths.Length == 0) return;
+
+        var data = new DataObject();
+        var sc = new System.Collections.Specialized.StringCollection();
+        foreach (var p in paths) sc.Add(p);
+        data.SetFileDropList(sc);
+
+        // Locked wormhole: forbid Move so the source folder stays intact. Copy / shortcut still
+        // allowed so the user can pull a reference out without mutating the locked contents.
+        var allowed = _record.IsLocked
+            ? DragDropEffects.Copy | DragDropEffects.Link
+            : DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link;
+
+        try
+        {
+            DragDrop.DoDragDrop(fe, data, allowed);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"WormholeWindow: drag-out failed: {ex.Message}");
+        }
     }
 
     // -----------------------------------------------------------------------------------------

@@ -260,7 +260,10 @@
                                         DragOver="OnItemDragOver"
                                         Drop="OnItemDrop"
                                         MouseLeftButtonDown="OnItemMouseDown"
-                                        MouseRightButtonUp="OnItemRightButtonUp">
+                                        MouseRightButtonUp="OnItemRightButtonUp"
+                                        PreviewMouseLeftButtonDown="OnItemPreviewMouseLeftButtonDown"
+                                        PreviewMouseLeftButtonUp="OnItemPreviewMouseLeftButtonUp"
+                                        PreviewMouseMove="OnItemPreviewMouseMove">
                                     <!-- Grid (not StackPanel) for the icon+label split: row 0 sizes
                                          to icon content, row 1 takes the remainder. The TextBlock
                                          carries BOTH Width AND MaxWidth bound to TileWidth — Width

@@ -3,6 +3,26 @@
 All notable changes to AresToys. Format loosely follows [Keep a Changelog](https://keepachangelog.com/),
 versions follow [SemVer](https://semver.org/).
 
+## [0.1.14] — 2026-05-15
+
+Fix: dragging a file or folder *out* of a wormhole now works as expected.
+
+### Wormhole — drag-out gesture
+- `WormholeWindow` did not implement an outbound `DoDragDrop`, so a left-button
+  click-and-drag from a tile fell through to the inner `ListBox` and started
+  its Extended-selection rubber-band: no file-cursor preview, no drop accepted
+  outside the window. Added `Preview*` mouse handlers on each tile that arm on
+  Down + promote to a real `DragDrop.DoDragDrop` once the OS drag threshold
+  (`SystemParameters.MinimumHorizontal/VerticalDragDistance`) is exceeded.
+- Payload is `DataFormats.FileDrop` with absolute paths — same format Explorer
+  produces, so Windows shows the file-icon preview cursor and the drop is
+  accepted by Explorer, the desktop, and other wormholes / per-tile folder
+  drops.
+- Multi-drag matches Explorer: if the armed tile is part of the live selection
+  every selected path is dragged; otherwise just the armed one. Locked
+  wormholes restrict allowed effects to `Copy | Link` so a Move drop can't
+  mutate the source folder.
+
 ## [0.1.13] — 2026-05-15
 
 Two new pipeline tasks (Trigger launcher key, Paste clipboard entry), per-item
