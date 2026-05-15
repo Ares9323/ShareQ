@@ -190,7 +190,7 @@
                       PreviewMouseDown="OnCanvasPreviewMouseDown"
                       PreviewMouseUp="OnCanvasPreviewMouseUp"
                       MouseLeave="OnCanvasMouseLeave"
-                      Background="#1A1A1A">
+                      Background="{DynamicResource Surface1Brush}">
             <Grid x:Name="CanvasHost" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Image x:Name="SourceImage" />
                 <Canvas x:Name="DrawingCanvas" Background="Transparent" />
@@ -278,7 +278,7 @@
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </ui:Button>
                 </UniformGrid>
-                <Border Height="1" Background="#333" Margin="0,0,0,12" />
+                <Border Height="1" Background="{DynamicResource Surface3Brush}" Margin="0,0,0,12" />
 
                 <!-- Crop properties — visible only when the Crop tool is active and there are
                      pending crop rectangles. Hosts the global "Apply all crops" action so the
@@ -300,7 +300,7 @@
                                        VerticalAlignment="Center" />
                         </StackPanel>
                     </ui:Button>
-                    <Border Height="1" Background="#333" Margin="0,12,0,0" />
+                    <Border Height="1" Background="{DynamicResource Surface3Brush}" Margin="0,12,0,0" />
                 </StackPanel>
 
                 <!-- Default properties: Outline / Fill / Stroke for the NEXT shape to draw.
@@ -355,7 +355,7 @@
                            IsEnabled="False"
                            ToolTip="Apply the default outline / fill / stroke above to the selected shape(s)"
                            Click="OnApplyCurrentClicked" />
-                <Border Height="1" Background="#333" Margin="0,0,0,12" />
+                <Border Height="1" Background="{DynamicResource Surface3Brush}" Margin="0,0,0,12" />
 
                 <!-- Dynamic title — set from RefreshPropertyPanel based on selection or active tool. -->
                 <TextBlock x:Name="PanelTitleText" Text="Properties"

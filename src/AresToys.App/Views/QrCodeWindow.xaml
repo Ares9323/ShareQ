@@ -7,7 +7,7 @@
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         AllowsTransparency="False"
-        Background="#1E1E1E"
+        Background="{DynamicResource Surface2Brush}"
         Foreground="White"
         ResizeMode="NoResize"
         Topmost="True"
@@ -17,7 +17,7 @@
         <Border Padding="8" Background="White" CornerRadius="4">
             <Image x:Name="QrImage" Width="280" Height="280" Stretch="Uniform" />
         </Border>
-        <TextBlock x:Name="UrlText" Foreground="#BBB" FontSize="11" FontFamily="Consolas"
+        <TextBlock x:Name="UrlText" Foreground="{DynamicResource AccentForegroundBrush}" FontSize="11" FontFamily="Consolas"
                    HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"
                    MaxWidth="280" Margin="0,8,0,0" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,12,0,0">

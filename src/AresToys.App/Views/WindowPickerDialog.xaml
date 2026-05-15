@@ -6,7 +6,7 @@
         Title="Pick a window"
         Width="600" Height="500"
         WindowStartupLocation="CenterOwner"
-        Background="#252525"
+        Background="{DynamicResource Surface2Brush}"
         Foreground="White">
     <Window.Resources>
         <Style TargetType="TextBlock">
@@ -29,7 +29,7 @@
                     Margin="0,0,0,8"
                     TextChanged="OnFilterChanged" />
 
-        <Border Grid.Row="2" Background="{DynamicResource Surface1Brush}" BorderBrush="#444" BorderThickness="1" CornerRadius="4">
+        <Border Grid.Row="2" Background="{DynamicResource Surface1Brush}" BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1" CornerRadius="4">
             <ListBox x:Name="WindowList"
                      Background="Transparent" Foreground="White"
                      BorderThickness="0" Padding="2"

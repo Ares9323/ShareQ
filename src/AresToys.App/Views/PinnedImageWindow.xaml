@@ -65,7 +65,7 @@
                         Click="OnResetZoomClick" />
                 <TextBlock x:Name="ZoomLabel"
                            Text="100%"
-                           Foreground="#DDD"
+                           Foreground="{DynamicResource AccentForegroundBrush}"
                            FontSize="11"
                            FontFamily="Consolas"
                            VerticalAlignment="Center"

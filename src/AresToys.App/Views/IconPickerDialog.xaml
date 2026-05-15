@@ -16,7 +16,7 @@
          render rounded corners (CornerRadius is purely visual; without transparency the
          opaque chrome behind clips the rounding back to a square). Same trick the Launcher /
          Clipboard / HotkeyCapture windows use to share the same "soft card" look. -->
-    <Border Background="#1E1E1E"
+    <Border Background="{DynamicResource Surface2Brush}"
             BorderBrush="{DynamicResource AccentForegroundDarkBrush}" BorderThickness="1"
             CornerRadius="8">
         <Grid Margin="20">
@@ -61,7 +61,7 @@
                         <DataTemplate DataType="{x:Type vm:IconCatalogEntry}">
                             <Button Width="56" Height="56" Margin="2"
                                     Background="{DynamicResource Surface3Brush}"
-                                    BorderBrush="#3A3A3A" BorderThickness="1"
+                                    BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1"
                                     Cursor="Hand"
                                     Tag="{Binding Glyph}"
                                     ToolTip="{Binding Name}"
@@ -72,7 +72,7 @@
                                 <TextBlock Text="{Binding Glyph}"
                                            FontFamily="{DynamicResource IconFont}"
                                            FontSize="22"
-                                           Foreground="#DDD"
+                                           Foreground="{DynamicResource AccentForegroundBrush}"
                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
                         </DataTemplate>

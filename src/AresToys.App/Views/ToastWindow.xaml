@@ -33,7 +33,7 @@
                            FontSize="13"
                            TextTrimming="CharacterEllipsis" />
                 <TextBlock x:Name="MessageText"
-                           Foreground="#CCC"
+                           Foreground="{DynamicResource AccentForegroundBrush}"
                            FontSize="12"
                            TextWrapping="Wrap"
                            Margin="0,2,0,0" />

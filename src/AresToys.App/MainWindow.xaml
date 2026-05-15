@@ -4,6 +4,7 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:vm="clr-namespace:AresToys.App.ViewModels"
                  xmlns:Markup="clr-namespace:AresToys.App.Markup"
+                 xmlns:behaviors="clr-namespace:AresToys.App.Behaviors"
                  Title="AresToys"
                  Icon="pack://application:,,,/Assets/icon.ico"
                  Width="900" Height="600"
@@ -623,7 +624,7 @@
                             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                 <StackPanel Margin="0,12,0,0">
                                     <TextBlock Text="{Markup:Loc Hotkeys_NoCustomYet}"
-                                               Foreground="#666" FontSize="11" FontStyle="Italic"
+                                               Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" FontStyle="Italic"
                                                Visibility="{Binding Hotkeys.CustomItems.Count, Converter={StaticResource ZeroToVisibility}}"
                                                Margin="0,0,0,8" />
                                     <ItemsControl ItemsSource="{Binding Hotkeys.CustomItems}"
@@ -744,7 +745,7 @@
                                                     Visibility="{Binding IsDropTargetAbove, Converter={StaticResource BoolToVisibility}}" />
                                         </Border>
                                         <Border Grid.Row="1" Padding="10,8" Background="{DynamicResource Surface1Brush}"
-                                                BorderBrush="#333" BorderThickness="1" CornerRadius="4"
+                                                BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1" CornerRadius="4"
                                                 Opacity="{Binding IsDragSource, Converter={StaticResource BoolToOpacity}}"
                                                 AllowDrop="True"
                                                 DragOver="OnStepRowDragOver"
@@ -763,7 +764,7 @@
                                                         MouseLeftButtonDown="OnStepHandleMouseDown"
                                                         MouseMove="OnStepHandleMouseMove"
                                                         MouseLeftButtonUp="OnStepHandleMouseUp">
-                                                    <TextBlock Text="⋮⋮" Foreground="#777" FontSize="14"
+                                                    <TextBlock Text="⋮⋮" Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="14"
                                                                VerticalAlignment="Center" />
                                                 </Border>
                                                 <StackPanel Grid.Column="1">
@@ -779,7 +780,7 @@
                                                                TextWrapping="Wrap" Margin="0,2,0,0" />
                                                     <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
                                                                 Visibility="{Binding HasParameter, Converter={StaticResource BoolToVisibility}}">
-                                                        <TextBlock Text="{Binding ParameterLabel}" Foreground="#AAA" FontSize="11"
+                                                        <TextBlock Text="{Binding ParameterLabel}" Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11"
                                                                    VerticalAlignment="Center" Margin="0,0,8,0" />
                                                         <!-- All three controls (- / value / +) share the same Height so the row reads
                                                              as one composed stepper instead of two short buttons hugging a tall input.
@@ -816,7 +817,7 @@
                                                             <DataTemplate>
                                                                 <CheckBox Content="{Binding Label}"
                                                                           IsChecked="{Binding IsChecked, Mode=TwoWay}"
-                                                                          Foreground="#DDD" FontSize="11"
+                                                                          Foreground="{DynamicResource AccentForegroundBrush}" FontSize="11"
                                                                           Margin="0,0,16,0" />
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
@@ -840,7 +841,7 @@
                                                                         <ColumnDefinition Width="Auto" />
                                                                     </Grid.ColumnDefinitions>
                                                                     <TextBlock Grid.Column="0" Text="{Binding Label}"
-                                                                               Foreground="#DDD" FontSize="11"
+                                                                               Foreground="{DynamicResource AccentForegroundBrush}" FontSize="11"
                                                                                VerticalAlignment="Center"
                                                                                Margin="0,0,8,0" />
                                                                     <!-- Editable ComboBox when the parameter declares an OptionsKey (e.g. preset
@@ -908,27 +909,27 @@
                                                                     <Button Grid.Column="2"
                                                                             Width="32" Height="32" Padding="0"
                                                                             Background="{DynamicResource Surface3Brush}"
-                                                                            BorderBrush="#444" BorderThickness="1"
+                                                                            BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1"
                                                                             Cursor="Hand" Margin="4,0,0,0"
                                                                             Command="{Binding BrowseFileCommand}"
                                                                             ToolTip="Pick a file…"
                                                                             Visibility="{Binding ShowFileButton, Converter={StaticResource BoolToVisibility}}">
                                                                         <TextBlock Text="&#xF15B;"
                                                                                    FontFamily="{DynamicResource IconFont}"
-                                                                                   FontSize="14" Foreground="#DDD"
+                                                                                   FontSize="14" Foreground="{DynamicResource AccentForegroundBrush}"
                                                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                                     </Button>
                                                                     <Button Grid.Column="3"
                                                                             Width="32" Height="32" Padding="0"
                                                                             Background="{DynamicResource Surface3Brush}"
-                                                                            BorderBrush="#444" BorderThickness="1"
+                                                                            BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1"
                                                                             Cursor="Hand" Margin="4,0,0,0"
                                                                             Command="{Binding BrowseFolderCommand}"
                                                                             ToolTip="Pick a folder…"
                                                                             Visibility="{Binding ShowFolderButton, Converter={StaticResource BoolToVisibility}}">
                                                                         <TextBlock Text="&#xF07B;"
                                                                                    FontFamily="{DynamicResource IconFont}"
-                                                                                   FontSize="14" Foreground="#DDD"
+                                                                                   FontSize="14" Foreground="{DynamicResource AccentForegroundBrush}"
                                                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                                     </Button>
                                                                 </Grid>
@@ -1157,7 +1158,7 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
                             Background="{Binding Theme.AccentForegroundPreview}"
-                            BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
+                            BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
                             ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnAccentFgSwatchClick" />
@@ -1178,7 +1179,7 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
                             Background="{Binding Theme.AccentForegroundDarkPreview}"
-                            BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
+                            BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
                             ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnAccentForegroundDarkSwatchClick" />
@@ -1202,7 +1203,7 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
                             Background="{Binding Theme.AccentBackgroundPreview}"
-                            BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
+                            BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
                             ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnAccentBgSwatchClick" />
@@ -1223,7 +1224,7 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
                             Background="{Binding Theme.AccentBackgroundDarkPreview}"
-                            BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
+                            BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
                             ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnAccentDarkSwatchClick" />
@@ -1247,7 +1248,7 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
                             Background="{Binding Theme.AccentDeletePreview}"
-                            BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
+                            BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
                             ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnAccentDeleteSwatchClick" />
@@ -1270,7 +1271,7 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
                             Background="{Binding Theme.Surface1Preview}"
-                            BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
+                            BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
                             ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnSurface1SwatchClick" />
@@ -1288,7 +1289,7 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
                             Background="{Binding Theme.Surface2Preview}"
-                            BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
+                            BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
                             ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnSurface2SwatchClick" />
@@ -1306,7 +1307,7 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Width="32" Height="32" CornerRadius="4"
                             Background="{Binding Theme.Surface3Preview}"
-                            BorderBrush="#444" BorderThickness="1" Margin="0,0,8,0"
+                            BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1" Margin="0,0,8,0"
                             Cursor="Hand"
                             ToolTip="{Markup:Loc Theme_TooltipSwatch}"
                             MouseLeftButtonDown="OnSurface3SwatchClick" />
@@ -1380,13 +1381,13 @@
                                         Click="OnPickCategoryIconClicked"
                                         Width="32" Height="32"
                                         Background="{DynamicResource Surface3Brush}"
-                                        BorderBrush="#444" BorderThickness="1"
+                                        BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1"
                                         Cursor="Hand" Padding="0"
                                         Margin="0,0,8,0"
                                         ToolTip="Click to pick an icon from the library.">
                                     <TextBlock Text="{Binding Categories.NewCategoryIcon}"
                                                FontFamily="{DynamicResource IconFont}"
-                                               FontSize="16" Foreground="#DDD"
+                                               FontSize="16" Foreground="{DynamicResource AccentForegroundBrush}"
                                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 </Button>
                                 <ui:Button Grid.Column="2" Content="{Markup:Loc Common_Add}"
@@ -1424,7 +1425,7 @@
                                                 Click="OnPickRowIconClicked"
                                                 Width="32" Height="32"
                                                 Background="{DynamicResource Surface3Brush}"
-                                                BorderBrush="#444" BorderThickness="1"
+                                                BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1"
                                                 Cursor="Hand" Padding="0"
                                                 IsEnabled="{Binding CanConfigure}"
                                                 Margin="0,0,8,0"
@@ -1432,14 +1433,14 @@
                                             <Grid>
                                                 <TextBlock Text="{Binding Icon}"
                                                            FontFamily="{DynamicResource IconFont}"
-                                                           FontSize="16" Foreground="#DDD"
+                                                           FontSize="16" Foreground="{DynamicResource AccentForegroundBrush}"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                                            Visibility="{Binding Icon, Converter={StaticResource NonEmptyToVisibility}}" />
                                                 <!-- Star fallback (FontAwesome ) for the
                                                      "no icon picked yet" empty state. -->
                                                 <TextBlock Text="&#xF005;"
                                                            FontFamily="{DynamicResource IconFont}"
-                                                           FontSize="16" Foreground="#777"
+                                                           FontSize="16" Foreground="{DynamicResource AccentForegroundDarkBrush}"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                                            Visibility="{Binding Icon, Converter={StaticResource NullOrEmptyToVisibility}}" />
                                             </Grid>
@@ -1467,7 +1468,7 @@
                                                     Click="OnCategoryStepperClicked"
                                                     Width="28" Height="32"
                                                     Background="{DynamicResource Surface3Brush}"
-                                                    BorderBrush="#444" BorderThickness="1"
+                                                    BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1"
                                                     Cursor="Hand" Padding="0"
                                                     IsEnabled="{Binding CanConfigure}"
                                                     ToolTip="Decrease by 1." />
@@ -1482,7 +1483,7 @@
                                                     Click="OnCategoryStepperClicked"
                                                     Width="28" Height="32"
                                                     Background="{DynamicResource Surface3Brush}"
-                                                    BorderBrush="#444" BorderThickness="1"
+                                                    BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1"
                                                     Cursor="Hand" Padding="0"
                                                     IsEnabled="{Binding CanConfigure}"
                                                     ToolTip="Increase by 1." />
@@ -1493,7 +1494,7 @@
                                                     Click="OnCategoryStepperClicked"
                                                     Width="28" Height="32"
                                                     Background="{DynamicResource Surface3Brush}"
-                                                    BorderBrush="#444" BorderThickness="1"
+                                                    BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1"
                                                     Cursor="Hand" Padding="0"
                                                     IsEnabled="{Binding CanConfigure}"
                                                     ToolTip="Decrease by 1 minute." />
@@ -1508,7 +1509,7 @@
                                                     Click="OnCategoryStepperClicked"
                                                     Width="28" Height="32"
                                                     Background="{DynamicResource Surface3Brush}"
-                                                    BorderBrush="#444" BorderThickness="1"
+                                                    BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1"
                                                     Cursor="Hand" Padding="0"
                                                     IsEnabled="{Binding CanConfigure}"
                                                     ToolTip="Increase by 1 minute." />
@@ -1643,31 +1644,44 @@
                                              so the row VM commits only when the user tabs away or clicks elsewhere — typing partial
                                              values like "-12" doesn't snap-back mid-edit. Enter also commits, via OnGeometryKeyDown
                                              in code-behind. Live updates from chrome drag/resize flow back through the manager's
-                                             RecordChanged event into RefreshDisplay() so these cells stay in sync without reload. -->
+                                             RecordChanged event into RefreshDisplay() so these cells stay in sync without reload.
+                                             behaviors:NumericDragScrub.IsEnabled lets the user press + drag horizontally on the
+                                             cell to scrub the value Unreal/Blender style — a normal click still focuses the box
+                                             for keyboard editing, the scrub only kicks in once the mouse moves past a 4px threshold.
+                                             Background=Surface3 makes the cells read as discrete fields rather than blending into
+                                             the surrounding card; Margin between fields keeps them visually separated. -->
                                         <TextBox Grid.Column="1" Text="{Binding PositionX, Mode=TwoWay}" PreviewKeyDown="OnGeometryKeyDown"
                                                  GotKeyboardFocus="OnGeometryGotFocus"
                                                  PreviewMouseLeftButtonDown="OnGeometryPreviewMouseDown"
+                                                 behaviors:NumericDragScrub.IsEnabled="True"
                                                  HorizontalContentAlignment="Center" VerticalAlignment="Center"
-                                                 Background="Transparent" BorderThickness="0"
-                                                 Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" Padding="0" />
+                                                 Background="{DynamicResource Surface3Brush}" BorderThickness="0"
+                                                 Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12"
+                                                 Padding="2" Margin="0,0,2,0" />
                                         <TextBox Grid.Column="2" Text="{Binding PositionY, Mode=TwoWay}" PreviewKeyDown="OnGeometryKeyDown"
                                                  GotKeyboardFocus="OnGeometryGotFocus"
                                                  PreviewMouseLeftButtonDown="OnGeometryPreviewMouseDown"
+                                                 behaviors:NumericDragScrub.IsEnabled="True"
                                                  HorizontalContentAlignment="Center" VerticalAlignment="Center"
-                                                 Background="Transparent" BorderThickness="0"
-                                                 Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" Padding="0" />
+                                                 Background="{DynamicResource Surface3Brush}" BorderThickness="0"
+                                                 Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12"
+                                                 Padding="2" Margin="0,0,2,0" />
                                         <TextBox Grid.Column="3" Text="{Binding SizeW,     Mode=TwoWay}" PreviewKeyDown="OnGeometryKeyDown"
                                                  GotKeyboardFocus="OnGeometryGotFocus"
                                                  PreviewMouseLeftButtonDown="OnGeometryPreviewMouseDown"
+                                                 behaviors:NumericDragScrub.IsEnabled="True"
                                                  HorizontalContentAlignment="Center" VerticalAlignment="Center"
-                                                 Background="Transparent" BorderThickness="0"
-                                                 Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" Padding="0" />
+                                                 Background="{DynamicResource Surface3Brush}" BorderThickness="0"
+                                                 Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12"
+                                                 Padding="2" Margin="0,0,2,0" />
                                         <TextBox Grid.Column="4" Text="{Binding SizeH,     Mode=TwoWay}" PreviewKeyDown="OnGeometryKeyDown"
                                                  GotKeyboardFocus="OnGeometryGotFocus"
                                                  PreviewMouseLeftButtonDown="OnGeometryPreviewMouseDown"
+                                                 behaviors:NumericDragScrub.IsEnabled="True"
                                                  HorizontalContentAlignment="Center" VerticalAlignment="Center"
-                                                 Background="Transparent" BorderThickness="0"
-                                                 Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12" Padding="0" />
+                                                 Background="{DynamicResource Surface3Brush}" BorderThickness="0"
+                                                 Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="12"
+                                                 Padding="2" Margin="0,0,2,0" />
 
                                         <CheckBox Grid.Column="5" IsChecked="{Binding IsLocked, Mode=TwoWay}"
                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -1808,17 +1822,17 @@
                                        Text="{Markup:Loc Settings_ModulesHint}" />
                             <CheckBox IsChecked="{Binding ClipboardModuleEnabled, Mode=TwoWay}"
                                       Content="{Markup:Loc Settings_ModuleClipboard}"
-                                      Foreground="#DDD" FontSize="12"
+                                      Foreground="{DynamicResource AccentForegroundBrush}" FontSize="12"
                                       HorizontalAlignment="Left" Margin="0,0,0,8"
                                       ToolTip="{Markup:Loc Settings_ModuleClipboardTooltip}" />
                             <CheckBox IsChecked="{Binding LauncherModuleEnabled, Mode=TwoWay}"
                                       Content="{Markup:Loc Settings_ModuleLauncher}"
-                                      Foreground="#DDD" FontSize="12"
+                                      Foreground="{DynamicResource AccentForegroundBrush}" FontSize="12"
                                       HorizontalAlignment="Left" Margin="0,0,0,8"
                                       ToolTip="{Markup:Loc Settings_ModuleLauncherTooltip}" />
                             <CheckBox IsChecked="{Binding WormholesModuleEnabled, Mode=TwoWay}"
                                       Content="{Markup:Loc Settings_ModuleWormholes}"
-                                      Foreground="#DDD" FontSize="12"
+                                      Foreground="{DynamicResource AccentForegroundBrush}" FontSize="12"
                                       HorizontalAlignment="Left" Margin="0,0,0,8"
                                       ToolTip="{Markup:Loc Settings_ModuleWormholesTooltip}" />
                             <!-- Restart row appears as soon as any module toggle moves. The button
@@ -1851,12 +1865,12 @@
                                        Text="{Markup:Loc Settings_WindowsIntegrationHint}" />
                             <CheckBox IsChecked="{Binding StartWithWindows, Mode=TwoWay}"
                                       Content="{Markup:Loc Settings_StartWithWindows}"
-                                      Foreground="#DDD" FontSize="12"
+                                      Foreground="{DynamicResource AccentForegroundBrush}" FontSize="12"
                                       HorizontalAlignment="Left" Margin="0,0,0,8"
                                       ToolTip="{Markup:Loc Settings_StartWithWindowsTooltip}" />
                             <CheckBox IsChecked="{Binding StartMinimized, Mode=TwoWay}"
                                       Content="{Markup:Loc Settings_StartMinimized}"
-                                      Foreground="#DDD" FontSize="12"
+                                      Foreground="{DynamicResource AccentForegroundBrush}" FontSize="12"
                                       HorizontalAlignment="Left" Margin="0,0,0,12"
                                       ToolTip="{Markup:Loc Settings_StartMinimizedTooltip}" />
 
@@ -1909,12 +1923,12 @@
                                        Text="{Markup:Loc Settings_EditorSectionHint}" />
                             <CheckBox IsChecked="{Binding EditorStartMaximized, Mode=TwoWay}"
                                       Content="{Markup:Loc Settings_EditorStartMaximized}"
-                                      Foreground="#DDD" FontSize="12"
+                                      Foreground="{DynamicResource AccentForegroundBrush}" FontSize="12"
                                       HorizontalAlignment="Left" Margin="0,0,0,8"
                                       ToolTip="{Markup:Loc Settings_EditorStartMaximizedTooltip}" />
                             <CheckBox IsChecked="{Binding EditorAltClickSelectAny, Mode=TwoWay}"
                                       Content="{Markup:Loc Settings_EditorAltClickSelectAny}"
-                                      Foreground="#DDD" FontSize="12"
+                                      Foreground="{DynamicResource AccentForegroundBrush}" FontSize="12"
                                       HorizontalAlignment="Left"
                                       ToolTip="{Markup:Loc Settings_EditorAltClickSelectAnyTooltip}" />
                         </StackPanel>
@@ -1930,7 +1944,7 @@
                                        Text="{Markup:Loc Settings_ClipboardSectionHint}" />
                             <CheckBox IsChecked="{Binding ClipboardShowSnippetWithLabel, Mode=TwoWay}"
                                       Content="{Markup:Loc Settings_ClipboardShowSnippetWithLabel}"
-                                      Foreground="#DDD" FontSize="12"
+                                      Foreground="{DynamicResource AccentForegroundBrush}" FontSize="12"
                                       HorizontalAlignment="Left"
                                       ToolTip="{Markup:Loc Settings_ClipboardShowSnippetWithLabelTooltip}" />
                         </StackPanel>
@@ -2035,7 +2049,7 @@
                           IsChecked="{Binding Debug.AutoScroll, Mode=TwoWay}"
                           Foreground="{DynamicResource AccentForegroundDarkBrush}" FontSize="11" Margin="0,8,0,8"
                           ToolTip="{Markup:Loc Debug_AutoScrollTooltip}" />
-                <Border Grid.Row="2" Background="#0F0F0F" BorderBrush="#333" BorderThickness="1" CornerRadius="4">
+                <Border Grid.Row="2" Background="{DynamicResource Surface1Brush}" BorderBrush="{DynamicResource Surface3Brush}" BorderThickness="1" CornerRadius="4">
                     <ListBox x:Name="DebugLogList"
                              ItemsSource="{Binding Debug.Entries}"
                              Background="Transparent" BorderThickness="0"
@@ -2065,12 +2079,12 @@
                                          and on a light theme (e.g. BurnMyEyes) drops to near-
                                          black, which is unreadable on the panel's hardcoded
                                          #0F0F0F surface. -->
-                                    <TextBlock Grid.Column="0" Text="{Binding TimestampDisplay}" Foreground="#888" Margin="0,0,8,0" />
+                                    <TextBlock Grid.Column="0" Text="{Binding TimestampDisplay}" Foreground="{DynamicResource AccentForegroundDarkBrush}" Margin="0,0,8,0" />
                                     <TextBlock Grid.Column="1" Text="{Binding LevelDisplay}" Margin="0,0,8,0"
                                                FontWeight="SemiBold"
                                                Foreground="{Binding LevelBrush}" />
-                                    <TextBlock Grid.Column="2" Text="{Binding Category}" Foreground="#999" Margin="0,0,8,0" />
-                                    <TextBlock Grid.Column="3" Text="{Binding Message}" Foreground="#DDD" TextWrapping="Wrap" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Category}" Foreground="{DynamicResource AccentForegroundDarkBrush}" Margin="0,0,8,0" />
+                                    <TextBlock Grid.Column="3" Text="{Binding Message}" Foreground="{DynamicResource AccentForegroundBrush}" TextWrapping="Wrap" />
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -2110,10 +2124,10 @@
                 <TextBlock HorizontalAlignment="Center" FontSize="12">
                     <Hyperlink NavigateUri="https://github.com/ShareX/ShareX" RequestNavigate="OnHyperlinkClicked"
                                Foreground="{DynamicResource AccentForegroundBrush}">ShareX</Hyperlink>
-                    <Run Text=" · " Foreground="#666" />
+                    <Run Text=" · " Foreground="{DynamicResource AccentForegroundDarkBrush}" />
                     <Hyperlink NavigateUri="https://github.com/hluk/CopyQ" RequestNavigate="OnHyperlinkClicked"
                                Foreground="{DynamicResource AccentForegroundBrush}">CopyQ</Hyperlink>
-                    <Run Text=" · " Foreground="#666" />
+                    <Run Text=" · " Foreground="{DynamicResource AccentForegroundDarkBrush}" />
                     <Hyperlink NavigateUri="https://maxlauncher.sourceforge.io/" RequestNavigate="OnHyperlinkClicked"
                                Foreground="{DynamicResource AccentForegroundBrush}">MaxLauncher</Hyperlink>
                 </TextBlock>

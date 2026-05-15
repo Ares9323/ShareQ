@@ -11,7 +11,7 @@
         MaxHeight="640"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="#252525"
+        Background="{DynamicResource Surface2Brush}"
         Foreground="White">
     <Window.Resources>
         <Style TargetType="TextBlock">
@@ -49,7 +49,7 @@
                              Loaded="OnPasswordBoxLoaded"
                              Background="{DynamicResource Surface3Brush}"
                              Foreground="White"
-                             BorderBrush="#444"
+                             BorderBrush="{DynamicResource Surface3Brush}"
                              BorderThickness="1"
                              Padding="8,6"
                              FontFamily="Consolas" />
