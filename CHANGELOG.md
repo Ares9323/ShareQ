@@ -3,7 +3,82 @@
 All notable changes to AresToys. Format loosely follows [Keep a Changelog](https://keepachangelog.com/),
 versions follow [SemVer](https://semver.org/).
 
-## [0.1.11] — Unreleased
+## [0.1.12] — Unreleased
+
+Three pieces of wormhole polish: Explorer-style right-button drag menu, the
+crash fix for the Del shortcut on shortcut (.lnk) items, and Cut visual
+feedback that fades selected items at 50 % opacity until the clipboard moves
+on.
+
+### Wormhole — right-button drag menu
+- Dragging a file into a wormhole with the **right** mouse button now opens
+  the Explorer-style choice menu on drop: **Copy here / Move here / Create
+  shortcut here / Cancel**. Left-button drag keeps the existing implicit
+  Move (same volume) / Copy (cross volume) heuristic — same as Explorer.
+- `DragDropKeyStates.RightMouseButton` is latched during `OnDragOver` because
+  by the time `OnDrop` fires the right button has already been released and
+  the flag in the final event has cleared.
+- Shortcut creation uses `IShellLinkW` + `IPersistFile` to write a proper
+  `.lnk` file named `<name> - Shortcut.lnk` (Explorer's default for this
+  gesture), with the target's icon inherited and the working directory set
+  to the target's parent folder.
+
+### Wormhole — Del / multi-select crash fix
+- Pressing Del on a `.lnk` item (or any multi-selection) inside a wormhole
+  used to crash the app with `0xC0000005` inside `SHFileOperation`. The
+  `LPWStr` marshaller was truncating the wide-string path list at the first
+  embedded NUL — exactly the byte the API uses to separate paths in the
+  multi-file list AND to mark the end of the list (double NUL). The kernel
+  received only the first path plus a single NUL, then scanned into
+  uninitialised memory looking for the terminator.
+- Fix: `pFrom` / `pTo` switched from `string` (LPWStr marshalled) to
+  `IntPtr`, with manual `Marshal.AllocHGlobal` of a properly
+  double-NUL-terminated UTF-16 buffer. Also removed the `Pack = 1` attribute
+  on `SHFILEOPSTRUCT` since modern shellapi.h ships the struct with natural
+  alignment on x64 — `Pack = 1` was forcing misaligned pointer fields and
+  contributing to the access violation.
+- Ctrl+V paste path (which also goes through `SHFileOperation` via
+  `ShellCopyOrMove`) gets the same treatment as a side benefit.
+
+### Settings — Auto-install error fallback
+- The "Automatically install updates when available" path used to swallow
+  every download/apply failure silently (offline, GitHub rate-limit, Velopack
+  staging-folder ACL, …) because the call was a fire-and-forget Task with no
+  exception handler. The user saw no toast, no install, no log entry — the
+  failure was invisible.
+- The auto-install handler now wraps the `DownloadAndRestartAsync` call in
+  `Task.Run` + try/catch. Any exception is logged through `ILogger<App>` and
+  falls back to the regular update toast labelled "auto-install failed —
+  click to retry", so the user can at least retry manually instead of
+  staring at a dead update notification.
+
+### CI / Release infrastructure
+- `ci.yml` skip marker renamed from `[skip ci]` to `[skip-ci-only]`. The
+  original `[skip ci]` is a GitHub Actions reserved keyword that skips
+  EVERY workflow on the push — including `release.yml` when a tag points
+  at a commit carrying that marker, which is exactly how the v0.1.12 first
+  attempt failed to fire its Release run. The new marker is custom (not on
+  the GitHub reserved list) so it only opts out of our own `ci.yml` job
+  while letting Release fire normally.
+
+### Wormhole — Cut fade-out
+- `Ctrl+X` on a wormhole selection now drops the selected tiles to 40 %
+  opacity, matching Explorer's "cut" visual. Cleared automatically when:
+  - the user pastes the items somewhere (the receiving app clears the
+    clipboard after a Cut+Paste, our `WM_CLIPBOARDUPDATE` listener detects
+    the takeover and unsets every IsCutMarked tile);
+  - the clipboard's content changes to something that isn't our path list
+    (another app's Ctrl+C, the user pressing Ctrl+X again on a different
+    selection, etc.).
+- New `WormholeItemViewModel.IsCutMarked` bound to the tile Border's
+  `Opacity` via the existing `BoolToOpacity` converter; the path set is
+  cached on the window (HashSet<string>) so the FileSystemWatcher-driven
+  VM rebuild can re-apply the flag without losing the visual state.
+- Wired up via `AddClipboardFormatListener` + a window-local
+  `WM_CLIPBOARDUPDATE` hook installed in `SourceInitialized` and torn down
+  on `Closed`.
+
+## [0.1.11] — 2026-05-15
 
 ### Settings — Self-update preferences
 - New "Look for updates at startup" checkbox in Settings → App settings →

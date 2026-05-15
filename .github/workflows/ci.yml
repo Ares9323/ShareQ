@@ -28,10 +28,15 @@ jobs:
   build-and-test:
     runs-on: windows-latest
     timeout-minutes: 15
-    # Manual opt-out for noisy WIP pushes: include [skip ci] anywhere in the commit
+    # Manual opt-out for noisy WIP pushes: include [skip-ci-only] anywhere in the commit
     # message and the whole job is skipped. PRs always run regardless of the title so
     # the safety net stays for anything review-worthy.
-    if: github.event_name == 'pull_request' || !contains(github.event.head_commit.message, '[skip ci]')
+    #
+    # NOT [skip ci] / [ci skip] / [skip actions] — those are GitHub Actions reserved
+    # keywords that skip EVERY workflow on the push, including release.yml when a tag
+    # points at this commit. The release workflow MUST fire even when ci.yml is
+    # opted out, so we use a custom marker GitHub doesn't recognise.
+    if: github.event_name == 'pull_request' || !contains(github.event.head_commit.message, '[skip-ci-only]')
 
     steps:
       - name: Checkout

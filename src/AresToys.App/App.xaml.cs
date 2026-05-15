@@ -561,15 +561,41 @@ public partial class App : Application
         var checkUpdatesAtStartup = !string.Equals(rawCheckUpdates, "false", StringComparison.OrdinalIgnoreCase);
         var rawAutoInstall = await settingsStoreForUpdate.GetAsync("app.updates.auto_install", CancellationToken.None).ConfigureAwait(true);
         var autoInstall = string.Equals(rawAutoInstall, "true", StringComparison.OrdinalIgnoreCase);
+        var updaterLogger = _host.Services.GetService<ILogger<App>>();
         updater.UpdateAvailable += (_, args) =>
         {
             Dispatcher.Invoke(() =>
             {
                 if (autoInstall)
                 {
-                    // User chose unattended updates — apply + restart without a prompt. The
-                    // download / apply / restart sequence exits the process so we don't return.
-                    _ = updater.DownloadAndRestartAsync(args.Info, CancellationToken.None);
+                    // User chose unattended updates — download + apply + restart with no prompt.
+                    // Wrapped in a Task with try/catch because the previous fire-and-forget
+                    // (`_ = updater.DownloadAndRestartAsync(...)`) silently swallowed every
+                    // failure: offline, GitHub rate-limit, Velopack staging-folder ACL, all
+                    // resulted in "no toast, no install, no log". Now any download/apply
+                    // failure falls back to the regular toast so the user can at least retry
+                    // manually instead of staring at nothing happening.
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await updater.DownloadAndRestartAsync(args.Info, CancellationToken.None).ConfigureAwait(false);
+                            // ApplyUpdatesAndRestart exits the process before this line — if we
+                            // do reach it, something completed without restarting (rare; usually
+                            // an internal Velopack early-out).
+                        }
+                        catch (Exception ex)
+                        {
+                            updaterLogger?.LogWarning(ex, "Auto-install failed; falling back to toast prompt");
+                            Dispatcher.Invoke(() =>
+                            {
+                                notifier.Show(
+                                    "AresToys update available",
+                                    $"Version {args.Version} is ready (auto-install failed — click to retry).",
+                                    onClick: () => _ = PromptInstallUpdateAsync(updater, args.Info));
+                            });
+                        }
+                    });
                     return;
                 }
                 notifier.Show(
